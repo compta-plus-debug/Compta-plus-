@@ -521,3 +521,80 @@ function App() {
     entries.forEach((e) => {
       const key = monthLabel(e.date);
       if (!byMonth[key]) byMonth[key] = { mo
+{active !== "dashboard" && active !== "compta" && active !== "caisse" && active !== "vente" && active !== "achat" && active !== "stock" && active !== "crm" && active !== "rapports" && active !== "admin" && (
+          <ComingSoon module={MODULES.find((m) => m.id === active)} />
+        )}
+        </fieldset>
+      </main>
+
+      {toast && (
+        <div
+          className="fixed bottom-6 right-6 px-4 py-3 rounded shadow-lg text-sm no-print"
+          style={{ background: "#152238", color: "#EFE9DD", border: "1px solid #C9A24B" }}
+        >
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Card({ label, value, accent }) {
+  return (
+    <div className="rounded-lg p-5 bg-white" style={{ border: "1px solid #E4DFD1" }}>
+      <div className="text-xs uppercase tracking-widest" style={{ color: "#8A8370" }}>{label}</div>
+      <div className="tabular text-2xl mt-2" style={{ color: accent || "#152238" }}>{fmt(value)}</div>
+    </div>
+  );
+}
+
+function Dashboard({ kpis, chartData, entriesCount, installPrompt, onInstallClick }) {
+  const [showIosHelp, setShowIosHelp] = useState(false);
+  const alreadyInstalled = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+  return (
+    <div className="p-4 md:p-8 max-w-6xl">
+      <header className="mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <div className="display text-3xl" style={{ color: "#152238" }}>Centre de contrôle</div>
+          <p className="text-sm mt-1" style={{ color: "#7A7460" }}>
+            Vue d'ensemble consolidée — {entriesCount} écriture{entriesCount > 1 ? "s" : ""} enregistrée{entriesCount > 1 ? "s" : ""} dans le journal.
+          </p>
+        </div>
+
+        {!alreadyInstalled && (
+          <div className="relative shrink-0">
+            {installPrompt ? (
+              <button onClick={onInstallClick}
+                className="flex items-center gap-2 px-4 py-2 rounded text-sm text-white"
+                style={{ background: "#152238" }}>
+                <Download size={15} /> Installer l'application
+              </button>
+            ) : (
+              <button onClick={() => setShowIosHelp((v) => !v)}
+                className="flex items-center gap-2 px-4 py-2 rounded text-sm"
+                style={{ background: "#fff", border: "1px solid #DDD6C4", color: "#152238" }}>
+                <Download size={15} /> Installer l'application
+              </button>
+            )}
+            {showIosHelp && !installPrompt && (
+              <div className="absolute right-0 mt-2 w-72 rounded-lg p-4 text-xs z-10 shadow-lg"
+                style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#5F5A4C" }}>
+                <div className="font-medium mb-2" style={{ color: "#152238" }}>Comment installer :</div>
+                <p className="mb-2"><b>Android (Chrome)</b> : menu ⋮ en haut à droite → « Installer l'application » ou « Ajouter à l'écran d'accueil ».</p>
+                <p className="mb-2"><b>iPhone/iPad (Safari)</b> : bouton Partager (carré avec flèche) → « Sur l'écran d'accueil ».</p>
+                <p><b>Windows/Mac (Chrome ou Edge)</b> : icône d'installation dans la barre d'adresse, à droite de l'URL.</p>
+                <button onClick={() => setShowIosHelp(false)} className="mt-3 underline" style={{ color: "#152238" }}>Fermer</button>
+              </div>
+            )}
+          </div>
+        )}
+      </header>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <Card label="Produits" value={kpis.produits} accent="#0F6B5C" />
+        <Card label="Charges" value={kpis.charges} accent="#A6432F" />
+        <Card label="Résultat" value={kpis.resultat} accent={kpis.resultat >= 0 ? "#0F6B5C" : "#A6432F"} />
+        <Card label="Trésorerie (Banque + Caisse)" value={kpis.tresorerie} />
+      </div>
+
+      <div className="bg
