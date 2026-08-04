@@ -598,3 +598,197 @@ function Dashboard({ kpis, chartData, entriesCount, installPrompt, onInstallClic
       </div>
 
       <div className="bg
+<div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {products.map((p) => (
+              <button key={p.id} onClick={() => addToCart(p.id)}
+                className="text-left bg-white rounded-lg p-3 hover:shadow-sm transition-shadow flex gap-3"
+                style={{ border: "1px solid #E4DFD1" }}>
+                {p.image ? (
+                  <img src={p.image} alt="" className="w-12 h-12 rounded object-cover shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded flex items-center justify-center shrink-0" style={{ background: "#F3EFE3" }}>
+                    <ImageIcon size={18} style={{ color: "#C7C0AD" }} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs" style={{ color: "#A39C87" }}>{p.code} · {p.type === "service" ? "Service" : "Marchandise"}</div>
+                  <div className="text-sm font-medium mt-0.5 truncate" style={{ color: "#152238" }}>{p.name}</div>
+                  <div className="flex items-center justify-between mt-1">
+                    <div className="tabular text-sm" style={{ color: "#0F6B5C" }}>{fmt(p.price)}</div>
+                    {p.type === "marchandise" && (
+                      <div className="tabular text-xs" style={{ color: (p.stock || 0) <= (p.seuil || 0) ? "#A6432F" : "#A39C87" }}>
+                        stock : {p.stock || 0}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-lg p-5 h-fit" style={{ border: "1px solid #E4DFD1" }}>
+            <div className="flex items-center gap-2 mb-4" style={{ color: "#152238" }}>
+              <Receipt size={16} /><span className="font-medium text-sm">Panier</span>
+            </div>
+            {cartLines.length === 0 ? (
+              <div className="text-xs py-6 text-center" style={{ color: "#A39C87" }}>Sélectionnez un article à gauche.</div>
+            ) : (
+              <div className="space-y-3 mb-4">
+                {cartLines.map((l) => (
+                  <div key={l.productId} className="flex items-center justify-between text-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate" style={{ color: "#152238" }}>{l.product.name}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <button onClick={() => changeQty(l.productId, -1)} className="w-5 h-5 flex items-center justify-center rounded" style={{ background: "#F3EFE3" }}><Minus size={10} /></button>
+                        <span className="tabular text-xs w-4 text-center">{l.qty}</span>
+                        <button onClick={() => changeQty(l.productId, 1)} className="w-5 h-5 flex items-center justify-center rounded" style={{ background: "#F3EFE3" }}><Plus size={10} /></button>
+                      </div>
+                    </div>
+                    <div className="tabular text-sm ml-2">{fmt(l.subtotal)}</div>
+                    <button onClick={() => removeLine(l.productId)} className="ml-2" style={{ color: "#A6432F" }}><X size={13} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="border-t pt-3 mb-4" style={{ borderColor: "#EEE9DA" }}>
+              {taxActive && (
+                <>
+                  <div className="flex justify-between tabular text-xs mb-1" style={{ color: "#8A8370" }}>
+                    <span>Sous-total HT</span><span>{fmt(totalHT)}</span>
+                  </div>
+                  <div className="flex justify-between tabular text-xs mb-2" style={{ color: "#8A8370" }}>
+                    <span>{taxLabel}</span><span>{fmt(totalTax)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between tabular text-base font-semibold" style={{ color: "#152238" }}>
+                <span>Total {taxActive ? "TTC" : ""}</span><span>{fmt(total)}</span>
+              </div>
+            </div>
+            <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Nom du client (optionnel)"
+              className="w-full border rounded px-2 py-1.5 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />
+            <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)}
+              className="w-full border rounded px-2 py-1.5 text-sm mb-3" style={{ borderColor: "#DDD6C4" }}>
+              <option value="caisse">Paiement en caisse</option>
+              <option value="banque">Paiement par banque</option>
+              <option value="credit">Vente à crédit (client)</option>
+            </select>
+            <button onClick={validateSale} className="w-full py-2 rounded text-sm text-white" style={{ background: "#152238" }}>
+              Valider la vente
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === "factures" && (
+        <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead>
+              <tr className="text-left" style={{ color: "#8A8370", borderBottom: "1px solid #EEE9DA" }}>
+                <th className="py-2 font-normal">N°</th>
+                <th className="py-2 font-normal">Date</th>
+                <th className="py-2 font-normal">Client</th>
+                <th className="py-2 font-normal text-right">Montant</th>
+                <th className="py-2 font-normal text-center">Statut</th>
+                <th className="py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.length === 0 && (
+                <tr><td colSpan={6} className="py-8 text-center" style={{ color: "#A39C87" }}>Aucune facture. Réalisez une vente depuis le POS.</td></tr>
+              )}
+              {[...invoices].reverse().map((inv) => (
+                <tr key={inv.id} style={{ borderBottom: "1px solid #F3EFE3" }}>
+                  <td className="py-2 tabular">{inv.number}</td>
+                  <td className="py-2 tabular">{inv.date}</td>
+                  <td className="py-2">{inv.client}</td>
+                  <td className="py-2 tabular text-right">{fmt(inv.total)}</td>
+                  <td className="py-2 text-center">
+                    <span className="text-xs px-2 py-0.5 rounded"
+                      style={{
+                        background: inv.status === "payée" ? "#E6F1EE" : "#F7E9E3",
+                        color: inv.status === "payée" ? "#0F6B5C" : "#A6432F",
+                      }}>
+                      {inv.status}
+                    </span>
+                  </td>
+                  <td className="py-2 text-right">
+                    {inv.status === "impayée" && (
+                      <div className="flex gap-1 justify-end">
+                        <button onClick={() => encaisserFacture(inv, "530")} className="text-xs px-2 py-1 rounded" style={{ background: "#152238", color: "#EFE9DD" }}>Encaisser (caisse)</button>
+                        <button onClick={() => encaisserFacture(inv, "512")} className="text-xs px-2 py-1 rounded" style={{ background: "#152238", color: "#EFE9DD" }}>Encaisser (banque)</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+
+      {tab === "catalogue" && (
+        <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+          <div className="grid grid-cols-2 md:grid-cols-8 gap-3 mb-5 items-end">
+            <div>
+              <label className="text-xs" style={{ color: "#8A8370" }}>Photo</label>
+              <label className="mt-1 flex items-center justify-center rounded cursor-pointer overflow-hidden"
+                style={{ width: 38, height: 38, border: "1px dashed #DDD6C4", background: newProduct.image ? "transparent" : "#FAF8F1" }}>
+                {imgLoading ? (
+                  <span className="text-[9px]" style={{ color: "#A39C87" }}>...</span>
+                ) : newProduct.image ? (
+                  <img src={newProduct.image} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageIcon size={16} style={{ color: "#A39C87" }} />
+                )}
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+              </label>
+            </div>
+            <div>
+              <label className="text-xs" style={{ color: "#8A8370" }}>Code</label>
+              <input value={newProduct.code} onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
+                className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+            </div>
+            <div className="col-span-2">
+              <label className="text-xs" style={{ color: "#8A8370" }}>Intitulé</label>
+              <input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+            </div>
+            <div>
+              <label className="text-xs" style={{ color: "#8A8370" }}>Prix HT</label>
+              <input type="number" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
+            </div>
+            <div>
+              <label className="text-xs" style={{ color: "#8A8370" }}>{taxLabel} %</label>
+              <input type="number" value={newProduct.tva} onChange={(e) => setNewProduct({ ...newProduct, tva: e.target.value })}
+                className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
+            </div>
+            <div>
+              <label className="text-xs" style={{ color: "#8A8370" }}>Type</label>
+              <select value={newProduct.type} onChange={(e) => setNewProduct({ ...newProduct, type: e.target.value, account: e.target.value === "service" ? "706" : "707" })}
+                className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
+                <option value="service">Service</option>
+                <option value="marchandise">Marchandise</option>
+              </select>
+            </div>
+            <button onClick={addProduct} className="flex items-center justify-center gap-2 px-4 py-2 rounded text-sm text-white h-[38px]" style={{ background: "#152238" }}>
+              {editingProductId ? <CheckCircle2 size={14} /> : <Plus size={14} />}
+              {editingProductId ? "Enregistrer" : "Ajouter"}
+            </button>
+          </div>
+          {editingProductId && (
+            <div className="flex items-center gap-2 mb-4 text-xs" style={{ color: "#A6432F" }}>
+              Modification de « {products.find((p) => p.id === editingProductId)?.name} » en cours.
+              <button onClick={cancelEditProduct} className="underline">Annuler</button>
+            </div>
+          )}
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead>
+              <tr className="text-left" style={{ color: "#8A8370", borderBottom: "1px solid #EEE9DA" }}>
+                <th className="py-2 font-normal">Photo</th>
+                <th className="py-2 font-normal">Code</th>
+                <th className="py-2 font-normal">Intitulé</th>
+                <th className="py-2 font-normal">Type</th>
+                <th className="py-2 font-normal">Compte de vente</th>
+                <th className="p
