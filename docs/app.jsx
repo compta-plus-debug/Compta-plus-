@@ -792,3 +792,372 @@ function Dashboard({ kpis, chartData, entriesCount, installPrompt, onInstallClic
                 <th className="py-2 font-normal">Type</th>
                 <th className="py-2 font-normal">Compte de vente</th>
                 <th className="p
+}
+    if (clients.some((c) => c.name === newClient.name)) {
+      showToast("Ce client existe déjà.");
+      return;
+    }
+    setClients([...clients, { ...newClient, id: Date.now() }]);
+    setNewClient({ name: "", email: "", phone: "" });
+    showToast("Client ajouté.");
+  };
+
+  return (
+    <div className="p-4 md:p-8 max-w-6xl">
+      <header className="mb-6">
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 6</div>
+        <div className="display text-3xl" style={{ color: "#152238" }}>Comptes clients (CRM)</div>
+        <p className="text-sm mt-1" style={{ color: "#7A7460" }}>
+          Fiches alimentées automatiquement par les factures du Module 3 — un client apparaît dès sa première vente.
+        </p>
+      </header>
+
+      <div className="bg-white rounded-lg p-6 mb-6" style={{ border: "1px solid #E4DFD1" }}>
+        <div className="text-sm font-medium mb-3" style={{ color: "#152238" }}>Compléter une fiche client</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs" style={{ color: "#8A8370" }}>Nom du client</label>
+            <input value={newClient.name} onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
+              placeholder="Doit correspondre au nom saisi en vente"
+              className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: "#8A8370" }}>Email</label>
+            <input value={newClient.email} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
+              className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: "#8A8370" }}>Téléphone</label>
+            <input value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+              className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+          </div>
+          <button onClick={addClient} className="flex items-center justify-center gap-2 px-4 py-2 rounded text-sm text-white h-[38px]" style={{ background: "#152238" }}>
+            <Plus size={14} /> Enregistrer
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+        {rows.length === 0 ? (
+          <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }}>
+            Aucun client pour le moment. Les clients apparaissent ici dès qu'une vente leur est associée dans le Module 3.
+          </div>
+        ) : (
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead>
+              <tr className="text-left" style={{ color: "#8A8370", borderBottom: "1px solid #EEE9DA" }}>
+                <th className="py-2 font-normal">Client</th>
+                <th className="py-2 font-normal">Contact</th>
+                <th className="py-2 font-normal text-right">Factures</th>
+                <th className="py-2 font-normal text-right">Total facturé</th>
+                <th className="py-2 font-normal text-right">Solde dû</th>
+                <th className="py-2 font-normal">Dernier achat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <React.Fragment key={r.name}>
+                  <tr
+                    onClick={() => setSelected(selected === r.name ? null : r.name)}
+                    className="cursor-pointer"
+                    style={{ borderBottom: "1px solid #F3EFE3" }}
+                  >
+                    <td className="py-2 font-medium" style={{ color: "#152238" }}>{r.name}</td>
+                    <td className="py-2" style={{ color: "#7A7460" }}>{r.email || r.phone || "—"}</td>
+                    <td className="py-2 tabular text-right">{r.nb}</td>
+                    <td className="py-2 tabular text-right">{fmt(r.total)}</td>
+                    <td className="py-2 tabular text-right" style={{ color: r.due > 0 ? "#A6432F" : "#0F6B5C" }}>{fmt(r.due)}</td>
+                    <td className="py-2 tabular">{r.lastDate}</td>
+                  </tr>
+                  {selected === r.name && (
+                    <tr>
+                      <td colSpan={6} className="py-3 px-3" style={{ background: "#FAF8F1" }}>
+                        <div className="text-xs uppercase tracking-widest mb-2" style={{ color: "#8A8370" }}>Historique des factures</div>
+                        <div className="overflow-x-auto"><table className="w-full text-xs">
+                          <tbody>
+                            {r.invoices.map((inv) => (
+                              <tr key={inv.id}>
+                                <td className="py-1 tabular">{inv.number}</td>
+                                <td className="py-1 tabular">{inv.date}</td>
+                                <td className="py-1 tabular text-right">{fmt(inv.total)}</td>
+                                <td className="py-1 text-right">
+                                  <span className="px-2 py-0.5 rounded" style={{ background: inv.status === "payée" ? "#E6F1EE" : "#F7E9E3", color: inv.status === "payée" ? "#0F6B5C" : "#A6432F" }}>
+                                    {inv.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table></div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table></div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RapportsModule({ accounts, balances, invoices, purchases, entries, settings, showToast }) {
+  const [tab, setTab] = useState("resultat");
+
+  const produitsAccounts = accounts.filter((a) => a.type === "Produit").map((a) => ({ ...a, solde: -(balances[a.code] || 0) }));
+  const chargesAccounts = accounts.filter((a) => a.type === "Charge").map((a) => ({ ...a, solde: balances[a.code] || 0 }));
+  const totalProduits = produitsAccounts.reduce((s, a) => s + a.solde, 0);
+  const totalCharges = chargesAccounts.reduce((s, a) => s + a.solde, 0);
+  const resultat = totalProduits - totalCharges;
+
+  const actifAccounts = accounts.filter((a) => a.type === "Actif").map((a) => ({ ...a, solde: balances[a.code] || 0 }));
+  const passifAccounts = accounts.filter((a) => a.type === "Passif").map((a) => ({ ...a, solde: -(balances[a.code] || 0) }));
+  const capitauxAccounts = accounts.filter((a) => a.type === "Capitaux propres").map((a) => ({ ...a, solde: -(balances[a.code] || 0) }));
+  const totalActif = actifAccounts.reduce((s, a) => s + a.solde, 0);
+  const totalPassif = passifAccounts.reduce((s, a) => s + a.solde, 0) + capitauxAccounts.reduce((s, a) => s + a.solde, 0) + resultat;
+
+  const salesByMonth = useMemo(() => {
+    const byMonth = {};
+    invoices.forEach((inv) => {
+      const key = monthLabel(inv.date);
+      byMonth[key] = (byMonth[key] || 0) + inv.total;
+    });
+    return Object.entries(byMonth).map(([mois, total]) => ({ mois, total }));
+  }, [invoices]);
+
+  const topProducts = useMemo(() => {
+    const byProduct = {};
+    invoices.forEach((inv) => {
+      inv.lines.forEach((l) => {
+        if (!byProduct[l.name]) byProduct[l.name] = { name: l.name, qty: 0, revenue: 0 };
+        byProduct[l.name].qty += l.qty;
+        byProduct[l.name].revenue += l.subtotal;
+      });
+    });
+    return Object.values(byProduct).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+  }, [invoices]);
+
+  const exportFEC = () => {
+    const cols = ["JournalCode", "JournalLib", "EcritureNum", "EcritureDate", "CompteNum", "CompteLib", "CompAuxNum", "CompAuxLib", "PieceRef", "PieceDate", "EcritureLib", "Debit", "Credit", "EcritureLet", "DateLet", "ValidDate", "Montantdevise", "Idevise"];
+    const rows = [cols.join("\t")];
+    const sorted = [...entries].sort((a, b) => (a.date > b.date ? 1 : -1));
+    sorted.forEach((e, idx) => {
+      const ecritureNum = String(idx + 1).padStart(6, "0");
+      const dateFEC = (e.date || "").replaceAll("-", "");
+      (e.lines || []).forEach((l) => {
+        const acc = accounts.find((a) => a.code === l.account);
+        rows.push([
+          "OD", "Opérations diverses", ecritureNum, dateFEC,
+          l.account, acc?.name || "", "", "",
+          ecritureNum, dateFEC, e.label || "",
+          l.debit ? l.debit.toFixed(2) : "0.00",
+          l.credit ? l.credit.toFixed(2) : "0.00",
+          "", "", dateFEC, "", "",
+        ].join("\t"));
+      });
+    });
+    const blob = new Blob(["\uFEFF" + rows.join("\r\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `FEC-${(settings?.companyName || "export").replace(/\s+/g, "")}-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Fichier FEC généré.");
+  };
+
+  return (
+    <div className="p-4 md:p-8 max-w-6xl">
+      <header className="mb-6">
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 7</div>
+        <div className="display text-3xl" style={{ color: "#152238" }}>Rapports et analyse</div>
+        <p className="text-sm mt-1" style={{ color: "#7A7460" }}>États calculés en continu à partir du journal comptable et des ventes.</p>
+      </header>
+
+      <div className="flex gap-1 mb-6 flex-wrap">
+        {[["resultat", "Compte de résultat"], ["bilan", "Bilan simplifié"], ["balance", "Balance des comptes"], ["ventes", "Analyse des ventes"], ["export", "Export"]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className="px-4 py-2 text-sm rounded-t"
+            style={{
+              background: tab === id ? "#fff" : "transparent",
+              borderBottom: tab === id ? "2px solid #C9A24B" : "2px solid transparent",
+              color: tab === id ? "#152238" : "#8A8370",
+              fontWeight: tab === id ? 600 : 400,
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "resultat" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+            <div className="text-sm font-semibold mb-3" style={{ color: "#0F6B5C" }}>Produits</div>
+            <div className="overflow-x-auto"><table className="w-full text-sm mb-2">
+              <tbody>
+                {produitsAccounts.map((a) => (
+                  <tr key={a.code} style={{ borderBottom: "1px solid #F3EFE3" }}>
+                    <td className="py-1.5 tabular" style={{ color: "#7A7460" }}>{a.code}</td>
+                    <td className="py-1.5">{a.name}</td>
+                    <td className="py-1.5 tabular text-right">{fmt(a.solde)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+            <div className="flex justify-between tabular text-sm font-semibold pt-2" style={{ borderTop: "1px solid #EEE9DA" }}>
+              <span>Total produits</span><span>{fmt(totalProduits)}</span>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+            <div className="text-sm font-semibold mb-3" style={{ color: "#A6432F" }}>Charges</div>
+            <div className="overflow-x-auto"><table className="w-full text-sm mb-2">
+              <tbody>
+                {chargesAccounts.map((a) => (
+                  <tr key={a.code} style={{ borderBottom: "1px solid #F3EFE3" }}>
+                    <td className="py-1.5 tabular" style={{ color: "#7A7460" }}>{a.code}</td>
+                    <td className="py-1.5">{a.name}</td>
+                    <td className="py-1.5 tabular text-right">{fmt(a.solde)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+            <div className="flex justify-between tabular text-sm font-semibold pt-2" style={{ borderTop: "1px solid #EEE9DA" }}>
+              <span>Total charges</span><span>{fmt(totalCharges)}</span>
+            </div>
+          </div>
+          <div className="col-span-2 bg-white rounded-lg p-6 flex justify-between items-center" style={{ border: "1px solid #E4DFD1" }}>
+            <span className="text-sm font-medium" style={{ color: "#152238" }}>Résultat net</span>
+            <span className="tabular text-xl font-semibold" style={{ color: resultat >= 0 ? "#0F6B5C" : "#A6432F" }}>{fmt(resultat)}</span>
+          </div>
+        </div>
+      )}
+
+      {tab === "bilan" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+            <div className="text-sm font-semibold mb-3" style={{ color: "#152238" }}>Actif</div>
+            <div className="overflow-x-auto"><table className="w-full text-sm mb-2">
+              <tbody>
+                {actifAccounts.map((a) => (
+                  <tr key={a.code} style={{ borderBottom: "1px solid #F3EFE3" }}>
+                    <td className="py-1.5 tabular" style={{ color: "#7A7460" }}>{a.code}</td>
+                    <td className="py-1.5">{a.name}</td>
+                    <td className="py-1.5 tabular text-right">{fmt(a.solde)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+            <div className="flex justify-between tabular text-sm font-semibold pt-2" style={{ borderTop: "1px solid #EEE9DA" }}>
+              <span>Total actif</span><span>{fmt(totalActif)}</span>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+            <div className="text-sm font-semibold mb-3" style={{ color: "#152238" }}>Passif &amp; capitaux propres</div>
+            <div className="overflow-x-auto"><table className="w-full text-sm mb-2">
+              <tbody>
+                {[...capitauxAccounts, ...passifAccounts].map((a) => (
+                  <tr key={a.code} style={{ borderBottom: "1px solid #F3EFE3" }}>
+                    <td className="py-1.5 tabular" style={{ color: "#7A7460" }}>{a.code}</td>
+                    <td className="py-1.5">{a.name}</td>
+                    <td className="py-1.5 tabular text-right">{fmt(a.solde)}</td>
+                  </tr>
+                ))}
+                <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
+                  <td className="py-1.5 tabular" style={{ color: "#7A7460" }}>—</td>
+                  <td className="py-1.5">Résultat de l'exercice</td>
+                  <td className="py-1.5 tabular text-right">{fmt(resultat)}</td>
+                </tr>
+              </tbody>
+            </table></div>
+            <div className="flex justify-between tabular text-sm font-semibold pt-2" style={{ borderTop: "1px solid #EEE9DA" }}>
+              <span>Total passif + capitaux propres</span><span>{fmt(totalPassif)}</span>
+            </div>
+          </div>
+          {Math.round(totalActif) !== Math.round(totalPassif) && (
+            <div className="col-span-2 text-xs px-4 py-2 rounded" style={{ background: "#F7E9E3", color: "#A6432F" }}>
+              Écart entre actif et passif : {fmt(totalActif - totalPassif)} — vérifiez les écritures saisies.
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "balance" && (
+        <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead>
+              <tr className="text-left" style={{ color: "#8A8370", borderBottom: "1px solid #EEE9DA" }}>
+                <th className="py-2 font-normal">Code</th>
+                <th className="py-2 font-normal">Compte</th>
+                <th className="py-2 font-normal">Type</th>
+                <th className="py-2 font-normal text-right">Solde</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.map((a) => (
+                <tr key={a.code} style={{ borderBottom: "1px solid #F3EFE3" }}>
+                  <td className="py-2 tabular">{a.code}</td>
+                  <td className="py-2">{a.name}</td>
+                  <td className="py-2" style={{ color: "#7A7460" }}>{a.type}</td>
+                  <td className="py-2 tabular text-right">{fmt(balances[a.code] || 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+
+      {tab === "ventes" && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+            <div className="text-sm font-semibold mb-4" style={{ color: "#152238" }}>Chiffre d'affaires par mois</div>
+            {salesByMonth.length === 0 ? (
+              <div className="text-sm py-10 text-center" style={{ color: "#A39C87" }}>Aucune vente enregistrée.</div>
+            ) : (
+              <SimpleLineChart data={salesByMonth} xKey="mois" yKey="total" color="#0F6B5C" name="Chiffre d'affaires" />
+            )}
+          </div>
+          <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+            <div className="text-sm font-semibold mb-4" style={{ color: "#152238" }}>Meilleures ventes</div>
+            {topProducts.length === 0 ? (
+              <div className="text-sm py-10 text-center" style={{ color: "#A39C87" }}>Aucune vente enregistrée.</div>
+            ) : (
+              <div className="overflow-x-auto"><table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left" style={{ color: "#8A8370", borderBottom: "1px solid #EEE9DA" }}>
+                    <th className="py-2 font-normal">Article</th>
+                    <th className="py-2 font-normal text-right">Quantité vendue</th>
+                    <th className="py-2 font-normal text-right">Chiffre d'affaires</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topProducts.map((p) => (
+                    <tr key={p.name} style={{ borderBottom: "1px solid #F3EFE3" }}>
+                      <td className="py-2">{p.name}</td>
+                      <td className="py-2 tabular text-right">{p.qty}</td>
+                      <td className="py-2 tabular text-right">{p.revenue !== undefined ? fmt(p.revenue) : null}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "export" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white rounded-lg p-5" style={{ border: "1px solid #E4DFD1" }}>
+            <FileDown size={18} style={{ color: "#0F6B5C" }} className="mb-2" />
+            <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Export FEC</div>
+            <p className="text-xs mb-3" style={{ color: "#8A8370" }}>
+              Fichier des Écritures Comptables au format normé (18 colonnes, séparateur tabulation) — le format exigé par l'administration fiscale française en cas de contrôle.
+            </p>
+            <button onClick={exportFEC} className="px-3 py-1.5 rounded text-xs text-white" style={{ background: "#152238" }}>
+              Télécharger le FEC (.txt)
+            </button>
+          </div>
+          <div className="bg-white rounded-lg p-5 no-print" style={{ border: "1px solid #E4DFD1" }}>
+            <Printer size={18} style={{ color: "#0F6B5C" }} className="mb-2" />
+            <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Export PDF</div>
+       
