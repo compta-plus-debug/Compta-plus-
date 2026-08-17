@@ -9,7 +9,7 @@ const SUPABASE_URL = "https://cnmmxpwlgovzbcfqaxqm.supabase.co";
 // livraison, en même temps que le cache-buster ?v=... d'index.html, pour pouvoir
 // vérifier en un coup d'œil dans l'app elle-même quelle version tourne réellement,
 // sans avoir besoin des outils développeur (peu pratiques sur mobile).
-const APP_VERSION = "20260817-1";
+const APP_VERSION = "20260817-2";
 const SUPABASE_ANON_KEY = "sb_publishable_Ba1KJd2YY-eLaCy1FRECIA_C1DoyAjL";
 let _supabaseClient = null;
 function supabaseClient() {
@@ -322,9 +322,17 @@ async function resolveMembershipInner() {
 
   try { localStorage.setItem("compta-plus-trial-used", new Date().toISOString()); } catch (e) {}
 
-  const { error: memberErr } = await supabase.from("company_members").insert({
-    company_id: company.id, email: user.email, user_id: user.id, role: "Administrateur",
+  let { error: memberErr } = await supabase.from("company_members").insert({
+    company_id: company.id, email: user.email, user_id: user.id, role: "Administrateur", is_primary_admin: true,
   });
+  if (memberErr && memberErr.code === "42703") {
+    // Colonne is_primary_admin pas encore migrée : retente sans elle plutôt que de
+    // bloquer toute inscription.
+    const retryInsert = await supabase.from("company_members").insert({
+      company_id: company.id, email: user.email, user_id: user.id, role: "Administrateur",
+    });
+    memberErr = retryInsert.error;
+  }
   if (memberErr) {
     // Le verrou "un email = une seule entreprise" (index unique en base) a bloqué
     // cette création — ça veut dire qu'une ligne existait déjà pour cet email mais
@@ -2384,6 +2392,7 @@ function App() {
             setSettings={setSettings}
             users={users}
             setUsers={setUsers}
+            currentUserEmail={currentUserEmail}
             accounts={accounts}
             entries={entries}
             products={products}
@@ -7148,7 +7157,7 @@ function RapportsModule({ accounts, balances, invoices, purchases, entries, sett
 }
 
 function AdminModule({
-  settings, setSettings, users, setUsers,
+  settings, setSettings, users, setUsers, currentUserEmail,
   accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, auditLog,
   employees, payslips, salaryAdvances,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
@@ -7188,11 +7197,19 @@ function AdminModule({
     setMembersLoading(true);
     try {
       const { companyId } = await resolveMembership();
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("company_members")
-        .select("id, email, role, user_id")
+        .select("id, email, role, user_id, is_primary_admin")
         .eq("company_id", companyId)
         .order("created_at", { ascending: true });
+      if (error && error.code === "42703") {
+        const retry = await supabase
+          .from("company_members")
+          .select("id, email, role, user_id")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: true });
+        data = retry.data; error = retry.error;
+      }
       if (!error) setMembers(data || []);
     } catch (e) {
       // hors mode Supabase, rien à charger
@@ -7303,6 +7320,10 @@ function AdminModule({
   };
 
   const changeUserRole = async (member, role) => {
+    if (member.is_primary_admin && (!currentUserEmail || member.email.toLowerCase() !== currentUserEmail.toLowerCase())) {
+      showToast("Un administrateur principal ne peut pas être rétrogradé par un autre administrateur.");
+      return;
+    }
     await supabase.from("company_members").update({ role }).eq("id", member.id);
     loadMembers();
     showToast("Rôle mis à jour.");
@@ -7310,6 +7331,10 @@ function AdminModule({
   };
 
   const removeUser = async (member) => {
+    if (member.is_primary_admin && (!currentUserEmail || member.email.toLowerCase() !== currentUserEmail.toLowerCase())) {
+      showToast("Un administrateur principal ne peut pas être retiré par un autre administrateur.");
+      return;
+    }
     const warning = member.user_id
       ? `Retirer ${member.email} de l'entreprise ? Ce membre a déjà un compte actif — il perdra l'accès immédiatement et devra être réinvité pour revenir.`
       : `Annuler l'invitation en attente pour ${member.email} ? Le lien d'invitation envoyé (par WhatsApp, SMS, etc.) cessera immédiatement de fonctionner.`;
@@ -7694,12 +7719,24 @@ function AdminModule({
               {!membersLoading && members.length === 0 && (
                 <tr><td colSpan={4} className="py-8 text-center" style={{ color: "#A39C87" }}>Aucun membre pour le moment.</td></tr>
               )}
-              {members.map((m) => (
+              {members.map((m) => {
+                const isMe = currentUserEmail && m.email && m.email.toLowerCase() === currentUserEmail.toLowerCase();
+                const locked = m.is_primary_admin && !isMe;
+                return (
                 <tr key={m.id} style={{ borderBottom: "1px solid #F3EFE3" }}>
-                  <td className="py-2" style={{ color: "#7A7460" }}>{m.email}</td>
+                  <td className="py-2" style={{ color: "#7A7460" }}>
+                    {m.email}
+                    {m.is_primary_admin && (
+                      <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded" style={{ background: "#FBF1DC", color: "#9A7B1E" }} title="Administrateur principal — a créé cette entreprise, ne peut pas être retiré ni rétrogradé par un autre administrateur">
+                        ★ principal
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2">
                     <select value={m.role} onChange={(e) => changeUserRole(m, e.target.value)}
-                      className="border rounded px-2 py-1 text-xs" style={{ borderColor: "#DDD6C4" }}>
+                      disabled={locked}
+                      title={locked ? "Un administrateur principal ne peut pas être rétrogradé par un autre administrateur." : undefined}
+                      className="border rounded px-2 py-1 text-xs" style={{ borderColor: "#DDD6C4", opacity: locked ? 0.6 : 1 }}>
                       <option>Administrateur</option>
                       <option>Éditeur</option>
                       <option>Vendeur</option>
@@ -7712,12 +7749,16 @@ function AdminModule({
                     </span>
                   </td>
                   <td className="py-2 text-right">
-                    {members.length > 1 && (
+                    {members.length > 1 && !locked && (
                       <button onClick={() => removeUser(m)} style={{ color: "#A6432F" }}><Trash2 size={14} /></button>
+                    )}
+                    {locked && (
+                      <span title="Un administrateur principal ne peut pas être retiré par un autre administrateur."><Lock size={13} style={{ color: "#A39C87" }} /></span>
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table></div>
         </div>
