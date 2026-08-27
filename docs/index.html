@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Compta+ — ERP Comptabilité</title>
+    <meta name="theme-color" content="#14458F" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="icon" href="icons/icon-192.png" />
+    <style>
+      /* Filet de sécurité anti-débordement : empêche la PAGE ENTIÈRE de défiler
+         horizontalement si un élément déborde par erreur (ex. bug "CSS Grid blowout").
+         N'affecte pas les tableaux qui ont volontairement leur propre défilement
+         horizontal interne (overflow-x-auto), seulement le défilement de la page. */
+      html, body { max-width: 100%; overflow-x: hidden; overscroll-behavior-x: none; }
+      /* Empêche le geste natif "retour" du navigateur (glissement depuis le bord de l'écran)
+         d'entrer en conflit avec le tiroir de navigation de l'application, qui utilise le
+         même geste horizontal depuis le bord gauche. */
+      html, body { touch-action: pan-y; }
+    </style>
+
+    <!-- Tailwind CSS (CDN — génère les styles utilitaires utilisés par l'app, ex: flex, w-64, px-5) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React (CDN, aucune installation requise, version fixée) -->
+    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Supabase (CDN, version précise et stable, expose window.supabase.createClient) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js" crossorigin></script>
+    <!-- jsPDF + autoTable (CDN) : génère de vrais fichiers PDF téléchargeables directement,
+         sans dépendre de la boîte de dialogue d'impression du téléphone (peu fiable sur
+         Android/iOS pour "Enregistrer en PDF"). Expose window.jspdf.jsPDF. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin></script>
+    <!-- Scan de codes-barres/QR via la caméra (CDN, expose window.Html5Qrcode) -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" crossorigin></script>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot-status" style="font-family: sans-serif; padding: 24px; color: #152238;">Chargement de Compta+…</div>
+    </div>
+
+    <!-- Filet de sécurité : affiche toute erreur directement sur la page, sans besoin des outils de développement -->
+    <script>
+      function showBootError(msg) {
+        var el = document.getElementById("root");
+        if (el) {
+          el.innerHTML =
+            '<div style="font-family: monospace; padding: 24px; color: #A6432F; background:#F7E9E3; white-space: pre-wrap; word-break: break-word;">' +
+            '<b>Erreur au chargement de Compta+ :</b><br><br>' + String(msg) + '</div>';
+        }
+      }
+      window.addEventListener("error", function (e) {
+        showBootError((e && e.message) || e);
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        showBootError((e && e.reason && (e.reason.message || e.reason)) || e);
+      });
+      setTimeout(function () {
+        var el = document.getElementById("boot-status");
+        if (el) {
+          showBootError(
+            "L'application n'a pas démarré après 6 secondes.\n\n" +
+            "Cause probable : le fichier app.min.js est incomplet (upload tronqué) ou une des ressources (React, Supabase) n'a pas pu se charger.\n\n" +
+            "Essayez d'ouvrir app.min.js directement dans le navigateur pour vérifier qu'il n'est pas vide."
+          );
+        }
+      }, 6000);
+    </script>
+
+    <!-- Filet de secours : si le script classique Supabase n'a pas fonctionné, on retente via ESM -->
+    <script type="module">
+      if (!(window.supabase && window.supabase.createClient)) {
+        import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/+esm")
+          .then((mod) => { window.supabase = { createClient: mod.createClient }; })
+          .catch((e) => console.error("Repli Supabase ESM échoué :", e));
+      }
+    </script>
+
+    <!-- L'application : code source pré-compilé et minifié (app.min.js), pas le fichier
+         app.jsx lisible — pour ne pas exposer publiquement la logique commentée du logiciel.
+         Le paramètre ?v=... force le navigateur ET le CDN de GitHub Pages à recharger
+         le fichier à chaque déploiement, au lieu de servir une copie en cache périmée.
+         IMPORTANT : change ce numéro (date du jour par ex.) à chaque nouveau déploiement. -->
+    <script src="app.min.js?v=20260827-7"></script>
+
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          // Même logique : ?v=... force la re-vérification du service worker à chaque déploiement.
+          navigator.serviceWorker.register("sw.js?v=20260827-7").catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>
