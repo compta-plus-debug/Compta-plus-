@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ajouter une pièce — Compta+</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:18px;background:#152238;color:#efe9dd}
+.c{max-width:520px;margin:0 auto}h1{font-size:20px;margin:0 0 6px}p{font-size:14px;color:#c9d0e0;line-height:1.45}
+.card{background:#efe9dd;color:#152238;border-radius:10px;padding:14px;margin:14px 0}
+label.b,a.b,button.b{display:block;text-align:center;background:#c9a24b;color:#152238;font-size:17px;font-weight:600;padding:14px;border-radius:8px;text-decoration:none;border:0;width:100%;box-sizing:border-box}
+a.s{display:block;text-align:center;color:#efe9dd;margin-top:14px;font-size:15px}
+#list div{font-size:14px;padding:6px 0;border-top:1px solid #d9d2bf;word-break:break-word}.ok{color:#0f6b5c}.ko{color:#a6432f}
+</style></head><body><div class="c">
+<h1>Ajouter une pièce justificative</h1>
+<p>Page légère pour les téléphones où l'application se ferme au choix d'un fichier. Choisissez un ou plusieurs fichiers (PDF ou photo, 5 Mo maximum chacun). Ils seront ajoutés à vos pièces dès votre retour dans Compta+.</p>
+<div class="card">
+ <label class="b" id="pick">Choisir des fichiers<input id="f" type="file" multiple accept="application/pdf,image/*" style="display:none"></label>
+ <div id="list"><div id="st">Chargement…</div></div>
+</div>
+<a class="s" href="./" id="back">← Retour à Compta+</a>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js" crossorigin></script>
+<script>
+const URL_="https://cnmmxpwlgovzbcfqaxqm.supabase.co",KEY="sb_publishable_Ba1KJd2YY-eLaCy1FRECIA_C1DoyAjL";
+const LIST=document.getElementById("list"),ST=document.getElementById("st");
+const add=(t,c)=>{const d=document.createElement("div");if(c)d.className=c;d.textContent=t;LIST.appendChild(d);return d;};
+const MAX=5*1024*1024;
+const safe=(n)=>(String(n||"piece").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9._-]+/g,"_").slice(-80)||"piece");
+const uid=()=>(self.crypto&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2)).replace(/-/g,"").slice(0,24);
+let sb=null,cid=null,ready=false;
+(async()=>{
+ try{
+  if(!window.supabase)throw new Error("connexion impossible (réseau ?)");
+  sb=window.supabase.createClient(URL_,KEY,{auth:{flowType:"implicit"}});
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){ST.textContent="Vous n'êtes pas connecté : ouvrez Compta+, connectez-vous, puis revenez ici.";ST.className="ko";return;}
+  const r=await sb.from("company_members").select("company_id,role").eq("user_id",session.user.id);
+  const rows=(r.data||[]).filter(x=>x.role==="Administrateur"||x.role==="Éditeur");
+  if(r.error||rows.length===0){ST.textContent="Aucune entreprise où vous pouvez ajouter des pièces.";ST.className="ko";return;}
+  let pref=null;try{pref=localStorage.getItem("compta_preferred_company_"+session.user.id)}catch(e){}
+  cid=(rows.find(x=>x.company_id===pref)||rows[0]).company_id;ready=true;ST.textContent="Prêt. Choisissez vos fichiers.";
+ }catch(e){ST.textContent="Erreur : "+(e&&e.message||e);ST.className="ko";}
+})();
+document.getElementById("f").addEventListener("change",async(ev)=>{
+ const files=Array.from(ev.target.files||[]);ev.target.value="";
+ if(!files.length)return;
+ if(!ready){add("La page n'est pas prête : voir le message ci-dessus.","ko");return;}
+ for(const f of files){
+  if(f.size>MAX){add(f.name+" : trop volumineux ("+Math.round(f.size/1024)+" Ko, maximum 5120 Ko).","ko");continue;}
+  const line=add(f.name+" : envoi en cours…");
+  try{
+   const path=cid+"/pending/"+uid()+"-"+safe(f.name);
+   const up=await sb.storage.from("justificatifs").upload(path,f,{contentType:f.type||(/\.pdf$/i.test(f.name)?"application/pdf":"application/octet-stream"),upsert:false});
+   if(up.error){line.textContent=f.name+" : échec — "+(up.error.message||"erreur");line.className="ko";}
+   else{line.textContent=f.name+" : envoyé ✓";line.className="ok";}
+  }catch(e){line.textContent=f.name+" : échec — "+(e&&e.message||e);line.className="ko";}
+ }
+ add("Terminé. Touchez « Retour à Compta+ » : vos pièces seront ajoutées automatiquement.","ok");
+});
+</script></body></html>
