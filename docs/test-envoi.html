@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test d'envoi de pièce — Compta+</title>
+<style>body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#f7f4ea;color:#152238}h1{font-size:18px}
+button,input{font-size:16px}#log{white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid #ddd6c4;border-radius:6px;padding:10px;margin-top:12px;font-size:14px;min-height:120px}
+.ok{color:#0f6b5c}.ko{color:#a6432f}</style></head><body>
+<h1>Test d'envoi d'une pièce (Compta+)</h1>
+<p>Ouvrez d'abord Compta+ et connectez-vous, puis revenez ici. Choisissez un fichier : la page tente de l'envoyer vers le stockage, étape par étape, puis le supprime. Rien n'est conservé.</p>
+<input type="file" id="f" accept="application/pdf,image/*">
+<div id="log">Chargement…</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js" crossorigin></script>
+<script>
+const URL_="https://cnmmxpwlgovzbcfqaxqm.supabase.co",KEY="sb_publishable_Ba1KJd2YY-eLaCy1FRECIA_C1DoyAjL";
+const L=document.getElementById("log");let lines=[];
+const say=(t,c)=>{lines.push((c?'<span class="'+c+'">':'<span>')+t.replace(/</g,"&lt;")+'</span>');L.innerHTML=lines.join("\n");};
+// Détecte un rechargement de la page pendant le choix du fichier
+try{const p=sessionStorage.getItem("diag-pick");if(p){sessionStorage.removeItem("diag-pick");say("⚠ La page s'est rechargée pendant le choix du fichier (le téléphone a fermé la page).","ko");}}catch(e){}
+let sb=null,cid=null;
+(async()=>{
+ try{
+  if(!window.supabase)throw new Error("bibliothèque non chargée (réseau ?)");
+  sb=window.supabase.createClient(URL_,KEY,{auth:{flowType:"implicit"}});
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){say("Aucune session : ouvrez Compta+, connectez-vous, puis rechargez cette page.","ko");return;}
+  say("Session : "+session.user.email,"ok");
+  const r=await sb.from("company_members").select("company_id").eq("user_id",session.user.id).limit(1);
+  if(r.error||!r.data||!r.data[0]){say("Entreprise introuvable : "+(r.error?r.error.message:"aucune"),"ko");return;}
+  cid=r.data[0].company_id;say("Entreprise trouvée.","ok");say("Choisissez un fichier ci-dessus.");
+ }catch(e){say("Erreur au démarrage : "+(e&&e.message||e),"ko");}
+})();
+document.getElementById("f").addEventListener("click",()=>{try{sessionStorage.setItem("diag-pick","1");window.addEventListener("focus",()=>setTimeout(()=>{try{sessionStorage.removeItem("diag-pick")}catch(e){}},2500),{once:true});}catch(e){}});
+document.getElementById("f").addEventListener("change",async(ev)=>{
+ const f=ev.target.files&&ev.target.files[0];
+ if(!f){say("Aucun fichier reçu par la page.","ko");return;}
+ say("Fichier reçu : "+f.name+" — "+Math.round(f.size/1024)+" Ko — type « "+(f.type||"inconnu")+" »","ok");
+ if(!sb||!cid){say("La page n'est pas prête (voir plus haut).","ko");return;}
+ const t0=Date.now();const el=()=>((Date.now()-t0)/1000).toFixed(1)+" s";
+ try{
+  const head=new Uint8Array(await f.slice(0,8).arrayBuffer());say("Lecture du fichier : OK ("+head.length+" octets lus)","ok");
+  const path=cid+"/diag-"+Date.now()+"-test.pdf";
+  say("Envoi en cours…");
+  const up=await sb.storage.from("justificatifs").upload(path,f,{contentType:f.type||"application/pdf",upsert:false});
+  if(up.error){say("ÉCHEC de l'envoi après "+el()+" : "+(up.error.message||JSON.stringify(up.error)),"ko");return;}
+  say("Envoi réussi en "+el(),"ok");
+  const sg=await sb.storage.from("justificatifs").createSignedUrl(path,60);
+  say(sg.error?("Lien d'ouverture : ÉCHEC — "+sg.error.message):"Lien d'ouverture : OK",sg.error?"ko":"ok");
+  const rm=await sb.storage.from("justificatifs").remove([path]);
+  say(rm.error?("Suppression du test : ÉCHEC — "+rm.error.message):"Fichier de test supprimé : OK",rm.error?"ko":"ok");
+  say("\nRésultat : le stockage fonctionne avec ce fichier sur ce téléphone.","ok");
+ }catch(e){say("ERREUR après "+el()+" : "+(e&&e.name)+" — "+(e&&e.message||e),"ko");}
+});
+</script></body></html>
