@@ -10,6 +10,10 @@ on:
       - "*.jsx"
       - "build.mjs"
       - "controle.mjs"
+      - "dependances.mjs"
+      - "entetes.mjs"
+      - "tst-*"
+      - "tests/**"
   workflow_dispatch:
 
 permissions:
@@ -35,6 +39,16 @@ jobs:
           if [ -f build/build.mjs ]; then S=build/build.mjs; else S=build.mjs; fi
           echo "Script : $S"
           node "$S" "$CIBLE"
+
+      - name: Installer le navigateur de test
+        run: |
+          if [ -f tests/tst-lancer.mjs ] || [ -f tst-lancer.mjs ]; then npx playwright install --with-deps chromium; else echo "Tests non installés : étape ignorée."; fi
+
+      - name: Tests automatiques
+        run: |
+          if [ -f tests/tst-lancer.mjs ]; then node tests/tst-lancer.mjs
+          elif [ -f tst-lancer.mjs ]; then node tst-lancer.mjs
+          else echo "Tests non installés : étape ignorée."; fi
 
       - name: Garder une copie téléchargeable (secours)
         uses: actions/upload-artifact@v4
