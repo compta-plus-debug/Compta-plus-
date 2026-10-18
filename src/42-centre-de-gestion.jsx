@@ -1,3 +1,7 @@
+// ═══ MODULE ═══
+// @module Centre de gestion
+// @depends BadgeDollar, CabinetBillingPanel, CabinetRequestsPanel, GroupedTabNav, SimpleGroupedBarChart, SupervisionPanel, SupportInbox, X, friendlyError, invokeEdgeFunction, logClientError, supabase, useEffect, useState
+// @exports CentreDeGestionModule
 function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin }) {
   const [tab, setTab] = useState("entreprises");
   const [companies, setCompanies] = useState([]);
