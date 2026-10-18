@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Scanner et ventes hors ligne
+// @depends X, _membership, fmt, friendlyError, resolveMembership, sanitizeUserMessage, useEffect
+//   useState
+// @exports BarcodeScannerModal, OFL_EVT, OflPanel, oflCompanyId, oflEnqueue, oflFinal, oflIsNetworkError
+//   oflLoad, oflProvisionalNumber, oflReserved, oflSyncAll, oflTimeout
+// ═══ FIN DE L'EN-TÊTE ═══
 // Fenêtre de scan de code-barres/QR via la caméra du téléphone/ordinateur. Utilise la
 // bibliothèque html5-qrcode chargée en CDN (window.Html5Qrcode). Appelle onScan(code) dès
 // qu'un code est détecté, puis se ferme automatiquement.

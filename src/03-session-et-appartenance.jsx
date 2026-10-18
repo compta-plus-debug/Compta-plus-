@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Session et appartenance
+// @depends NET_MSG, _extraInvitesFor, _hlNetBadUntil, _membership, _membershipPromise, genInviteToken
+//   hlMeta, hlNetDown, hlOfflineAllowed, oflIsNetworkError, oflTimeout, supabase, uid
+// @exports chooseCompany, clearMembershipCache, dlog, forgetCompanyChoice, invokeEdgeFunction
+//   resolveMembership
+// ═══ FIN DE L'EN-TÊTE ═══
 // Journalisation de diagnostic TEMPORAIRE (table debug_login_log, voir
 // debug-login-log.sql) — best-effort, ne doit jamais faire échouer le flux réel même
 // si l'insertion elle-même échoue (ex. table pas encore créée).

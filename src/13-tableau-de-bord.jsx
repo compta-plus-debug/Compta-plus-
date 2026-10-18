@@ -1,3 +1,9 @@
+// ═══ MODULE ═══
+// @module Tableau de bord
+// @depends Download, SimpleGroupedBarChart, SimpleGrowthBarChart, balanceDue, fmt, normalizeClientName
+//   useState
+// @exports Card, Dashboard
+// ═══ FIN DE L'EN-TÊTE ═══
 function Card({ label, value, accent }) {
   return (
     <div className="rounded-lg p-5 bg-white min-w-0" style={{ border: "1px solid #E4DFD1" }}>

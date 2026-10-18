@@ -1,3 +1,11 @@
+// ═══ MODULE ═══
+// @module Rapports et bilans
+// @depends ComparatifPanel, DeclarationIRPanel, DeclarationTCAPanel, Download, EC_BALANCE_COLS
+//   EC_JOURNAL_COLS, FileDown, GroupedTabNav, Printer, SimpleDonutChart, SimpleLineChart
+//   computeBalances, downloadEtatsFinanciersPDF, downloadTablePDF, ecBalanceRows, ecCsv
+//   ecDownloadCsv, ecJournalRows, fmt, monthLabel, todayStr, useBackNav, useMemo, useState
+// @exports RapportsModule
+// ═══ FIN DE L'EN-TÊTE ═══
 function buildLedger(entries, accountCode, from, to) {
   const lines = [];
   (entries || []).forEach((e, idx) => {

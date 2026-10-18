@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Administration securite et groupes
+// @depends BluetoothIcon, Eye, EyeOff, Plus, Printer, Trash2, connectThermalPrinter
+//   disconnectThermalPrinter, friendlyError, getRememberedPrinterName, invokeEdgeFunction
+//   isThermalPrinterConnected, printInvoiceBluetooth, supabase, todayStr, uid, useEffect, useState
+// @exports BluetoothPrinterCard, CompanyGroupPanel, CompanySecurityPinPanel, SalesStationsPanel
+// ═══ FIN DE L'EN-TÊTE ═══
 // Panneau de gestion du code de sécurité partagé de l'entreprise — visible
 // uniquement de l'Administrateur principal (contrôlé par le composant appelant).
 // Le code lui-même n'est jamais stocké ni transmis en clair : seule son empreinte

@@ -1,3 +1,8 @@
+// ═══ MODULE ═══
+// @module Gestion import caisse
+// @depends Receipt, normalizeClientName
+// @exports posBuildImport, posParseReceipts, posPayAccountFor
+// ═══ FIN DE L'EN-TÊTE ═══
 // ---------------------------------------------------------------- Phase 3 : avoirs / retours
 // K:POS:START
 // Import de tickets d'un POS externe (Zobase POS) : lecture du texte des tickets, contrôle des totaux,

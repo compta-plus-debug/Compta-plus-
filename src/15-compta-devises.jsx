@@ -1,3 +1,8 @@
+// ═══ MODULE ═══
+// @module Compta devises
+// @depends CURRENCIES, fmt, isFutureDate, isLocked, todayStr, uid, useMemo, useState
+// @exports DevisesPanel
+// ═══ FIN DE L'EN-TÊTE ═══
 // ── Chantier E : opérations en devise et écarts de change ───────────────────
 // Principe : une créance client ou une dette fournisseur en devise est enregistrée
 // dans la devise de tenue de compte (settings.currency) au taux du jour, avec les

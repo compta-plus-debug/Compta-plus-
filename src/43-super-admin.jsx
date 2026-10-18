@@ -1,7 +1,10 @@
 // ═══ MODULE ═══
-// @module Super Admin
-// @depends FALLBACK_HTG_PER_USD, NET_MSG, PAYMENT_METHODS, SimpleDonutChart, SimpleLineChart, fetchHtgPerUsd, friendlyError, isFutureDate, monthLabel, periodLabel, supabase, todayStr, useEffect, useState
+// @module Super admin
+// @depends FALLBACK_HTG_PER_USD, NET_MSG, PAYMENT_METHODS, SimpleDonutChart, SimpleLineChart
+//   fetchHtgPerUsd, friendlyError, isFutureDate, monthLabel, periodLabel, supabase, todayStr
+//   useEffect, useState
 // @exports SuperAdminModule
+// ═══ FIN DE L'EN-TÊTE ═══
 function SuperAdminModule({ showToast }) {
   const [tab, setTab] = useState("dashboard"); // dashboard | entreprises | rapports | erreurs
   const [errorLogs, setErrorLogs] = useState(null); // null = pas encore chargé

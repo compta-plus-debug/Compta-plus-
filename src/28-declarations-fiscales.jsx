@@ -1,3 +1,8 @@
+// ═══ MODULE ═══
+// @module Declarations fiscales
+// @depends HEADER_RGB, fmt, pdfSafe, useState
+// @exports ComparatifPanel, DeclarationIRPanel, DeclarationTCAPanel, FISCAL_RULES_VALIDATED
+// ═══ FIN DE L'EN-TÊTE ═══
 const MOIS_NOMS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
 // Reproduit le Formulaire No. 018 de la DGI (Haïti) — "Taxe sur le chiffre

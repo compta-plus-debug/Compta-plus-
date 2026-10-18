@@ -1,3 +1,16 @@
+// ═══ MODULE ═══
+// @module Vente
+// @depends AssistedPrincipleReminder, BarcodeScannerModal, BluetoothIcon, BluetoothPrinterCard
+//   CheckCircle2, ChequeDialog, Download, History, ImageIcon, Lock, Minus, OFL_EVT, OflPanel
+//   Pencil, PendingRecommendationsBanner, Plus, Printer, ProductHistoryModal, Receipt
+//   RecordedStamp, RotateCcw, ScanLine, TAX_SYSTEMS, Trash2, X, _membership, balanceDue
+//   detectAmountAnomaly, detectDuplicateAnomaly, detectTaxAnomaly, downloadInvoicePDF, fmt
+//   isFutureDate, isLocked, makeChequeRecord, normalizeClientName, oflCompanyId, oflEnqueue
+//   oflFinal, oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved, oflTimeout
+//   printInvoiceBluetooth, resizeImage, simpleEntry, suggestSimilarTiers, supabase, todayStr, uid
+//   useAssistedAnomalyGate, useBackNav, useEffect, useMemo, useState
+// @exports VenteModule
+// ═══ FIN DE L'EN-TÊTE ═══
 function VenteModule({ setCheques, accounts, entries, setEntries, products: productsProp, setProducts, productImages, setProductImages, invoices, setInvoices, movements, setMovements, settings, setSettings, salesStations, stationId, setStationId, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation }) {
   const anomalyGate = useAssistedAnomalyGate();
   // --- Vente hors ligne : file locale, stock réservé, état de connexion ---

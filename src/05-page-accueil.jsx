@@ -1,3 +1,9 @@
+// ═══ MODULE ═══
+// @module Page accueil
+// @depends BarChart3, BookOpen, Boxes, FALLBACK_HTG_PER_USD, ShoppingCart, Truck, Users, fetchHtgPerUsd
+//   useEffect, useState
+// @exports LandingPage
+// ═══ FIN DE L'EN-TÊTE ═══
 // --- Page d'accueil publique — première chose vue par un visiteur non connecté,
 // avant l'écran de connexion. Sert de vitrine du produit.
 function LandingPage({ onStart }) {

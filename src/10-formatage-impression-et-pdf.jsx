@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Formatage impression et pdf
+// @depends CURRENCIES, CURRENT_CURRENCY, todayStr
+// @exports HEADER_RGB, RecordedStamp, connectThermalPrinter, disconnectThermalPrinter
+//   downloadEtatsFinanciersPDF, downloadInvoicePDF, downloadTablePDF, fmt
+//   getRememberedPrinterName, isThermalPrinterConnected, pdfSafe, printInvoiceBluetooth
+// ═══ FIN DE L'EN-TÊTE ═══
 const fmt = (n) => {
   const code = CURRENT_CURRENCY;
   const locale = CURRENCIES[code]?.locale || "fr-FR";

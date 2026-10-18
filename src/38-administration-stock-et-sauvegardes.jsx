@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Administration stock et sauvegardes
+// @depends APP_VERSION, RotateCcw, computeBalances, fmt, isFutureDate, isLocked, todayStr, uid, useEffect
+//   useState
+// @exports BK_LABELS, PartialResetPanel, RestorePointsPanel, RestorePreviewModal, StockMethodPanel
+//   bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify, rpSave
+// ═══ FIN DE L'EN-TÊTE ═══
 // ── Changement de méthode de stock avec écriture de régularisation ─────────
 function StockMethodPanel({ settings, setSettings, accounts, entries, setEntries, products, isPrimaryAdmin, showToast, logAudit }) {
   const current = settings.stockValuationMethod === "actif" ? "actif" : "charge";

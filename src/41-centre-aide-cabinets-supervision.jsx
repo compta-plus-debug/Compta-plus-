@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Centre aide cabinets supervision
+// @depends EC_BALANCE_COLS, EC_JOURNAL_COLS, EC_PLAN_COLS, NET_MSG, Send, ecBalanceRows, ecChecks, ecCsv
+//   ecDownloadCsv, ecJournalRows, ecPlanRows, friendlyError, supabase, uid, unwrapVersioned
+//   useEffect, useMemo, useState
+// @exports CabinetBillingPanel, CabinetRequestsPanel, CabinetSpace, SupervisionPanel, SupportInbox
+// ═══ FIN DE L'EN-TÊTE ═══
 // --- Boîte de réception du Centre d'aide (côté support, dans le Centre de gestion) ---
 // Les messages sont regroupés par utilisateur (une conversation par personne),
 // puis découpés en « échanges » : un échange = une ou plusieurs questions de

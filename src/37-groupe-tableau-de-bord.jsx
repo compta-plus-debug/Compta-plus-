@@ -1,3 +1,9 @@
+// ═══ MODULE ═══
+// @module Groupe tableau de bord
+// @depends SimpleGroupedBarChart, chooseCompany, computeBalances, computeKpis, fmt, friendlyError
+//   genInviteToken, invokeEdgeFunction, supabase, unwrapVersioned, useEffect, useState
+// @exports GroupDashboardModule
+// ═══ FIN DE L'EN-TÊTE ═══
 // --- Tableau de bord consolidé du groupe ---
 function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlanStatus, groupTrialEndsAt, companyId, role, showToast, onGroupRenamed, onRequestsChanged, onEnterCurrentCompany, onJumpToModule }) {
   const [loading, setLoading] = useState(true);

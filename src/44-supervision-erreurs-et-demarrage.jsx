@@ -1,3 +1,8 @@
+// ═══ MODULE ═══
+// @module Supervision erreurs et demarrage
+// @depends APP_VERSION, App, AuthGate, _membership, supabase
+// @exports logClientError
+// ═══ FIN DE L'EN-TÊTE ═══
 // --- Supervision d'erreurs basique ---
 // Capte toute erreur JS non gérée (window.onerror) et toute promesse rejetée
 // non gérée (unhandledrejection) n'importe où dans l'app, et les journalise dans

@@ -1,3 +1,9 @@
+// ═══ MODULE ═══
+// @module Calculs comptables
+// @depends uid
+// @exports balanceDue, computeBalances, computeKpis, monthLabel, periodLabel, resizeImage, simpleEntry
+//   stockReconcile, unwrapVersioned
+// ═══ FIN DE L'EN-TÊTE ═══
 const monthLabel = (d) => {
   // Construit la date à partir des composants AAAA-MM-JJ directement en heure locale,
   // sans passer par l'interprétation UTC de `new Date(chaîne)` — celle-ci décale les

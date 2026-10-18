@@ -1,3 +1,13 @@
+// ═══ MODULE ═══
+// @module Achats
+// @depends AssistedPrincipleReminder, CheckCircle2, ChequeDialog, History, Pencil
+//   PendingRecommendationsBanner, Plus, RecordedStamp, RotateCcw, Trash2, X, _membership
+//   cleanSuggestionLabel, detectAmountAnomaly, detectDuplicateAnomaly, detectRareAccountAnomaly
+//   fmt, isFutureDate, isLocked, makeChequeRecord, normalizeClientName, simpleEntry
+//   suggestAccountFromHistory, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect
+//   useState
+// @exports AchatModule, ProductHistoryModal
+// ═══ FIN DE L'EN-TÊTE ═══
 // Modal d'historique produit — réutilisé depuis Vente (POS/Catalogue) et Achat et
 // fournisseurs, pour afficher tous les mouvements (achats reçus, ventes, pertes,
 // dons, ajustements) d'un même produit, du plus récent au plus ancien.

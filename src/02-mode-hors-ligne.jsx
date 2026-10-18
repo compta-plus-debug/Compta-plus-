@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Mode hors ligne
+// @depends —
+// @exports HL_EVT, _hlNetBadUntil, hlCacheAll, hlCachePut, hlClearCache, hlKeys, hlMeta, hlNetDown
+//   hlOffline, hlOfflineAllowed, hlOfflineSession, hlOfflineWhyNot, hlOverlay, hlPendAll
+//   hlPendDel, hlPendMark, hlSaveMeta
+// ═══ FIN DE L'EN-TÊTE ═══
 // ── Chantier H : hors-ligne étendu ──────────────────────────────────────────
 // 1) Cache local (IndexedDB) de la dernière version connue de chaque catégorie de données.
 // 2) Journal des modifications NON synchronisées : quand une sauvegarde échoue (pas de réseau),

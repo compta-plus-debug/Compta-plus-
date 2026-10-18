@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Compta rapprochement et lettrage
+// @depends —
+// @exports EC_BALANCE_COLS, EC_JOURNAL_COLS, EC_PLAN_COLS, EC_TARGETS, applyLettrage, bankRecoCompute
+//   ecBalanceRows, ecChecks, ecCsv, ecDownloadCsv, ecFmt, ecInviteError, ecJournalRows, ecPlanRows
+//   ecSortEntries, lettrageLines, lettrageSuggest, nextLetterCode, rcR2, removeLettrage
+// ═══ FIN DE L'EN-TÊTE ═══
 // ── Chantier F : rapprochement bancaire et lettrage ─────────────────────────
 // Rapprochement : on s'appuie sur le pointage existant (`reconciled` sur l'écriture).
 // Le solde du relevé doit égaler le solde des écritures pointées ; les écritures non

@@ -1,3 +1,12 @@
+// ═══ MODULE ═══
+// @module Assistance et anomalies
+// @depends fmt, useEffect, useState
+// @exports AssistedPrincipleReminder, PendingRecommendationsBanner, _backNavStack
+//   buildReversedCorrectedLines, buildReversedCorrection, cleanSuggestionLabel
+//   detectAmountAnomaly, detectDuplicateAnomaly, detectRareAccountAnomaly, detectReversedAnomaly
+//   detectTaxAnomaly, fetchHtgPerUsd, suggestAccountFromHistory, suggestSimilarTiers
+//   useAssistedAnomalyGate, useBackNav
+// ═══ FIN DE L'EN-TÊTE ═══
 // --- Rappel du principe comptable (forfait Assisté uniquement) ---
 // Affiché systématiquement à chaque saisie (pas seulement la première fois),
 // sur les modules impliquant un principe comptable — jugé fondamental par

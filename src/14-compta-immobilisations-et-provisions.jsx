@@ -1,3 +1,9 @@
+// ═══ MODULE ═══
+// @module Compta immobilisations et provisions
+// @depends ASSET_CATEGORIES, _membership, detectAmountAnomaly, fmt, todayStr, uid, useAssistedAnomalyGate
+//   useEffect, useState
+// @exports AccrualsPanel, DeferralsPanel, ImmobilisationsPanel, RiskProvisionsPanel
+// ═══ FIN DE L'EN-TÊTE ═══
 // Registre des immobilisations — amortissement linéaire uniquement, dotations
 // générées manuellement par l'utilisateur (bouton "Générer les dotations"), jamais
 // automatiquement à l'insu de l'entreprise. Le calcul se base sur des mois entiers

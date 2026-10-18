@@ -1,3 +1,16 @@
+// ═══ MODULE ═══
+// @module Compta module
+// @depends AccrualsPanel, AffectationResultatPanel, AssistantPanel, AssistedPrincipleReminder
+//   BankReconciliationPanel, CheckCircle2, Circle, ClotureAnnuellePanel, DeferralsPanel
+//   DevisesPanel, GENESIS_HASH, GroupedTabNav, ImmobilisationsPanel, LettragePanel, Lock
+//   PendingRecommendationsBanner, Plus, RecordedStamp, RevisionPanel, RiskProvisionsPanel
+//   RotateCcw, X, _membership, buildReversedCorrectedLines, buildReversedCorrection
+//   canonicalEntryContent, cleanSuggestionLabel, detectAmountAnomaly, detectDuplicateAnomaly
+//   detectRareAccountAnomaly, detectReversedAnomaly, fmt, isFutureDate, isLocked, sha256Hex
+//   simpleEntry, suggestAccountFromHistory, todayStr, uid, useAssistedAnomalyGate, useBackNav
+//   useEffect, useState, verifyChain, verifyChainFull
+// @exports ComptaModule
+// ═══ FIN DE L'EN-TÊTE ═══
 function ComptaModule({ accounts, setAccounts, entries, setEntries, invoices, setInvoices, balances, settings, setSettings, assets, setAssets, accruals, setAccruals, deferrals, setDeferrals, riskProvisions, setRiskProvisions, entryTemplates, setEntryTemplates, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation, pendingApprovals, setPendingApprovals, companyId, isAccountant, assistantActive, assistantFindings, assistantAll, assistantJump, products }) {
   const lastSubmitRef = React.useRef(0); // anti double-clic/double-tap sur "Enregistrer l'écriture"
   const anomalyGate = useAssistedAnomalyGate();

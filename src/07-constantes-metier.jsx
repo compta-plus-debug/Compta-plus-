@@ -1,3 +1,12 @@
+// ═══ MODULE ═══
+// @module Constantes metier
+// @depends BadgeDollar, BarChart3, BookOpen, Boxes, ClipboardIcon, Settings, ShoppingCart, Truck, Users
+//   Wallet
+// @exports ACCOUNTING_ONLY_HIDDEN_GESTION_TABS, ASSET_CATEGORIES, CURRENCIES, CURRENT_CURRENCY
+//   DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS, DEFAULT_SETTINGS, DEFAULT_SUPPLIERS
+//   DEFAULT_USERS, MODULES, ROLE_MODULE_ACCESS, TAX_SYSTEMS, VENDEUR_WRITABLE_CATEGORIES
+//   __uidCounter, allowedModulesFor, isLocked
+// ═══ FIN DE L'EN-TÊTE ═══
 const MODULES = [
   { id: "compta", n: 1, label: "Comptabilité", icon: BookOpen, ready: true },
   { id: "caisse", n: 2, label: "Caisse et banque", icon: Wallet, ready: true },

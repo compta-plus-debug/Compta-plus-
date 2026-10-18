@@ -1,3 +1,13 @@
+// ═══ MODULE ═══
+// @module Icones et graphiques
+// @depends fmt
+// @exports ArrowDownCircle, ArrowUpCircle, BadgeDollar, BarChart3, BluetoothIcon, BookOpen, Boxes
+//   CheckCircle2, ChevronRight, Circle, ClipboardIcon, CreditCard, Download, Eye, EyeOff, FileDown
+//   History, Icon, ImageIcon, LayoutDashboard, Lock, Menu, MessageCircle, Minus, Pencil, Plus
+//   Printer, Receipt, RotateCcw, ScanLine, Send, Settings, ShoppingCart, SimpleDonutChart
+//   SimpleGroupedBarChart, SimpleGrowthBarChart, SimpleLineChart, Smartphone, Trash2, Truck
+//   Upload, Users, Wallet, X
+// ═══ FIN DE L'EN-TÊTE ═══
 // --- Icônes (SVG minimalistes, remplacent lucide-react pour un usage sans build) ---
 const Icon = ({ children, size = 16, style, className }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"

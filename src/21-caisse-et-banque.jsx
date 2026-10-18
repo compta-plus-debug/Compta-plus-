@@ -1,3 +1,11 @@
+// ═══ MODULE ═══
+// @module Caisse et banque
+// @depends ArrowDownCircle, ArrowUpCircle, AssistedPrincipleReminder, Card, CheckCircle2, ChequesPanel
+//   Circle, GENESIS_HASH, PendingRecommendationsBanner, Plus, RecordedStamp, RotateCcw
+//   _membership, detectAmountAnomaly, detectDuplicateAnomaly, detectRareAccountAnomaly, fmt
+//   isFutureDate, isLocked, simpleEntry, todayStr, uid, useAssistedAnomalyGate, useMemo, useState
+// @exports CaisseBanqueModule
+// ═══ FIN DE L'EN-TÊTE ═══
 const COUNTERPART_TYPES = ["Actif", "Passif", "Capitaux propres", "Charge", "Produit"];
 
 function CaisseBanqueModule({ cheques, setCheques, invoices, setInvoices, purchases, setPurchases, accounts, entries, setEntries, balances, settings, role, showToast, logAudit, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation }) {

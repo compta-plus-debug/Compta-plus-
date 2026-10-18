@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Gestion reprise et rapports
+// @depends BZ_ATT_MAX_COUNT, BzAttLink, BzCard, BzEmpty, asstApplyFix, bzDiffDays, bzExcelRead, bzFixDate
+//   bzNoAccent, bzNum, bzParseCSV, bzR, bzReadText, bzStoreAttachment, fmt, pjPickMark, todayStr
+//   uid, useMemo, useState
+// @exports BzJustificatifs, BzRapportBanque, BzReprise
+// ═══ FIN DE L'EN-TÊTE ═══
 // K:REP:START
 // Reprise d'une comptabilité existante, rapport ventes ↔ banque, pièces justificatives.
 // Fonctions pures (testées hors navigateur). Dépendent de bzNum, bzFixDate, bzNoAccent, bzR, bzDiffDays.

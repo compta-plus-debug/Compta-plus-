@@ -1,3 +1,9 @@
+// ═══ MODULE ═══
+// @module Cheques
+// @depends Card, Plus, balanceDue, fmt, isLocked, normalizeClientName, simpleEntry, todayStr, uid
+//   useState
+// @exports ChequeDialog, ChequesPanel, makeChequeRecord
+// ═══ FIN DE L'EN-TÊTE ═══
 // ── Chèques ───────────────────────────────────────────────────────────────
 // Registre des chèques. Chèque REÇU d'un client : débit 5112 (Chèques à encaisser) /
 // crédit 411 à la réception, puis débit 512 / crédit 5112 au dépôt en banque.

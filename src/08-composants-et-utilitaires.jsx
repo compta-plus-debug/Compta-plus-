@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Composants et utilitaires
+// @depends __uidCounter, supabase, useState
+// @exports FALLBACK_HTG_PER_USD, GENESIS_HASH, GroupedTabNav, NET_MSG, PLAN_TIER_INFO
+//   canonicalEntryContent, friendlyError, genInviteToken, isFutureDate, normalizeClientName
+//   sanitizeUserMessage, sealEntries, sha256Hex, todayStr, uid, verifyChain, verifyChainFull
+// ═══ FIN DE L'EN-TÊTE ═══
 // Normalise un nom de client pour le regroupement (espaces superflus et casse
 // ignorés) — sans ça, deux saisies légèrement différentes du même nom ("Guerline"
 // vs "Guerline " ou une casse différente) créent deux fiches distinctes au lieu

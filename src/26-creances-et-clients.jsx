@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Creances et clients
+// @depends ChequeDialog, History, Plus, RecordedStamp, X, _membership, balanceDue, fmt, makeChequeRecord
+//   normalizeClientName, simpleEntry, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect
+//   useState
+// @exports CRMModule
+// ═══ FIN DE L'EN-TÊTE ═══
 // Provision pour créances douteuses — mêmes principes que la dépréciation de
 // stock : on indique le montant qu'on estime réellement récupérable sur une
 // créance, la provision se recalcule automatiquement (dotation si elle augmente,

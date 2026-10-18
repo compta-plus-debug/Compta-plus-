@@ -1,3 +1,8 @@
+// ═══ MODULE ═══
+// @module Config
+// @depends —
+// @exports APP_VERSION, ENV_PROD_REF, SUPABASE_ANON_KEY, SUPABASE_URL, useEffect, useMemo, useState
+// ═══ FIN DE L'EN-TÊTE ═══
 // Version "sans build" : pas d'imports ES module — React, ainsi que les icônes et
 // graphiques ci-dessous (remplaçant lucide-react et recharts), sont des variables
 // globales chargées directement par <script> dans index.html.

@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Paie
+// @depends AssistedPrincipleReminder, FISCAL_RULES_VALIDATED, Pencil, PendingRecommendationsBanner
+//   RecordedStamp, RotateCcw, _membership, detectAmountAnomaly, fmt, isFutureDate, isLocked
+//   todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useState
+// @exports PayrollModule
+// ═══ FIN DE L'EN-TÊTE ═══
 // ── Chantier C : cotisations de paie à taux paramétrables ───────────────────
 // Aucun taux n'est livré par défaut : les taux légaux (part salariale / patronale,
 // plafonds) doivent être saisis par l'entreprise et validés avec l'expert-comptable.

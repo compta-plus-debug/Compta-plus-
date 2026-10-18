@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Gestion module
+// @depends ACCOUNTING_ONLY_HIDDEN_GESTION_TABS, BzAcomptes, BzAvoirs, BzBudget, BzDocs, BzEcheances
+//   BzImportPos, BzInventaire, BzJustificatifs, BzPilotage, BzRapportBanque, BzRecurrent
+//   BzReprise, bzAlerts, todayStr, useState
+// @exports GestionModule
+// ═══ FIN DE L'EN-TÊTE ═══
 // ---------------------------------------------------------------- Module principal
 function GestionModule(props) {
   const { premium, bizdocs, invoices, purchases, settings } = props;

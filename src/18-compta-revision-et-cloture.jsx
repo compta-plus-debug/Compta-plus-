@@ -1,3 +1,13 @@
+// ═══ MODULE ═══
+// @module Compta revision et cloture
+// @depends EC_BALANCE_COLS, EC_JOURNAL_COLS, EC_PLAN_COLS, EC_TARGETS, FileDown, _membership
+//   applyLettrage, bankRecoCompute, bkBuildFile, ecBalanceRows, ecChecks, ecCsv, ecDownloadCsv
+//   ecFmt, ecJournalRows, ecPlanRows, ecSortEntries, fmt, lettrageLines, lettrageSuggest
+//   nextLetterCode, rcR2, removeLettrage, rpSave, stockReconcile, supabase, todayStr, uid
+//   useEffect, useMemo, useState
+// @exports AffectationResultatPanel, BankReconciliationPanel, ClotureAnnuellePanel, LettragePanel
+//   RevisionPanel
+// ═══ FIN DE L'EN-TÊTE ═══
 function RevisionPanel({ accounts, entries, invoices, settings, role, isAccountant, companyId, currentUserEmail, showToast, logAudit }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const [comments, setComments] = useState(null);

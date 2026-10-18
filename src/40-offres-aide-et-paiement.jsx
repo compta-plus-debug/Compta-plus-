@@ -1,3 +1,10 @@
+// ═══ MODULE ═══
+// @module Offres aide et paiement
+// @depends ChevronRight, FALLBACK_HTG_PER_USD, Icon, NET_MSG, PLAN_TIER_INFO, SUPABASE_URL, Send
+//   _membership, clearMembershipCache, fetchHtgPerUsd, fmt, friendlyError, resolveMembership
+//   sanitizeUserMessage, supabase, uid, useEffect, useState
+// @exports ComingSoon, HelpCenterChat, PAYMENT_METHODS, UpgradeModal
+// ═══ FIN DE L'EN-TÊTE ═══
 function ComingSoon({ module }) {
   if (!module) {
     return (

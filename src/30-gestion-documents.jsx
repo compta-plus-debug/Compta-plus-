@@ -1,3 +1,11 @@
+// ═══ MODULE ═══
+// @module Gestion documents
+// @depends BZ_ST_BUCKET, BZ_ST_MAX_COUNT, BZ_ST_TOTAL, TAX_SYSTEMS, bzAddDays, bzAging, bzAlerts
+//   bzBuildCreditInvoice, bzCalcLines, bzIsStored, bzNextNumber, bzOpenAttachment, bzPayables, bzR
+//   bzReceivables, bzReceivePO, bzStockShortage, fmt, isLocked, supabase, todayStr, uid, useState
+// @exports BzAttLink, BzCard, BzDocs, BzEcheances, BzEmpty, BzField, BzLinesEditor, BzStatus, bzBtn
+//   bzBtn2, bzInp, bzInpS, bzInventoryEntries, bzPendingRecover, pjPickMark, pjStep, pjTraceText
+// ═══ FIN DE L'EN-TÊTE ═══
 function BzAttLink({ a, showToast }) {
   return bzIsStored(a)
     ? <button type="button" data-bz="att-open" onClick={() => bzOpenAttachment(a, showToast)} style={{ color: "#3B6EA5", textDecoration: "underline" }}>{a.fileName}</button>

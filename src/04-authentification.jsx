@@ -1,3 +1,9 @@
+// ═══ MODULE ═══
+// @module Authentification
+// @depends LandingPage, clearMembershipCache, friendlyError, hlMeta, hlOffline, hlOfflineSession
+//   hlOfflineWhyNot, sanitizeUserMessage, supabase, useEffect, useState
+// @exports AuthGate, SecurityPanel
+// ═══ FIN DE L'EN-TÊTE ═══
 // --- Écran de connexion (lien magique par email) ---
 function AuthGate({ children }) {
   const [session, setSession] = useState(undefined);

@@ -1,3 +1,14 @@
+// ═══ MODULE ═══
+// @module Gestion calculs
+// @depends X, pjStep, supabase, uid
+// @exports BZ_ACCOUNTS, BZ_ATT_MAX_COUNT, BZ_ST_BUCKET, BZ_ST_MAX_COUNT, BZ_ST_TOTAL, bzAddDays, bzAging
+//   bzAlerts, bzApplyCreditToInvoice, bzBudgetActuals, bzBuildCreditInvoice, bzCalcLines
+//   bzCreditNoteEntry, bzDepositLeft, bzDiffDays, bzExcelRead, bzFixDate, bzForecast, bzInvBalance
+//   bzInventoryDiff, bzInvoiceText, bzIsStored, bzMatchBank, bzNextNumber, bzNextRecurring
+//   bzNoAccent, bzNum, bzOpenAttachment, bzOpenInvoices, bzParseCSV, bzParseCSVDetailed
+//   bzPayables, bzR, bzReadText, bzReceivables, bzReceivePO, bzRecurringDates, bzRemoveStored
+//   bzStockShortage, bzStoreAttachment, bzSupplierReturnEntry
+// ═══ FIN DE L'EN-TÊTE ═══
 // ── Grand livre ───────────────────────────────────────────────────────────
 // Pour UN compte : solde d'ouverture (tout ce qui précède "from"), lignes de la période
 // triées par date puis ordre de saisie, avec solde progressif (débit − crédit).

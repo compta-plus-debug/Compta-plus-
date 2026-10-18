@@ -1,3 +1,8 @@
+// ═══ MODULE ═══
+// @module Garde environnement et supabase
+// @depends ENV_PROD_REF, SUPABASE_ANON_KEY, SUPABASE_URL, hlClearCache
+// @exports _extraInvitesFor, _membership, _membershipPromise, supabase
+// ═══ FIN DE L'EN-TÊTE ═══
 function envGuardProblem(url, host, path) {
   const h = String(host || "").toLowerCase(), p = String(path || "").toLowerCase(), u = String(url || "");
   const prodSite = h === "comptaplus.app" || h === "www.comptaplus.app";

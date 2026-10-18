@@ -1,3 +1,8 @@
+// ═══ MODULE ═══
+// @module Compta assistant de controle
+// @depends stockReconcile, todayStr, uid, useState
+// @exports AssistantPanel, asstApplyFix, asstScan
+// ═══ FIN DE L'EN-TÊTE ═══
 // === A:PURE ===
 // Assistant de contrôle (forfaits Assisté et Extension) — analyse automatique du journal.
 // Principe : il DÉTECTE et PROPOSE ; rien n'est jamais appliqué sans un clic explicite, et toute

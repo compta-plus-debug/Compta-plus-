@@ -1,3 +1,16 @@
+// ═══ MODULE ═══
+// @module Gestion ecrans
+// @depends BzAttLink, BzCard, BzEmpty, BzField, BzLinesEditor, BzStatus, Receipt, TAX_SYSTEMS
+//   asstApplyFix, bzAddDays, bzApplyCreditToInvoice, bzBtn, bzBtn2, bzBudgetActuals
+//   bzBuildCreditInvoice, bzCalcLines, bzCreditNoteEntry, bzDepositLeft, bzDiffDays, bzExcelRead
+//   bzForecast, bzInp, bzInpS, bzInvBalance, bzInventoryDiff, bzInventoryEntries, bzInvoiceText
+//   bzMatchBank, bzNextNumber, bzNextRecurring, bzOpenInvoices, bzParseCSVDetailed, bzPayables
+//   bzPendingRecover, bzR, bzReadText, bzReceivables, bzRecurringDates, bzRemoveStored
+//   bzStockShortage, bzStoreAttachment, bzSupplierReturnEntry, downloadInvoicePDF, fmt
+//   isFutureDate, isLocked, normalizeClientName, pjPickMark, pjStep, pjTraceText, posBuildImport
+//   posParseReceipts, posPayAccountFor, simpleEntry, todayStr, uid, useEffect, useState
+// @exports BzAcomptes, BzAvoirs, BzBudget, BzImportPos, BzInventaire, BzPilotage, BzRecurrent
+// ═══ FIN DE L'EN-TÊTE ═══
 function BzImportPos({ P }) {
   const { entries, setEntries, invoices, setInvoices, clients, setClients, accounts, settings, role, showToast, logAudit } = P;
   const canEdit = role === "Administrateur" || role === "Éditeur";

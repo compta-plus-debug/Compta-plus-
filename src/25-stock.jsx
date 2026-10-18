@@ -1,3 +1,11 @@
+// ═══ MODULE ═══
+// @module Stock
+// @depends ArrowDownCircle, ArrowUpCircle, AssistedPrincipleReminder, PendingRecommendationsBanner, Plus
+//   RecordedStamp, Trash2, _membership, detectAmountAnomaly, fmt, isLocked, resolveMembership
+//   stockReconcile, supabase, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect
+//   useMemo, useState
+// @exports StockModule
+// ═══ FIN DE L'EN-TÊTE ═══
 // Dépréciation de stock — dévalue un produit sans en retirer la quantité physique
 // (contrairement à "Perte", qui retire du stock réellement disparu/détruit). Utile
 // pour un article encore présent mais qui ne vaut plus son coût d'achat : invendable,
