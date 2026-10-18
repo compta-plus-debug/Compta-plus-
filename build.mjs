@@ -31,7 +31,7 @@ console.log("Parties lues dans : " + path.relative(racine, dossierParties) + (do
 const noms = fs.readdirSync(dossierParties).filter(estPartie).sort();
 const lues = noms.map((n) => ({ nom: n, texte: fs.readFileSync(path.join(dossierParties, n), "utf8") }));
 const dep = verifierDependances(lues);
-dep.infos.forEach((i) => console.log("  · " + i));
+console.log("Frontières entre modules vérifiées (" + lues.filter((x) => x.texte.startsWith("// ═══ MODULE")).length + " modules).");
 if (dep.problemes.length) { console.error("BLOQUÉ — frontières entre modules :"); dep.problemes.forEach((x) => console.error("  ✗ " + x)); process.exit(1); }
 let source = noms.map((n) => fs.readFileSync(path.join(dossierParties, n), "utf8")).join("");
 

@@ -22,6 +22,20 @@ function nomsDeclares(texte) {
 const sansCommentaires = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
 const utilise = (texte, nom) => new RegExp("(?<![\\w$.])" + nom.replace(/\$/g, "\\$") + "(?![\\w$])").test(texte);
 
+// Lit l'en-tête d'un module : lignes « // @clé valeurs » ; les lignes « //   suite » prolongent la précédente.
+export function lireEntete(texte) {
+  const res = { module: null, depends: [], exports: [] };
+  let cle = null;
+  for (const l of texte.split("\n")) {
+    if (!l.startsWith("//") || l.includes("FIN DE L'EN-TÊTE")) break;
+    const m = l.match(/^\/\/ @(\w+)\s*(.*)$/);
+    if (m) { cle = m[1]; if (cle === "module") res.module = m[2].trim(); else if (cle in res) res[cle].push(...m[2].split(",").map((x) => x.trim()).filter(Boolean)); }
+    else if (cle && cle !== "module" && /^\/\/ {3}\S/.test(l)) res[cle].push(...l.slice(2).split(",").map((x) => x.trim()).filter(Boolean));
+  }
+  return res;
+}
+export { nomsDeclares, sansCommentaires, utilise };
+
 export function verifierDependances(parties) {
   const problemes = [], infos = [];
   const decl = new Map(); // nom -> fichier
@@ -29,8 +43,8 @@ export function verifierDependances(parties) {
   for (const p of parties) {
     const mod = p.texte.match(/^\/\/ @module (.+)$/m);
     if (!mod) continue;
-    const dep = (p.texte.match(/^\/\/ @depends (.*)$/m) || [, ""])[1].split(",").map((x) => x.trim()).filter(Boolean);
-    const exp = (p.texte.match(/^\/\/ @exports (.*)$/m) || [, ""])[1].split(",").map((x) => x.trim()).filter(Boolean);
+    const ent = lireEntete(p.texte);
+    const dep = ent.depends, exp = ent.exports;
     const code = sansCommentaires(p.texte);
     const propres = nomsDeclares(p.texte);
     // 1) emprunts non déclarés
