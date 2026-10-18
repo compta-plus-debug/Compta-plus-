@@ -1,0 +1,57 @@
+# Compile automatiquement le site à chaque modification de src/ : aucun fichier compilé à déposer à la main.
+# La cible (test ou production) est déduite du NOM du dépôt : « compta-plus--test » = test, sinon production.
+name: Construire le site
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "build/**"
+      - "*.jsx"
+      - "build.mjs"
+      - "controle.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer le compilateur
+        run: npm install --no-audit --no-fund --no-package-lock
+
+      - name: Compiler
+        run: |
+          if [[ "${GITHUB_REPOSITORY}" == *"--test" ]]; then CIBLE=test; else CIBLE=prod; fi
+          echo "Cible : $CIBLE"
+          if [ -f build/build.mjs ]; then S=build/build.mjs; else S=build.mjs; fi
+          echo "Script : $S"
+          node "$S" "$CIBLE"
+
+      - name: Garder une copie téléchargeable (secours)
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-compile
+          path: |
+            docs/app.min.js
+            docs/index.html
+
+      - name: Publier les fichiers compilés dans docs/
+        run: |
+          git config user.name "construction-automatique"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/app.min.js docs/index.html
+          if git diff --cached --quiet; then
+            echo "Aucun changement à publier."
+          else
+            git commit -m "Construction automatique du site"
+            git push
+          fi
