@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { controle } from "./controle.mjs";
+import { verifierDependances } from "./dependances.mjs";
 
 const require = createRequire(import.meta.url);
 const esbuild = require("esbuild");
@@ -28,6 +29,10 @@ console.log("Parties lues dans : " + path.relative(racine, dossierParties) + (do
 
 // 1) Assemblage des parties
 const noms = fs.readdirSync(dossierParties).filter(estPartie).sort();
+const lues = noms.map((n) => ({ nom: n, texte: fs.readFileSync(path.join(dossierParties, n), "utf8") }));
+const dep = verifierDependances(lues);
+dep.infos.forEach((i) => console.log("  · " + i));
+if (dep.problemes.length) { console.error("BLOQUÉ — frontières entre modules :"); dep.problemes.forEach((x) => console.error("  ✗ " + x)); process.exit(1); }
 let source = noms.map((n) => fs.readFileSync(path.join(dossierParties, n), "utf8")).join("");
 
 // 2) Cible TEST : même substitution que l'ancienne publication (première occurrence par ligne)
