@@ -86,13 +86,13 @@
          Le paramètre ?v=... force le navigateur ET le CDN de GitHub Pages à recharger
          le fichier à chaque déploiement, au lieu de servir une copie en cache périmée.
          IMPORTANT : change ce numéro (date du jour par ex.) à chaque nouveau déploiement. -->
-    <script src="app.min.js?v=20260830-228"></script>
+    <script src="app.min.js?v=20260830-229"></script>
 
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
           // Même logique : ?v=... force la re-vérification du service worker à chaque déploiement.
-          navigator.serviceWorker.register("sw.js?v=20260830-228").then((registration) => {
+          navigator.serviceWorker.register("sw.js?v=20260830-229").then((registration) => {
             // Vérifie activement une mise à jour dès l'arrivée sur la page et à chaque
             // fois que l'onglet redevient visible — au lieu d'attendre le cycle
             // automatique du navigateur, qui peut prendre jusqu'à 24h et laisser une
