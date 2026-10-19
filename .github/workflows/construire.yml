@@ -19,6 +19,11 @@ on:
 permissions:
   contents: write
 
+# Si plusieurs dépôts de fichiers se suivent, seule la dernière construction va au bout.
+concurrency:
+  group: construire-le-site
+  cancel-in-progress: true
+
 jobs:
   construire:
     runs-on: ubuntu-latest
@@ -67,5 +72,10 @@ jobs:
             echo "Aucun changement à publier."
           else
             git commit -m "Construction automatique du site"
-            git push
+            for essai in 1 2 3 4; do
+              git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" || true
+              if git push; then echo "Publié."; exit 0; fi
+              echo "Envoi refusé (essai $essai), nouvelle tentative…"; sleep 5
+            done
+            echo "Impossible de publier après 4 essais."; exit 1
           fi
