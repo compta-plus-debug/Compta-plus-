@@ -1,0 +1,23 @@
+// Centre de gestion → Annonces (v230) : l'onglet reste affiché, on peut publier et retirer une annonce.
+const {chromium}=require('playwright');const {boot}=require('./tst-harness.cjs');
+let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.stringify(i)));if(!c)fails++};
+const init=()=>{const S=window.__srv;S.tables.platform_admins=[{email:'a@x.com'}];S.tables.announcements=[];S.tables.announcement_reads=[];try{localStorage.removeItem('compta-plus-active-tab')}catch(e){}};
+(async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
+const {p,errs}=await boot(b,{settings:{companyName:'X'},primary:true,pageInit:new Function('('+init.toString()+')()')});
+await p.getByText('Centre de gestion',{exact:false}).first().click();await p.waitForTimeout(1000);
+await p.getByRole('button',{name:'Campagnes',exact:true}).click();await p.waitForTimeout(300);
+await p.getByRole('button',{name:'Annonces',exact:true}).click();await p.waitForTimeout(800);
+ok('l\'onglet Annonces reste affiché',(await p.locator('[data-testid="announcements-admin"]').count())===1);
+await p.locator('[data-testid="ann-title"]').fill('Maintenance samedi');
+await p.locator('[data-testid="ann-body"]').fill('Compta+ sera indisponible 10 minutes samedi matin.');
+await p.locator('[data-testid="ann-level"]').selectOption('important');
+await p.locator('[data-testid="ann-publish"]').click();await p.waitForTimeout(900);
+const rows=await p.evaluate(()=>window.__srv.tables.announcements);
+ok('annonce enregistrée',rows.length===1&&rows[0].title==='Maintenance samedi'&&rows[0].level==='important'&&rows[0].active===true,rows);
+ok('annonce listée à l\'écran',(await p.locator('[data-testid="ann-row"]').count())===1);
+await p.locator('[data-testid="ann-toggle"]').first().click();await p.waitForTimeout(700);
+ok('annonce retirée',(await p.evaluate(()=>window.__srv.tables.announcements[0].active))===false);
+await p.locator('[data-testid="ann-toggle"]').first().click();await p.waitForTimeout(700);
+ok('annonce remise',(await p.evaluate(()=>window.__srv.tables.announcements[0].active))===true);
+ok('aucune erreur JS',errs.length===0,errs.slice(0,3));
+await b.close();console.log('fails='+fails);process.exit(fails?1:0)})();

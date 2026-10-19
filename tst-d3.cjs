@@ -1,0 +1,20 @@
+// Administration → Utilisateurs : réglages « double authentification exigée » et « rappels par email » (v230).
+const {chromium}=require('playwright');const {boot}=require('./tst-harness.cjs');
+let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.stringify(i)));if(!c)fails++};
+const st=(p)=>p.evaluate(()=>{const s=window.__srv.getCat('settings');return s||{}});
+(async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
+const {p,errs}=await boot(b,{settings:{companyName:"Lakay SA",currency:"HTG"},primary:true,pageInit:()=>{try{localStorage.removeItem('compta-plus-active-tab')}catch(e){}}});
+await p.getByText('Administration',{exact:true}).first().click();await p.waitForTimeout(600);
+await p.getByRole('button',{name:'Accès',exact:true}).click();await p.waitForTimeout(300);await p.getByRole('button',{name:'Utilisateurs',exact:true}).click();await p.waitForTimeout(800);
+ok('cadre double authentification présent',(await p.locator('[data-testid="admin-mfa-panel"]').count())===1);
+ok('cadre rappels par email présent',(await p.locator('[data-testid="email-reminders-panel"]').count())===1);
+ok('rappels activés par défaut',/Activés/.test(await p.locator('[data-testid="email-reminders-panel"]').innerText()));
+await p.locator('[data-testid="email-reminders-toggle"]').click();await p.waitForTimeout(1800);
+ok('rappels désactivés et enregistrés',(await st(p)).emailReminders===false,await st(p));
+ok('texte « Désactivés » affiché',/Désactivés/.test(await p.locator('[data-testid="email-reminders-panel"]').innerText()));
+await p.locator('[data-testid="email-reminders-toggle"]').click();await p.waitForTimeout(1800);
+ok('rappels réactivés',(await st(p)).emailReminders===true,await st(p));
+await p.locator('[data-testid="admin-mfa-toggle"]').click();await p.waitForTimeout(1800);
+ok('double authentification exigée enregistrée',(await st(p)).requireAdminMfa===true,await st(p));
+ok('aucune erreur JS',errs.length===0,errs.slice(0,3));
+await b.close();console.log('fails='+fails);process.exit(fails?1:0)})();
