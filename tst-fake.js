@@ -27,7 +27,7 @@ function builder(table) {
     if (!NET()) return netErr();
     if (table === "kv_store") {
       const rows = S.kvMulti ? Object.entries(S.kvMulti).flatMap(([cid, m]) => Object.entries(m).map(([k, v]) => ({ company_id: cid, key: k, value: v }))) : Object.entries(S.kv).map(([k, v]) => ({ company_id: "c1", key: k, value: v }));
-      if (st.op === "upsert") { const p = Array.isArray(st.payload) ? st.payload : [st.payload]; if (p.some(x => S.failSetKeys.includes(x.key))) return { data: null, error: { message: "TypeError: Failed to fetch", code: "" } }; p.forEach(x => { S.kv[x.key] = x.value; S.calls.push("kv.set " + x.key); }); return { data: p, error: null }; }
+      if (st.op === "upsert") { const p = Array.isArray(st.payload) ? st.payload : [st.payload]; const _dat = (v) => { try { return JSON.stringify(JSON.parse(v).data); } catch (e) { return null; } }; const _rr = p.find(x => S.ruleRefuse && S.ruleRefuse[x.key] && _dat(x.value) !== _dat(S.kv[x.key])); if (_rr) return { data: null, error: { message: "REGLE|test_regle|" + S.ruleRefuse[_rr.key], code: "P0001" } }; if (p.some(x => S.failSetKeys.includes(x.key))) return { data: null, error: { message: "TypeError: Failed to fetch", code: "" } }; p.forEach(x => { S.kv[x.key] = x.value; S.calls.push("kv.set " + x.key); }); return { data: p, error: null }; }
       let out = rows.filter(r => st.f.every(f => f(r)));
       if (st.op === "delete") { out.forEach(r => delete S.kv[r.key]); return { data: null, error: null }; }
       if (st.single || st.maybe) return { data: out[0] || null, error: null };
