@@ -3,7 +3,8 @@
 // @depends BluetoothIcon, Eye, EyeOff, Plus, Printer, Trash2, connectThermalPrinter
 //   disconnectThermalPrinter, friendlyError, getRememberedPrinterName, invokeEdgeFunction
 //   isThermalPrinterConnected, printInvoiceBluetooth, supabase, todayStr, uid, useEffect, useState
-// @exports BluetoothPrinterCard, CompanyGroupPanel, CompanySecurityPinPanel, SalesStationsPanel
+// @exports AdminMfaRequirementPanel, BluetoothPrinterCard, CompanyGroupPanel, CompanySecurityPinPanel
+//   SalesStationsPanel
 // ═══ FIN DE L'EN-TÊTE ═══
 // Panneau de gestion du code de sécurité partagé de l'entreprise — visible
 // uniquement de l'Administrateur principal (contrôlé par le composant appelant).
@@ -68,6 +69,32 @@ function CompanySecurityPinPanel({ companyId, showToast, logAudit }) {
           Retirer le code
         </button>
       </div>
+    </div>
+  );
+}
+
+// Réglage « Double authentification obligatoire pour les administrateurs ». Une fois activé,
+// chaque administrateur de l'entreprise doit avoir activé sa double authentification pour
+// continuer à utiliser l'application (écran d'activation affiché à la prochaine ouverture).
+function AdminMfaRequirementPanel({ settings, setSettings, showToast, logAudit }) {
+  const on = !!(settings && settings.requireAdminMfa);
+  const toggle = () => {
+    const next = !on;
+    if (next && !window.confirm("Exiger la double authentification pour tous les administrateurs ? Chaque administrateur devra l'activer à sa prochaine ouverture de l'application avant de continuer.")) return;
+    setSettings({ ...settings, requireAdminMfa: next });
+    try { logAudit && logAudit("Administration", next ? "Double authentification exigée (administrateurs)" : "Double authentification non exigée (administrateurs)", ""); } catch (e) { /* ignoré */ }
+    showToast(next ? "La double authentification est désormais exigée pour les administrateurs." : "La double authentification n'est plus exigée.");
+  };
+  return (
+    <div className="mt-6 p-4 rounded-lg" data-testid="admin-mfa-panel" style={{ background: "#FAF8F1", border: "1px solid #EEE9DA" }}>
+      <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Double authentification des administrateurs</div>
+      <p className="text-xs mb-3" style={{ color: "#8A8370" }}>
+        Recommandé : en plus du lien reçu par email, chaque administrateur saisit un code à 6 chiffres généré par son téléphone. Cela protège l'entreprise même si une boîte email est piratée. Les codes de secours remis à l'activation permettent de se reconnecter en cas de perte du téléphone.
+      </p>
+      <button data-testid="admin-mfa-toggle" onClick={toggle} className="text-xs px-3 py-1.5 rounded text-white" style={{ background: on ? "#A6432F" : "#152238" }}>
+        {on ? "Ne plus exiger la double authentification" : "Exiger la double authentification"}
+      </button>
+      <span className="text-xs ml-3" style={{ color: on ? "#0F6B5C" : "#8A8370" }}>{on ? "✓ Exigée" : "Non exigée"}</span>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 // @module Authentification
 // @depends LandingPage, clearMembershipCache, friendlyError, hlMeta, hlOffline, hlOfflineSession
 //   hlOfflineWhyNot, sanitizeUserMessage, supabase, useEffect, useState
-// @exports AuthGate, SecurityPanel
+// @exports AdminMfaEnforcer, AuthGate, SecurityPanel
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Écran de connexion (lien magique par email) ---
 function AuthGate({ children }) {
@@ -337,7 +337,7 @@ function MfaChallengeScreen({ onVerified, onSignOut }) {
 
 // --- Panneau "Sécurité du compte" : chaque utilisateur active/désactive sa propre
 // double authentification (TOTP), indépendamment de son rôle dans l'entreprise.
-function SecurityPanel({ onClose, showToast }) {
+function SecurityPanel({ onClose, showToast, forced, onEnrolled }) {
   const [factors, setFactors] = useState(null); // null = chargement
   const [enrolling, setEnrolling] = useState(null); // { factorId, qrCode, secret }
   const [code, setCode] = useState("");
@@ -437,12 +437,17 @@ function SecurityPanel({ onClose, showToast }) {
   const verifiedFactor = (factors || []).find((f) => f.status === "verified");
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(21,34,56,0.5)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(21,34,56,0.5)", zIndex: forced ? 70 : 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={forced ? undefined : onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 8, padding: 24, width: 360, maxWidth: "100%", maxHeight: "85vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <h2 style={{ fontSize: 16, color: "#152238", margin: 0 }}>Sécurité du compte</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8A8370", fontSize: 18 }}>×</button>
+          {!forced && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8A8370", fontSize: 18 }}>×</button>}
         </div>
+        {forced && (
+          <p data-testid="mfa-forced-note" style={{ fontSize: 13, color: "#7A5E10", background: "#FBF1DC", borderRadius: 6, padding: 10, marginBottom: 12 }}>
+            Votre entreprise exige la double authentification pour les administrateurs. Activez-la maintenant pour continuer : cela prend deux minutes.
+          </p>
+        )}
 
         {factors === null && <p style={{ fontSize: 13, color: "#8A8370" }}>Chargement…</p>}
 
@@ -480,10 +485,16 @@ function SecurityPanel({ onClose, showToast }) {
                   style={{ width: "100%", padding: 10, marginBottom: 8, background: "#fff", color: "#152238", border: "1px solid #DDD6C4", borderRadius: 4, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
                   Régénérer mes codes de secours
                 </button>
-                <button onClick={() => disable(verifiedFactor.id)} disabled={busy}
+                {forced && !backupCodes && (
+                  <button data-testid="mfa-forced-continue" onClick={() => onEnrolled && onEnrolled()}
+                    style={{ width: "100%", padding: 10, marginBottom: 8, background: "#152238", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
+                    Continuer
+                  </button>
+                )}
+                {!forced && <button onClick={() => disable(verifiedFactor.id)} disabled={busy}
                   style={{ width: "100%", padding: 10, background: "#A6432F", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
                   Désactiver la double authentification
-                </button>
+                </button>}
               </>
             ) : (
               <button onClick={startEnroll} disabled={busy}
@@ -532,3 +543,37 @@ function SecurityPanel({ onClose, showToast }) {
   );
 }
 
+
+
+// --- Exigence de double authentification pour les administrateurs (réglage d'entreprise
+// settings.requireAdminMfa, activé dans Administration). Si l'entreprise l'exige et que
+// l'administrateur connecté n'a pas encore de double authentification vérifiée, un écran
+// plein format l'invite à l'activer avant de continuer. Hors ligne ou en cas de doute, on ne
+// bloque jamais (la vérification est refaite à la prochaine ouverture en ligne).
+function AdminMfaEnforcer({ role, settings, showToast, onSignOut }) {
+  const required = role === "Administrateur" && !!(settings && settings.requireAdminMfa);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    if (!required) { setMissing(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.auth.mfa.listFactors();
+        if (error || cancelled) return;
+        const ok = (data?.totp || []).some((f) => f.status === "verified");
+        if (!cancelled) setMissing(!ok);
+      } catch (e) { /* hors ligne : on ne bloque pas */ }
+    })();
+    return () => { cancelled = true; };
+  }, [required]);
+  if (!required || !missing) return null;
+  return (
+    <>
+      <SecurityPanel forced showToast={showToast} onEnrolled={() => setMissing(false)} onClose={() => {}} />
+      <button data-testid="mfa-forced-signout" onClick={onSignOut}
+        style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", zIndex: 80, background: "none", border: "none", color: "#fff", textDecoration: "underline", cursor: "pointer", fontSize: 13 }}>
+        Se déconnecter
+      </button>
+    </>
+  );
+}

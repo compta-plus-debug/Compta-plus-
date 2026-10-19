@@ -1,20 +1,20 @@
 // ═══ MODULE ═══
 // @module Application principale
-// @depends APP_VERSION, AchatModule, AdminModule, BZ_ACCOUNTS, Boxes, CRMModule, CURRENT_CURRENCY
-//   CabinetSpace, CaisseBanqueModule, CentreDeGestionModule, ComingSoon, ComptaModule, CreditCard
-//   DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS, DEFAULT_SETTINGS, DEFAULT_SUPPLIERS
-//   DEFAULT_USERS, Dashboard, FALLBACK_HTG_PER_USD, GestionModule, GroupDashboardModule, HL_EVT
-//   HelpCenterChat, Icon, LayoutDashboard, Lock, MODULES, Menu, MessageCircle, NET_MSG, OFL_EVT
-//   PLAN_TIER_INFO, PayrollModule, ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL, SecurityPanel
-//   Smartphone, StockModule, SuperAdminModule, UpgradeModal, VENDEUR_WRITABLE_CATEGORIES
-//   VenteModule, X, _backNavStack, _membership, allowedModulesFor, asstScan, bkBuildFile
-//   bkDownload, chooseCompany, clearMembershipCache, computeBalances, computeKpis, dlog
-//   fetchHtgPerUsd, forgetCompanyChoice, friendlyError, genInviteToken, hlCacheAll, hlCachePut
-//   hlKeys, hlMeta, hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlSaveMeta
-//   invokeEdgeFunction, logClientError, monthLabel, oflIsNetworkError, oflLoad, oflSyncAll
-//   oflTimeout, pjTraceText, resolveMembership, ruleRefusalMessage, sanitizeUserMessage
-//   sealEntries, supabase, todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo
-//   useState
+// @depends APP_VERSION, AchatModule, AdminMfaEnforcer, AdminModule, BZ_ACCOUNTS, Boxes, CRMModule
+//   CURRENT_CURRENCY, CabinetSpace, CaisseBanqueModule, CentreDeGestionModule, ComingSoon
+//   ComptaModule, CreditCard, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
+//   DEFAULT_SETTINGS, DEFAULT_SUPPLIERS, DEFAULT_USERS, Dashboard, FALLBACK_HTG_PER_USD
+//   GestionModule, GroupDashboardModule, HL_EVT, HelpCenterChat, Icon, LayoutDashboard, Lock
+//   MODULES, Menu, MessageCircle, NET_MSG, OFL_EVT, PLAN_TIER_INFO, PayrollModule
+//   ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL, SecurityPanel, Smartphone, StockModule
+//   SuperAdminModule, UpgradeModal, VENDEUR_WRITABLE_CATEGORIES, VenteModule, X, _backNavStack
+//   _membership, allowedModulesFor, asstScan, bkBuildFile, bkDownload, chooseCompany
+//   clearMembershipCache, computeBalances, computeKpis, dlog, fetchHtgPerUsd, forgetCompanyChoice
+//   friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline
+//   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlSaveMeta, invokeEdgeFunction, logClientError
+//   monthLabel, oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, pjTraceText, resolveMembership
+//   ruleRefusalMessage, sanitizeUserMessage, sealEntries, supabase, todayStr, uid, unwrapVersioned
+//   useBackNav, useEffect, useMemo, useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 function App() {
@@ -2467,6 +2467,7 @@ function App() {
       )}
 
       {showSecurityPanel && <SecurityPanel onClose={() => setShowSecurityPanel(false)} showToast={showToast} />}
+      <AdminMfaEnforcer role={role} settings={settings} showToast={showToast} onSignOut={() => { clearMembershipCache(); supabase.auth.signOut(); }} />
       {showHelpCenter && <HelpCenterChat onClose={() => { setShowHelpCenter(false); refreshHelpCounters(); }} />}
       {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} planTier={planTier} groupId={groupId} groupName={groupName} showToast={showToast} />}
 

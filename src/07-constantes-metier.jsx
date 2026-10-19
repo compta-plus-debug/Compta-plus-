@@ -153,6 +153,7 @@ const DEFAULT_SETTINGS = {
   companyType: "", // ex. "Salon de coiffure", "Lave-auto", "Dépôt de gros" — utile notamment pour distinguer les entreprises d'un groupe multi-entreprises
   currency: "HTG",
   fiscalYearStart: "01-01",
+  requireAdminMfa: false, // Double authentification obligatoire pour les administrateurs de cette entreprise
   taxSystem: "tca", // "iva" | "tca" | "aucune"
   taxRate: TAX_SYSTEMS.tca.defaultRate,
   taxAccount: "445",

@@ -1,12 +1,12 @@
 // ═══ MODULE ═══
 // @module Administration module
-// @depends APP_VERSION, BK_LABELS, BluetoothPrinterCard, CURRENCIES, CompanyGroupPanel
-//   CompanySecurityPinPanel, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
-//   DEFAULT_SUPPLIERS, Download, GroupedTabNav, Lock, NET_MSG, PartialResetPanel, Plus
-//   RestorePointsPanel, RestorePreviewModal, SalesStationsPanel, StockMethodPanel, TAX_SYSTEMS
-//   Trash2, Upload, bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify, ecInviteError, fmt
-//   genInviteToken, isFutureDate, isLocked, logClientError, resizeImage, resolveMembership, rpSave
-//   supabase, todayStr, uid, useBackNav, useEffect, useState
+// @depends APP_VERSION, AdminMfaRequirementPanel, BK_LABELS, BluetoothPrinterCard, CURRENCIES
+//   CompanyGroupPanel, CompanySecurityPinPanel, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS
+//   DEFAULT_PRODUCTS, DEFAULT_SUPPLIERS, Download, GroupedTabNav, Lock, NET_MSG, PartialResetPanel
+//   Plus, RestorePointsPanel, RestorePreviewModal, SalesStationsPanel, StockMethodPanel
+//   TAX_SYSTEMS, Trash2, Upload, bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify
+//   ecInviteError, fmt, genInviteToken, isFutureDate, isLocked, logClientError, resizeImage
+//   resolveMembership, rpSave, supabase, todayStr, uid, useBackNav, useEffect, useState
 // @exports AdminModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function AdminModule({
@@ -1186,6 +1186,10 @@ function AdminModule({
 
           {isPrimaryAdmin && (
             <CompanySecurityPinPanel companyId={myCompanyId} showToast={showToast} logAudit={logAudit} />
+          )}
+
+          {isPrimaryAdmin && (
+            <AdminMfaRequirementPanel settings={settings} setSettings={setSettings} showToast={showToast} logAudit={logAudit} />
           )}
 
           {isPrimaryAdmin && (
