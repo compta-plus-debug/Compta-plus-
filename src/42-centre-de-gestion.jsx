@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Centre de gestion
-// @depends BadgeDollar, CabinetBillingPanel, CabinetRequestsPanel, GroupedTabNav, SimpleGroupedBarChart
-//   SupervisionPanel, SupportInbox, X, friendlyError, invokeEdgeFunction, logClientError, supabase
-//   useEffect, useState
+// @depends AnnouncementsAdminPanel, BadgeDollar, CabinetBillingPanel, CabinetRequestsPanel, GroupedTabNav
+//   SimpleGroupedBarChart, SupervisionPanel, SupportInbox, X, friendlyError, invokeEdgeFunction
+//   logClientError, supabase, useEffect, useState
 // @exports CentreDeGestionModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin }) {
@@ -69,7 +69,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
   const basePerms = isPlatformAdmin
     ? { entreprises: true, offres: true, statistiques: true, collaborateurs: true, supervision: true }
     : (myRecord?.permissions || { entreprises: true, offres: true, statistiques: true, collaborateurs: false });
-  const perms = { ...basePerms, aide: isPlatformAdmin ? true : basePerms.aide !== false, cabinets: isPlatformAdmin ? true : !!basePerms.offres };
+  const perms = { ...basePerms, aide: isPlatformAdmin ? true : basePerms.aide !== false, cabinets: isPlatformAdmin ? true : !!basePerms.offres, annonces: isPlatformAdmin ? true : !!basePerms.offres };
 
   // Nombre de messages d'utilisateurs pas encore lus — affiché sur l'onglet
   // et rafraîchi régulièrement pour ne jamais manquer une demande d'aide.
@@ -456,7 +456,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
         setTab={setTab}
         groups={[
           ...(perms.entreprises ? [{ label: "Entreprises", color: { bg: "#5B3FA0", text: "#fff", light: "#EDEAF7", lightText: "#5B3FA0" }, tabs: [["entreprises", "Entreprises"]] }] : []),
-          ...(perms.offres ? [{ label: "Campagnes", color: { bg: "#9A7B1E", text: "#fff", light: "#FBF1DC", lightText: "#9A7B1E" }, tabs: [["offres", "Offres spéciales"], ["cabinets", "Cabinets"]] }] : []),
+          ...(perms.offres ? [{ label: "Campagnes", color: { bg: "#9A7B1E", text: "#fff", light: "#FBF1DC", lightText: "#9A7B1E" }, tabs: [["offres", "Offres spéciales"], ["annonces", "Annonces"], ["cabinets", "Cabinets"]] }] : []),
           ...(perms.statistiques ? [{ label: "Statistiques", color: { bg: "#0F6B5C", text: "#fff", light: "#E6F1EE", lightText: "#0F6B5C" }, tabs: [["statistiques", "Statistiques"]] }] : []),
           ...(perms.supervision ? [{ label: "Supervision", color: { bg: "#3B5C1F", text: "#fff", light: "#EEF4E2", lightText: "#3B5C1F" }, tabs: [["supervision", "Supervision"]] }] : []),
           ...(perms.aide ? [{ label: "Centre d'aide", color: { bg: "#A6432F", text: "#fff", light: "#F7E9E3", lightText: "#A6432F" }, tabs: [["aide", `Messages${inboxUnread ? ` (${inboxUnread})` : ""}`]] }] : []),
@@ -628,6 +628,8 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
           </div>
           )}
         </div>
+      ) : tab === "annonces" ? (
+        <AnnouncementsAdminPanel showToast={showToast} currentUserEmail={currentUserEmail} />
       ) : tab === "offres" ? (
         <div>
           <div className="bg-white rounded-lg p-6 mb-4" style={{ border: "1px solid #E4DFD1" }}>

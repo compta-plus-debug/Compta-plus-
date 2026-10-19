@@ -79,7 +79,7 @@ function BzImportPos({ P }) {
           className="w-full border rounded px-2 py-1.5 text-xs font-mono" style={{ borderColor: "#DDD6C4", minWidth: 0 }} />
         <div className="flex flex-wrap items-center gap-2 mt-2">
           <button onClick={analyse} disabled={!text.trim()} data-testid="pos-analyse" className="text-sm px-4 py-2 rounded" style={{ background: "#152238", color: "#EFE9DD", opacity: text.trim() ? 1 : 0.5 }}>Analyser</button>
-          <label className="text-xs underline cursor-pointer" style={{ color: "#8A8370" }}>Choisir un fichier texte<input type="file" accept=".txt,.csv,.text,text/plain" className="hidden" onChange={onFile} data-ro-ok /></label>
+          <label className="text-xs underline cursor-pointer" style={{ color: "#8A8370" }}>Choisir un fichier texte<input type="file" accept="text/plain,text/csv,.txt,.csv,.text" className="hidden" onChange={onFile} data-ro-ok /></label>
         </div>
       </div>
       {parsed && (

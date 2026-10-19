@@ -2,11 +2,12 @@
 // @module Administration module
 // @depends APP_VERSION, AdminMfaRequirementPanel, BK_LABELS, BluetoothPrinterCard, CURRENCIES
 //   CompanyGroupPanel, CompanySecurityPinPanel, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS
-//   DEFAULT_PRODUCTS, DEFAULT_SUPPLIERS, Download, GroupedTabNav, Lock, NET_MSG, PartialResetPanel
-//   Plus, RestorePointsPanel, RestorePreviewModal, SalesStationsPanel, StockMethodPanel
-//   TAX_SYSTEMS, Trash2, Upload, bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify
-//   ecInviteError, fmt, genInviteToken, isFutureDate, isLocked, logClientError, resizeImage
-//   resolveMembership, rpSave, supabase, todayStr, uid, useBackNav, useEffect, useState
+//   DEFAULT_PRODUCTS, DEFAULT_SUPPLIERS, Download, EmailRemindersPanel, GroupedTabNav, Lock
+//   NET_MSG, PartialResetPanel, Plus, RestorePointsPanel, RestorePreviewModal, SalesStationsPanel
+//   StockMethodPanel, TAX_SYSTEMS, Trash2, Upload, bkBalance, bkBuildFile, bkDiff, bkDownload
+//   bkVerify, ecInviteError, fmt, genInviteToken, isFutureDate, isLocked, logClientError
+//   resizeImage, resolveMembership, rpSave, supabase, todayStr, uid, useBackNav, useEffect
+//   useState
 // @exports AdminModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function AdminModule({
@@ -1193,6 +1194,10 @@ function AdminModule({
           )}
 
           {isPrimaryAdmin && (
+            <EmailRemindersPanel settings={settings} setSettings={setSettings} showToast={showToast} logAudit={logAudit} />
+          )}
+
+          {isPrimaryAdmin && (
             <CompanyGroupPanel companyId={myCompanyId} groupId={groupId} groupName={groupName} groupMaxCompanies={groupMaxCompanies} showToast={showToast} />
           )}
         </div>
@@ -1254,7 +1259,7 @@ function AdminModule({
             <Upload size={18} style={{ color: "#0F6B5C" }} className="mb-2" />
             <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Importer une sauvegarde</div>
             <p className="text-xs mb-3" style={{ color: "#8A8370" }}>Affiche d'abord un aperçu des différences, puis remplace les données actuelles par celles du fichier après votre confirmation.</p>
-            <input type="file" accept="application/json" ref={fileInputRef} onChange={importData} className="hidden" />
+            <input type="file" accept="application/json,.json,text/plain,application/octet-stream" ref={fileInputRef} onChange={importData} className="hidden" />
             <div className="flex flex-wrap gap-2">
               <button onClick={() => fileInputRef.current?.click()} className="px-3 py-1.5 rounded text-xs text-white" style={{ background: "#152238" }}>Importer un fichier</button>
               <button onClick={() => setShowPasteImport((v) => !v)} className="px-3 py-1.5 rounded text-xs" style={{ border: "1px solid #DDD6C4", color: "#152238" }}>

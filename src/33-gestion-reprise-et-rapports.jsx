@@ -365,7 +365,7 @@ function BzReprise({ P }) {
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="rep-date" className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
           </div>
         )}
-        <input type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" onChange={onFile} className="text-sm mb-1 max-w-full" data-testid="rep-file" data-ro-ok />
+        <input type="file" accept="text/csv,text/plain,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.csv,.txt,.tsv,.xlsx,.xls" onChange={onFile} className="text-sm mb-1 max-w-full" data-testid="rep-file" data-ro-ok />
         {fileMsg && <div className="text-xs mb-2 p-2 rounded" style={{ background: fileMsg.ok ? "#EAF3EE" : "#F7E9E3", color: fileMsg.ok ? "#0F6B5C" : "#A6432F" }}>{fileMsg.text}</div>}
         <textarea data-testid="rep-text" value={text} onChange={(e) => { setText(e.target.value); setParsed(null); setResult(null); }} rows={7} placeholder={mode === "balance" ? "Compte;Libellé;Débit;Crédit\n101;Capital;;500000\n512;Banque;250000;\n…" : "Date;Pièce;Compte;Libellé;Débit;Crédit\n05/03/2026;F001;411;Vente;1000;\n05/03/2026;F001;707;Vente;;1000"} className="w-full border rounded px-2 py-1.5 text-xs font-mono" style={{ borderColor: "#DDD6C4", minWidth: 0 }} />
         <div className="flex flex-wrap items-center gap-3 mt-2">
@@ -472,7 +472,7 @@ function BzRapportBanque({ P }) {
           <div><label className="text-xs" style={{ color: "#8A8370" }}>Au</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} data-testid="rb-to" data-ro-ok className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} /></div>
         </div>
         <div className="text-xs mb-1" style={{ color: "#8A8370" }}>Relevé bancaire de la période (CSV, Excel ou texte collé : colonnes Date, Description, Montant ou Débit/Crédit).</div>
-        <input type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" onChange={onFile} className="text-sm mb-1 max-w-full" data-testid="rb-file" data-ro-ok />
+        <input type="file" accept="text/csv,text/plain,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.csv,.txt,.tsv,.xlsx,.xls" onChange={onFile} className="text-sm mb-1 max-w-full" data-testid="rb-file" data-ro-ok />
         {fileMsg && <div className="text-xs mb-2 p-2 rounded" data-testid="rb-file-msg" style={{ background: fileMsg.ok ? "#EAF3EE" : "#F7E9E3", color: fileMsg.ok ? "#0F6B5C" : "#A6432F" }}>{fileMsg.text}</div>}
         <textarea data-testid="rb-text" value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="…ou collez le relevé ici" className="w-full border rounded px-2 py-1.5 text-xs font-mono" style={{ borderColor: "#DDD6C4", minWidth: 0 }} />
       </BzCard>

@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Application principale
-// @depends APP_VERSION, AchatModule, AdminMfaEnforcer, AdminModule, BZ_ACCOUNTS, Boxes, CRMModule
-//   CURRENT_CURRENCY, CabinetSpace, CaisseBanqueModule, CentreDeGestionModule, ComingSoon
-//   ComptaModule, CreditCard, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
+// @depends APP_VERSION, AchatModule, AdminMfaEnforcer, AdminModule, AnnouncementsBanner, BZ_ACCOUNTS
+//   Boxes, CRMModule, CURRENT_CURRENCY, CabinetSpace, CaisseBanqueModule, CentreDeGestionModule
+//   ComingSoon, ComptaModule, CreditCard, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
 //   DEFAULT_SETTINGS, DEFAULT_SUPPLIERS, DEFAULT_USERS, Dashboard, FALLBACK_HTG_PER_USD
 //   GestionModule, GroupDashboardModule, HL_EVT, HelpCenterChat, Icon, LayoutDashboard, Lock
 //   MODULES, Menu, MessageCircle, NET_MSG, OFL_EVT, PLAN_TIER_INFO, PayrollModule
@@ -484,10 +484,17 @@ function App() {
       e.preventDefault();
       setInstallPrompt(e);
     };
-    const onInstalled = () => setInstallPrompt(null);
+    const onInstalled = () => { window.__deferredInstall = null; setInstallPrompt(null); };
+    // Le navigateur n'envoie l'invitation d'installation qu'une fois, souvent AVANT que
+    // l'application soit prête : index.html la garde de côté (window.__deferredInstall) et on la
+    // récupère ici, sinon le bouton « Installer » ne fonctionnerait jamais sur Android.
+    if (window.__deferredInstall) setInstallPrompt(window.__deferredInstall);
+    const onReady = () => { if (window.__deferredInstall) setInstallPrompt(window.__deferredInstall); };
+    window.addEventListener("compta-plus-install-ready", onReady);
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
+      window.removeEventListener("compta-plus-install-ready", onReady);
       window.removeEventListener("beforeinstallprompt", onPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };
@@ -2467,6 +2474,7 @@ function App() {
       )}
 
       {showSecurityPanel && <SecurityPanel onClose={() => setShowSecurityPanel(false)} showToast={showToast} />}
+      <AnnouncementsBanner />
       <AdminMfaEnforcer role={role} settings={settings} showToast={showToast} onSignOut={() => { clearMembershipCache(); supabase.auth.signOut(); }} />
       {showHelpCenter && <HelpCenterChat onClose={() => { setShowHelpCenter(false); refreshHelpCounters(); }} />}
       {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} planTier={planTier} groupId={groupId} groupName={groupName} showToast={showToast} />}
