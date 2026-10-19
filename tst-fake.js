@@ -56,7 +56,7 @@ const client = {
     getUser: async () => HNG() ? NEVER() : ({ data: { user: S.user }, error: null }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     signOut: async () => ({}),
-    mfa: { getAuthenticatorAssuranceLevel: async () => HNG() ? NEVER() : ({ data: { currentLevel: "aal1", nextLevel: "aal1" }, error: null }), listFactors: async () => ({ data: { totp: [] }, error: null }) },
+    mfa: { getAuthenticatorAssuranceLevel: async () => HNG() ? NEVER() : ({ data: { currentLevel: "aal1", nextLevel: "aal1" }, error: null }), listFactors: async () => ({ data: { totp: (S.mfaVerified || (()=>{try{return localStorage.getItem("t-mfa")}catch(e){}})()) ? [{ id: "f1", status: "verified" }] : [] }, error: null }) },
   },
   from: builder,
   storage: { from: (bucket) => ({
