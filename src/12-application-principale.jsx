@@ -12,8 +12,9 @@
 //   fetchHtgPerUsd, forgetCompanyChoice, friendlyError, genInviteToken, hlCacheAll, hlCachePut
 //   hlKeys, hlMeta, hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlSaveMeta
 //   invokeEdgeFunction, logClientError, monthLabel, oflIsNetworkError, oflLoad, oflSyncAll
-//   oflTimeout, pjTraceText, resolveMembership, sanitizeUserMessage, sealEntries, supabase
-//   todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo, useState
+//   oflTimeout, pjTraceText, resolveMembership, ruleRefusalMessage, sanitizeUserMessage
+//   sealEntries, supabase, todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo
+//   useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 function App() {
@@ -641,6 +642,17 @@ function App() {
         // Sauvegarde réussie : si cette catégorie était en échec, on l'efface de l'avertissement.
         setSyncErrorCategories((prev) => prev.filter((c) => c !== category));
       } catch (e) {
+        // Refus volontaire de la base (règle métier : période clôturée, écriture déséquilibrée…) :
+        // inutile de réessayer. On annule la modification locale, on recharge l'état réel et on
+        // explique clairement la raison à l'utilisateur.
+        const ruleMsg = ruleRefusalMessage(e);
+        if (ruleMsg) {
+          try { const cidR = _membership && _membership.companyId; if (cidR) hlPendDel(cidR, category); } catch (e2) { /* ignoré */ }
+          try { await refreshCategoryFromServer(category, settersByCategory[category]); } catch (e3) { /* ignoré */ }
+          setSyncErrorCategories((prev) => prev.filter((c) => c !== category));
+          try { showToast(ruleMsg + " La modification a été annulée."); } catch (e4) { /* ignoré */ }
+          return;
+        }
         // CRITIQUE : ne jamais laisser un échec de sauvegarde passer inaperçu — sans ceci,
         // les données peuvent sembler enregistrées à l'écran alors qu'elles ne le sont pas
         // réellement côté serveur, avec un risque de perte définitive à la déconnexion.

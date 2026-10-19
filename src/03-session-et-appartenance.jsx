@@ -3,7 +3,7 @@
 // @depends NET_MSG, _extraInvitesFor, _hlNetBadUntil, _membership, _membershipPromise, genInviteToken
 //   hlMeta, hlNetDown, hlOfflineAllowed, oflIsNetworkError, oflTimeout, supabase, uid
 // @exports chooseCompany, clearMembershipCache, dlog, forgetCompanyChoice, invokeEdgeFunction
-//   resolveMembership
+//   resolveMembership, ruleRefusalMessage
 // ═══ FIN DE L'EN-TÊTE ═══
 // Journalisation de diagnostic TEMPORAIRE (table debug_login_log, voir
 // debug-login-log.sql) — best-effort, ne doit jamais faire échouer le flux réel même
@@ -492,6 +492,16 @@ async function chooseCompany(companyId, userId) {
 function forgetCompanyChoice(userId) {
   try { window.localStorage.removeItem(`compta_preferred_company_${userId}`); } catch (e) {}
   _membership = null;
+}
+
+// Règles métier appliquées par la base (v228) : un refus arrive sous la forme
+// « REGLE|code|message en français ». Retourne ce message, ou null si l'erreur est autre.
+function ruleRefusalMessage(e) {
+  const m = e && typeof e.message === "string" ? e.message : "";
+  const i = m.indexOf("REGLE|");
+  if (i < 0) return null;
+  const parts = m.slice(i).split("|");
+  return parts.slice(2).join("|").trim() || "Cette opération n'est pas autorisée.";
 }
 
 window.storage = {
