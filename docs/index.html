@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Politique de sécurité de la page : seules les sources listées peuvent charger des scripts,
+         des styles, des polices ou joindre le réseau. Toute autre source (script injecté, formulaire
+         détourné, objet incorporé) est refusée par le navigateur. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co https://open.er-api.com https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; worker-src 'self' blob:; frame-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <title>Compta+ — ERP Comptabilité</title>
     <meta name="theme-color" content="#14458F" />
     <link rel="manifest" href="manifest.json" />
