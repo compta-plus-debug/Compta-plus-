@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Groupe tableau de bord
 // @depends SimpleGroupedBarChart, chooseCompany, computeBalances, computeKpis, fmt, friendlyError
-//   genInviteToken, invokeEdgeFunction, supabase, unwrapVersioned, useEffect, useState
+//   genInviteToken, invokeEdgeFunction, roleLabel, supabase, unwrapVersioned, useEffect, useState
 // @exports GroupDashboardModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Tableau de bord consolidé du groupe ---
@@ -519,7 +519,7 @@ function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlan
                     {rows.map((m) => (
                       <div key={m.id} className="flex items-center justify-between gap-2 text-xs">
                         <span style={{ color: "#7A7460" }}>
-                          {(companiesData.find((c) => c.id === m.company_id) || {}).name || "?"} — {m.role}{!m.user_id ? " (invitation en attente)" : ""}
+                          {(companiesData.find((c) => c.id === m.company_id) || {}).name || "?"} — {roleLabel(m.role)}{!m.user_id ? " (invitation en attente)" : ""}
                         </span>
                         <button onClick={() => removeCollaboratorFromCompany(m)} disabled={removingMemberId === m.id}
                           className="underline shrink-0" style={{ color: "#A6432F", opacity: removingMemberId === m.id ? 0.5 : 1 }}>
@@ -550,7 +550,7 @@ function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlan
                     className="w-full border rounded px-3 py-2 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />
                   <select value={newCollabRole} onChange={(e) => setNewCollabRole(e.target.value)}
                     className="w-full border rounded px-3 py-2 text-sm mb-2" style={{ borderColor: "#DDD6C4" }}>
-                    <option>Administrateur</option><option>Éditeur</option><option>Lecture seule</option><option>Vendeur</option>
+                    <option value="Administrateur">Administrateur</option><option value="Éditeur">Gestionnaire</option><option value="Lecture seule">Consultant</option><option value="Vendeur">Vendeur</option>
                   </select>
                   <div className="text-xs mb-1" style={{ color: "#8A8370" }}>Entreprises concernées :</div>
                   <div className="space-y-1 mb-3">

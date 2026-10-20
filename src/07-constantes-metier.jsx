@@ -5,7 +5,7 @@
 // @exports ACCOUNTING_ONLY_HIDDEN_GESTION_TABS, ASSET_CATEGORIES, CURRENCIES, CURRENT_CURRENCY
 //   DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS, DEFAULT_SETTINGS, DEFAULT_SUPPLIERS
 //   DEFAULT_USERS, MODULES, ROLE_MODULE_ACCESS, TAX_SYSTEMS, VENDEUR_WRITABLE_CATEGORIES
-//   __uidCounter, allowedModulesFor, isLocked
+//   __uidCounter, allowedModulesFor, isLocked, roleLabel
 // ═══ FIN DE L'EN-TÊTE ═══
 const MODULES = [
   { id: "compta", n: 1, label: "Comptabilité", icon: BookOpen, ready: true },
@@ -24,6 +24,10 @@ const MODULES = [
 // historique pour Administrateur/Éditeur/Lecture seule). Le rôle "Vendeur" est
 // cantonné au point de vente : il peut encaisser des clients sans jamais voir ni
 // modifier la comptabilité, les rapports ou l'administration de l'entreprise.
+// Libellés affichés des rôles. Les valeurs stockées (base de données, règles serveur) restent
+// « Éditeur » et « Lecture seule » : seuls les mots vus à l'écran changent.
+const ROLE_LABELS = { "Éditeur": "Gestionnaire", "Lecture seule": "Consultant" };
+const roleLabel = (r) => ROLE_LABELS[r] || r;
 const ROLE_MODULE_ACCESS = {
   Vendeur: ["vente", "crm", "stock"],
 };

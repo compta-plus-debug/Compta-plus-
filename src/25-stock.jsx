@@ -337,7 +337,7 @@ function StockModule({ products, setProducts, movements, setMovements, accounts,
   };
 
   const deleteMovement = async (m) => {
-    if (role === "Vendeur") { showToast("Seul un administrateur ou éditeur peut supprimer un mouvement de stock."); return; }
+    if (role === "Vendeur") { showToast("Seul un administrateur ou gestionnaire peut supprimer un mouvement de stock."); return; }
     if (!window.confirm("Supprimer définitivement ce mouvement de stock ? Le stock de l'article sera réajusté en conséquence.")) return;
     const originalDelta = m.type === "sortie" ? -m.qty : m.qty;
     try {

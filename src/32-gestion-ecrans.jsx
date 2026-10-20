@@ -38,7 +38,7 @@ function BzImportPos({ P }) {
     e.target.value = "";
   };
   const run = () => {
-    if (!canEdit) { showToast("Seuls un administrateur ou un éditeur peuvent importer des tickets."); return; }
+    if (!canEdit) { showToast("Seuls un administrateur ou un gestionnaire peuvent importer des tickets."); return; }
     const batchId = uid();
     const res = posBuildImport(parsed.tickets, { entries, invoices, clients, settings, opts, mkId: uid, nowIso: new Date().toISOString(), batchId });
     if (res.entries.length === 0) { showToast("Aucun ticket à importer."); setResult({ done: 0, skipped: res.skipped }); return; }

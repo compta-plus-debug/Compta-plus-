@@ -13,8 +13,8 @@
 //   friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline
 //   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlSaveMeta, invokeEdgeFunction, logClientError
 //   monthLabel, oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, pjTraceText, resolveMembership
-//   ruleRefusalMessage, sanitizeUserMessage, sealEntries, supabase, todayStr, uid, unwrapVersioned
-//   useBackNav, useEffect, useMemo, useState
+//   roleLabel, ruleRefusalMessage, sanitizeUserMessage, sealEntries, supabase, todayStr, uid
+//   unwrapVersioned, useBackNav, useEffect, useMemo, useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 function App() {
@@ -104,6 +104,7 @@ function App() {
   // seul l'écart entre l'ancienne et la nouvelle estimation génère une dotation ou
   // une reprise, jamais le montant total à chaque réévaluation.
   const [riskProvisions, setRiskProvisions] = useState([]);
+  const [loans, setLoans] = useState([]);
   // Modèles d'écritures récurrentes — fonctionnalité exclusive au forfait Assisté.
   // Un libellé + un jeu de lignes (comptes/montants) enregistrés une fois, réutilisables
   // en un clic pour une écriture qui revient régulièrement (loyer, abonnement...).
@@ -233,6 +234,7 @@ function App() {
   useEffect(() => { loadPendingGroupRequests(); }, [groupId]);
   const [isAssistedSupervisor, setIsAssistedSupervisor] = useState(false);
   const [isAccountant, setIsAccountant] = useState(false);
+  const [canAdjust, setCanAdjust] = useState(false); // expert-comptable autorisé à passer des écritures de régularisation
   const [companyCount, setCompanyCount] = useState(1);
   // Recommandations en attente (mode Assisté) : une anomalie ignorée jusqu'à la
   // 3e tentative reste affichée en boucle (toutes les 45s + à chaque retour sur
@@ -524,6 +526,7 @@ function App() {
     accruals: setAccruals,
     deferrals: setDeferrals,
     riskProvisions: setRiskProvisions,
+    loans: setLoans,
     entryTemplates: setEntryTemplates,
     pendingApprovals: setPendingApprovals,
     cheques: setCheques,
@@ -916,6 +919,7 @@ function App() {
         setPlanTier(membership.planTier || "standard");
         setIsAssistedSupervisor(!!membership.isAssistedSupervisor);
         setIsAccountant(!!membership.isAccountant);
+        setCanAdjust(!!membership.isAccountant && !!membership.canAdjust);
         setCompanyCount(membership.companyCount || 1);
         if ((membership.planTier || "standard") === "assisted") loadPendingRecommendations(membership.companyId);
         setTrialEndsAt(membership.trialEndsAt || null);
@@ -997,7 +1001,7 @@ function App() {
     const daysSince = (Date.now() - last) / 86400000;
     if (daysSince < 7) return;
     try {
-      const data = { accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, entryTemplates, pendingApprovals, cheques, bizdocs };
+      const data = { accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs };
       bkDownload(bkBuildFile(data, _membership && _membership.companyId, "Sauvegarde automatique hebdomadaire"), `sauvegarde-auto-${settings.companyName || "erp"}-${todayStr()}.json`);
       const now = new Date().toISOString();
       setSettings((prev) => ({ ...prev, lastAutoBackupAt: now }));
@@ -1049,6 +1053,7 @@ function App() {
   useEffect(() => { if (loaded && loadedCategoriesRef.current.accruals) saveCategory("accruals", accruals); }, [accruals, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.deferrals) saveCategory("deferrals", deferrals); }, [deferrals, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.riskProvisions) saveCategory("riskProvisions", riskProvisions); }, [riskProvisions, loaded]);
+  useEffect(() => { if (loaded && loadedCategoriesRef.current.loans) saveCategory("loans", loans); }, [loans, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.entryTemplates) saveCategory("entryTemplates", entryTemplates); }, [entryTemplates, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.pendingApprovals) saveCategory("pendingApprovals", pendingApprovals); }, [pendingApprovals, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.cheques) saveCategory("cheques", cheques); }, [cheques, loaded]);
@@ -1194,7 +1199,7 @@ function App() {
     const values = {
       accounts, entries, products, invoices, suppliers, purchases,
       movements, clients, settings, users, productImages, auditLog,
-      employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, entryTemplates, pendingApprovals, cheques, bizdocs,
+      employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs,
     };
     await Promise.all(Object.entries(values).map(async ([cat, val]) => {
       if (role === "Vendeur" && !VENDEUR_WRITABLE_CATEGORIES.includes(cat)) return;
@@ -1882,7 +1887,7 @@ function App() {
                 className="text-left rounded-lg p-4 flex items-center justify-between" style={{ background: "#EFE9DD" }}>
                 <div>
                   <div className="font-semibold" style={{ color: "#152238" }}>{opt.name}</div>
-                  <div className="text-xs mt-0.5" style={{ color: "#7A7460" }}>Rôle : {opt.role}</div>
+                  <div className="text-xs mt-0.5" style={{ color: "#7A7460" }}>Rôle : {roleLabel(opt.role)}</div>
                 </div>
                 <span style={{ color: "#C9A24B" }}>→</span>
               </button>
@@ -2415,9 +2420,9 @@ function App() {
             </button>
           )}
           {readOnly ? (
-            <span style={{ color: "#D9A441" }}>Mode lecture seule — les modifications sont désactivées.</span>
+            <span style={{ color: "#D9A441" }}>{isAccountant && canAdjust ? "Mode consultation — vous pouvez passer des écritures de régularisation dans Comptabilité." : "Mode consultation — les modifications sont désactivées."}</span>
           ) : (
-            <>Rôle : {role}{role === "Vendeur" && currentStationForSidebar?.activeSellerName ? ` — ${currentStationForSidebar.activeSellerName}` : ""}</>
+            <>Rôle : {roleLabel(role)}{role === "Vendeur" && currentStationForSidebar?.activeSellerName ? ` — ${currentStationForSidebar.activeSellerName}` : ""}</>
           )}
           {planStatus === "trial" && trialDaysLeft !== null && (
             <div className="mt-1" style={{ color: trialDaysLeft <= 5 ? "#D9A441" : "#5C6B8C" }}>
@@ -2551,7 +2556,7 @@ function App() {
             if (isNavTab) return;
             e.preventDefault();
             e.stopPropagation();
-            showToast("Mode lecture seule : votre rôle ne permet aucune modification. Contactez un administrateur de votre entreprise pour effectuer cette action.");
+            showToast("Mode consultation : votre rôle ne permet aucune modification. Contactez un administrateur de votre entreprise pour effectuer cette action.");
           } : undefined}
           onFocusCapture={readOnly ? (e) => {
             const el = e.target;
@@ -2577,7 +2582,9 @@ function App() {
             deferrals={deferrals}
             setDeferrals={setDeferrals}
             riskProvisions={riskProvisions}
+            loans={loans}
             setRiskProvisions={setRiskProvisions}
+            setLoans={setLoans}
             entryTemplates={entryTemplates}
             setEntryTemplates={setEntryTemplates}
             pendingApprovals={pendingApprovals}
@@ -2593,6 +2600,7 @@ function App() {
             resolvePendingRecommendation={resolvePendingRecommendation}
             companyId={companyPinCompanyId}
             isAccountant={isAccountant}
+            adjust={isAccountant && canAdjust}
             assistantActive={assistantActive}
             assistantFindings={assistantVisible}
             assistantAll={assistantAll}
@@ -2735,6 +2743,7 @@ function App() {
             settings={settings}
             assets={assets}
             riskProvisions={riskProvisions}
+            loans={loans}
             deferrals={deferrals}
             products={products}
             clients={clients}
@@ -2791,6 +2800,7 @@ function App() {
             accruals={accruals}
             deferrals={deferrals}
             riskProvisions={riskProvisions}
+            loans={loans}
             entryTemplates={entryTemplates}
             pendingApprovals={pendingApprovals}
             cheques={cheques}
@@ -2814,6 +2824,7 @@ function App() {
             setAccruals={setAccruals}
             setDeferrals={setDeferrals}
             setRiskProvisions={setRiskProvisions}
+            setLoans={setLoans}
             setEntryTemplates={setEntryTemplates}
             setPendingApprovals={setPendingApprovals}
             showToast={showToast}

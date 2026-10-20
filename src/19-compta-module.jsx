@@ -2,8 +2,8 @@
 // @module Compta module
 // @depends AccrualsPanel, AffectationResultatPanel, AssistantPanel, AssistedPrincipleReminder
 //   BankReconciliationPanel, CheckCircle2, Circle, ClotureAnnuellePanel, DeferralsPanel
-//   DevisesPanel, GENESIS_HASH, GroupedTabNav, ImmobilisationsPanel, LettragePanel, Lock
-//   PendingRecommendationsBanner, Plus, RecordedStamp, RevisionPanel, RiskProvisionsPanel
+//   DevisesPanel, GENESIS_HASH, GroupedTabNav, ImmobilisationsPanel, LettragePanel, LoansPanel
+//   Lock, PendingRecommendationsBanner, Plus, RecordedStamp, RevisionPanel, RiskProvisionsPanel
 //   RotateCcw, X, _membership, buildReversedCorrectedLines, buildReversedCorrection
 //   canonicalEntryContent, cleanSuggestionLabel, detectAmountAnomaly, detectDuplicateAnomaly
 //   detectRareAccountAnomaly, detectReversedAnomaly, fmt, isFutureDate, isLocked, sha256Hex
@@ -11,7 +11,8 @@
 //   useEffect, useState, verifyChain, verifyChainFull
 // @exports ComptaModule
 // ═══ FIN DE L'EN-TÊTE ═══
-function ComptaModule({ accounts, setAccounts, entries, setEntries, invoices, setInvoices, balances, settings, setSettings, assets, setAssets, accruals, setAccruals, deferrals, setDeferrals, riskProvisions, setRiskProvisions, entryTemplates, setEntryTemplates, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation, pendingApprovals, setPendingApprovals, companyId, isAccountant, assistantActive, assistantFindings, assistantAll, assistantJump, products }) {
+const ADJUST_TABS = ["journal", "plan", "immobilisations", "regularisations", "avances", "risques"];
+function ComptaModule({ accounts, setAccounts, entries, setEntries: setEntriesProp, invoices, setInvoices, balances, settings, setSettings, assets, setAssets, accruals, setAccruals, deferrals, setDeferrals, riskProvisions, setRiskProvisions, loans, setLoans, entryTemplates, setEntryTemplates, role: roleProp, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation, pendingApprovals, setPendingApprovals, companyId, isAccountant, adjust, assistantActive, assistantFindings, assistantAll, assistantJump, products }) {
   const lastSubmitRef = React.useRef(0); // anti double-clic/double-tap sur "Enregistrer l'écriture"
   const anomalyGate = useAssistedAnomalyGate();
   const hasPendingCompta = (pendingRecommendations || []).some((r) => r.module === "comptabilite");
@@ -25,6 +26,17 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries, invoices, se
   };
   const [tab, setTab] = useState("journal");
   useBackNav(tab, setTab, "journal");
+  // Droit de régularisation (expert-comptable) : réservé à ces onglets ; partout ailleurs le
+  // compte reste en consultation. Les écritures ajoutées portent la mention de l'expert.
+  const adjustTabOk = !!adjust && ADJUST_TABS.includes(tab);
+  const role = adjustTabOk ? "Éditeur" : roleProp;
+  const setEntries = adjust
+    ? (fn) => setEntriesProp((prev) => {
+        const next = typeof fn === "function" ? fn(prev) : fn;
+        const known = new Set((prev || []).map((x) => x.id));
+        return (next || []).map((x) => (known.has(x.id) ? x : { ...x, byAccountant: true, createdByEmail: currentUserEmail || "" }));
+      })
+    : setEntriesProp;
   useEffect(() => { if (assistantJump) setTab("assistant"); }, [assistantJump]); // eslint-disable-line
   const [date, setDate] = useState(todayStr());
   const [label, setLabel] = useState("");
@@ -436,11 +448,12 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries, invoices, se
         setTab={setTab}
         groups={[
           { label: "Écritures", color: { bg: "#152238", text: "#fff", light: "#E8EAF0", lightText: "#152238" }, tabs: [["journal", "Journal des écritures"], ["plan", "Plan comptable"], ["associes", "Associés (capital)"], ["devises", "Opérations en devise"], ["rapprochement", "Rapprochement bancaire"], ["lettrage", "Lettrage"], ["revision", "Révision (cabinet)"], ...(assistantActive ? [["assistant", `Assistant de contrôle${(assistantFindings || []).length ? ` (${(assistantFindings || []).length})` : ""}`]] : [])] },
-          { label: "Immobilisations & Provisions", color: { bg: "#0F6B5C", text: "#fff", light: "#E6F1EE", lightText: "#0F6B5C" }, tabs: [["immobilisations", "Immobilisations"], ["regularisations", "Régularisations"], ["avances", "Charges/produits d'avance"], ["risques", "Provisions pour risques"]] },
+          { label: "Immobilisations & Provisions", color: { bg: "#0F6B5C", text: "#fff", light: "#E6F1EE", lightText: "#0F6B5C" }, tabs: [["immobilisations", "Immobilisations"], ["regularisations", "Régularisations"], ["avances", "Charges/produits d'avance"], ["risques", "Provisions pour risques"], ["emprunts", "Emprunts"]] },
           { label: "Clôture", color: { bg: "#5B3FA0", text: "#fff", light: "#EDEAF7", lightText: "#5B3FA0" }, tabs: [["cloture", "Clôture annuelle"], ["affectation", "Affectation du résultat"]] },
         ]}
       />
 
+      <div {...(adjustTabOk ? { "data-ro-ok": "1" } : {})}>
       {tab === "journal" && (
         <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
           {planTier === "assisted" && (
@@ -938,6 +951,10 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries, invoices, se
         <RiskProvisionsPanel accounts={accounts} riskProvisions={riskProvisions} setRiskProvisions={setRiskProvisions} entries={entries} setEntries={setEntries} role={role} showToast={showToast} logAudit={logAudit} planTier={planTier} recordPendingRecommendation={recordPendingRecommendation} currentUserEmail={currentUserEmail} />
       )}
 
+      {tab === "emprunts" && (
+        <LoansPanel accounts={accounts} setAccounts={setAccounts} loans={loans || []} setLoans={setLoans} entries={entries} setEntries={setEntries} settings={settings} role={role} showToast={showToast} logAudit={logAudit} />
+      )}
+
       {tab === "devises" && (
         <DevisesPanel accounts={accounts} setAccounts={setAccounts} entries={entries} setEntries={setEntries} settings={settings} setSettings={setSettings} role={role} showToast={showToast} logAudit={logAudit} />
       )}
@@ -965,6 +982,7 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries, invoices, se
       {tab === "affectation" && (
         <AffectationResultatPanel accounts={accounts} setAccounts={setAccounts} entries={entries} setEntries={setEntries} balances={balances} settings={settings} role={role} showToast={showToast} logAudit={logAudit} planTier={planTier} currentUserEmail={currentUserEmail} pendingApprovals={pendingApprovals} setPendingApprovals={setPendingApprovals} />
       )}
+      </div>
     </div>
   );
 }

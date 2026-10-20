@@ -3,14 +3,14 @@
 // @depends APP_VERSION, BK_LABELS, CURRENCIES, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
 //   DEFAULT_SUPPLIERS, GroupedTabNav, NET_MSG, PartialResetPanel, Plus, RestorePreviewModal
 //   TAX_SYSTEMS, bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify, ecInviteError, fmt
-//   genInviteToken, isFutureDate, isLocked, logClientError, resizeImage, resolveMembership, rpSave
-//   supabase, todayStr, uid, useBackNav, useEffect, useState
+//   genInviteToken, isFutureDate, isLocked, logClientError, resizeImage, resolveMembership
+//   roleLabel, rpSave, supabase, todayStr, uid, useBackNav, useEffect, useState
 // @exports AdminModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function AdminModule({
   settings, setSettings, users, setUsers, currentUserEmail, companyId,
   accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, auditLog,
-  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs,
+  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
   setEmployees, setPayslips, setSalaryAdvances, setSalesStations, setAssets, setAccruals, setDeferrals, setRiskProvisions, setEntryTemplates, setPendingApprovals,
   showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies,
@@ -213,6 +213,11 @@ function AdminModule({
           const acc = await supabase.from("company_members").select("id, is_accountant").eq("company_id", companyId);
           if (!acc.error && acc.data) { const m = {}; acc.data.forEach((r) => { m[r.id] = !!r.is_accountant; }); rows = rows.map((r) => ({ ...r, is_accountant: !!m[r.id] })); }
         } catch (e2) {}
+        // Droit de régularisation de l'expert-comptable : colonne facultative (script SQL v235).
+        try {
+          const adj = await supabase.from("company_members").select("id, can_adjust").eq("company_id", companyId);
+          if (!adj.error && adj.data) { const m2 = {}; adj.data.forEach((r) => { m2[r.id] = !!r.can_adjust; }); rows = rows.map((r) => ({ ...r, can_adjust: !!m2[r.id], adjust_ready: true })); }
+        } catch (e3) {}
         setMembers(rows);
       }
     } catch (e) {
@@ -339,7 +344,7 @@ function AdminModule({
         showToast(existing.user_id
           ? `${email} est déjà membre — rôle mis à jour.`
           : `Invitation déjà existante pour ${email} — rôle mis à jour.`);
-        logAudit("Administration", "Mise à jour invitation existante", `${email} — rôle ${newUser.role}`);
+        logAudit("Administration", "Mise à jour invitation existante", `${email} — rôle ${roleLabel(newUser.role)}`);
         loadMembers();
         return;
       }
@@ -355,7 +360,7 @@ function AdminModule({
       setNewUser({ email: "", role: "Éditeur", assistedSupervisor: false, accountant: false });
       setLastInviteLink({ email, link: buildInviteLink(token) });
       showToast(`Invitation créée pour ${email}.`);
-      logAudit("Administration", "Invitation utilisateur", `${email} — rôle ${newUser.role}`);
+      logAudit("Administration", "Invitation utilisateur", `${email} — rôle ${roleLabel(newUser.role)}`);
       loadMembers();
     } catch (e) {
       showToast("Action impossible pour le moment. Vérifiez votre connexion internet puis réessayez.");
@@ -383,6 +388,16 @@ function AdminModule({
     logAudit("Administration", "Changement de rôle", `${member.email} — ${selectedLabel}`);
   };
 
+  // Accorde ou retire à un expert-comptable le droit de passer des écritures de régularisation.
+  // Réservé à l'administrateur (contrôlé aussi côté serveur). Effet à la prochaine ouverture de l'expert.
+  const setAdjustRight = async (member, on) => {
+    if (on && !window.confirm(`Autoriser ${member.email} à passer des écritures de régularisation dans la comptabilité (écritures manuelles, régularisations, provisions, amortissements) ? Il pourra ajouter des écritures, jamais en supprimer ni en modifier, et chaque action sera tracée. Vous pourrez retirer ce droit à tout moment.`)) return;
+    const { error } = await supabase.from("company_members").update({ can_adjust: !!on }).eq("id", member.id);
+    if (error) { showToast("Le droit n'a pas pu être modifié. Réessayez dans un instant."); loadMembers(); return; }
+    loadMembers();
+    showToast(on ? "Droit de régularisation accordé." : "Droit de régularisation retiré.");
+    logAudit("Administration", on ? "Droit de régularisation accordé à l'expert-comptable" : "Droit de régularisation retiré à l'expert-comptable", member.email);
+  };
   const removeUser = async (member) => {
     if (member.is_primary_admin && (!currentUserEmail || member.email.toLowerCase() !== currentUserEmail.toLowerCase())) {
       showToast("Un administrateur principal ne peut pas être retiré par un autre administrateur.");
@@ -399,7 +414,7 @@ function AdminModule({
   };
 
   const [lastExportAt, setLastExportAt] = useState(() => { try { return localStorage.getItem("compta-plus-last-export"); } catch (e) { return null; } });
-  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, entryTemplates, pendingApprovals, cheques, bizdocs });
+  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs });
   const buildBackupNow = (label) => bkBuildFile(buildExportData(), companyId || myCompanyId, label);
   const exportData = () => {
     bkDownload(buildBackupNow("Export manuel"), `sauvegarde-${settings.companyName || "erp"}-${todayStr()}.json`);
@@ -457,6 +472,7 @@ function AdminModule({
     accruals: { kind: "array", requiredKeys: ["id", "type"], numericKeys: ["amount"], dateKeys: ["date"] },
     deferrals: { kind: "array", requiredKeys: ["id", "type"], numericKeys: ["totalAmount", "months", "amountRecognized"], dateKeys: ["startDate"] },
     riskProvisions: { kind: "array", requiredKeys: ["id", "label"], numericKeys: ["currentAmount"], dateKeys: ["date"] },
+    loans: { kind: "array", requiredKeys: ["id", "name"], numericKeys: ["principal", "annualRate"], dateKeys: ["startDate"] },
     entryTemplates: { kind: "array", requiredKeys: ["id", "name"] },
     pendingApprovals: { kind: "array", requiredKeys: ["id", "type"] },
     cheques: { kind: "array", requiredKeys: ["id", "kind"], numericKeys: ["amount"], dateKeys: ["date"] },
@@ -642,6 +658,7 @@ function AdminModule({
     if (data.accruals) setAccruals(data.accruals);
     if (data.deferrals) setDeferrals(data.deferrals);
     if (data.riskProvisions) setRiskProvisions(data.riskProvisions);
+    if (data.loans) setLoans(data.loans);
     if (data.entryTemplates) setEntryTemplates(data.entryTemplates);
     if (data.pendingApprovals) setPendingApprovals(data.pendingApprovals);
     if (data.cheques) setCheques(data.cheques);
@@ -736,7 +753,7 @@ function AdminModule({
     if (sel.compta) {
       setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]);
       setPayslips([]); setSalaryAdvances([]);
-      setAssets([]); setAccruals([]); setDeferrals([]); setRiskProvisions([]);
+      setAssets([]); setAccruals([]); setDeferrals([]); setRiskProvisions([]); setLoans([]);
     }
     if (sel.movements) setMovements([]);
     if (sel.templates) { setEntryTemplates([]); setPendingApprovals([]); }
@@ -1105,7 +1122,7 @@ function AdminModule({
       {tab === "utilisateurs" && (
         <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
           <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-            Invitez une personne par email : dès qu'elle se connecte avec cette adresse, elle rejoint automatiquement cette entreprise avec le rôle choisi. <b>Lecture seule</b> permet de consulter sans rien modifier ; <b>Expert-comptable</b> est une lecture seule avec exports et commentaires de révision — un même cabinet peut être rattaché à plusieurs entreprises ; <b>Vendeur</b> n'a accès qu'au point de vente (POS), sans voir la comptabilité, les rapports ni l'administration ; <b>Éditeur</b> permet de saisir et modifier les données sur tous les modules ; <b>Administrateur</b> a en plus accès à ce module.
+            Invitez une personne par email : dès qu'elle se connecte avec cette adresse, elle rejoint automatiquement cette entreprise avec le rôle choisi. <b>Consultant</b> permet de consulter sans rien modifier ; <b>Expert-comptable</b> est une consultation avec exports et commentaires de révision (vous pouvez en plus l'autoriser à passer des écritures de régularisation, et retirer ce droit à tout moment) — un même cabinet peut être rattaché à plusieurs entreprises ; <b>Vendeur</b> n'a accès qu'au point de vente (POS), sans voir la comptabilité, les rapports ni l'administration ; <b>Gestionnaire</b> permet de saisir et modifier les données sur tous les modules ; <b>Administrateur</b> a en plus accès à ce module.
             {(planTier === "assisted" || !!groupId) && <> L'<b>Assistant de contrôle</b> n'est pas un rôle : il s'active automatiquement avec le forfait Assisté ou Extension et surveille les erreurs et données sensibles pour tous les utilisateurs autorisés.</>}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 items-end">
@@ -1126,11 +1143,11 @@ function AdminModule({
                   else setNewUser({ ...newUser, role: v, assistedSupervisor: false, accountant: false });
                 }}
                 className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
-                <option>Administrateur</option>
-                <option>Éditeur</option>
-                <option>Vendeur</option>
-                <option>Lecture seule</option>
-                <option>Expert-comptable</option>
+                <option value="Administrateur">Administrateur</option>
+                <option value="Éditeur">Gestionnaire</option>
+                <option value="Vendeur">Vendeur</option>
+                <option value="Lecture seule">Consultant</option>
+                <option value="Expert-comptable">Expert-comptable</option>
               </select>
             </div>
             <button onClick={addUser} className="flex items-center justify-center gap-2 px-4 py-2 rounded text-sm text-white h-[38px] sm:col-span-3" style={{ background: "#152238" }}>
@@ -1177,6 +1194,12 @@ function AdminModule({
                 <tr key={m.id} style={{ borderBottom: "1px solid #F3EFE3" }}>
                   <td className="py-2" style={{ color: "#7A7460" }}>
                     {m.email}
+                    {m.is_accountant && m.adjust_ready && (
+                      <label className="flex items-center gap-1.5 mt-1 text-xs cursor-pointer" style={{ color: "#5B3FA0" }} title="L'expert pourra ajouter des écritures de régularisation (jamais supprimer ni modifier). Chaque action est tracée. Retirable à tout moment.">
+                        <input type="checkbox" data-testid="adjust-right" checked={!!m.can_adjust} onChange={(e) => setAdjustRight(m, e.target.checked)} />
+                        Autoriser les écritures de régularisation
+                      </label>
+                    )}
                     {m.is_primary_admin && (
                       <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded" style={{ background: "#FBF1DC", color: "#9A7B1E" }} title="Administrateur principal — a créé cette entreprise, ne peut pas être retiré ni rétrogradé par un autre administrateur">
                         ★ principal
@@ -1188,11 +1211,11 @@ function AdminModule({
                       disabled={locked}
                       title={locked ? "Un administrateur principal ne peut pas être rétrogradé par un autre administrateur." : undefined}
                       className="border rounded px-2 py-1 text-xs" style={{ borderColor: "#DDD6C4", opacity: locked ? 0.6 : 1 }}>
-                      <option>Administrateur</option>
-                      <option>Éditeur</option>
-                      <option>Vendeur</option>
-                      <option>Lecture seule</option>
-                      <option>Expert-comptable</option>
+                      <option value="Administrateur">Administrateur</option>
+                      <option value="Éditeur">Gestionnaire</option>
+                      <option value="Vendeur">Vendeur</option>
+                      <option value="Lecture seule">Consultant</option>
+                      <option value="Expert-comptable">Expert-comptable</option>
                     </select>
                   </td>
                   <td className="py-2">

@@ -249,6 +249,17 @@ async function resolveMembershipInner() {
         base.isAccountant = !!(me && me.is_accountant);
       } catch (e) {}
     }
+    // Droit optionnel de régularisation (accordé par l'administrateur à l'expert-comptable).
+    // Lecture séparée et tolérante : colonne absente ou erreur = pas de droit (jamais de blocage).
+    if (base.canAdjust === undefined) {
+      base.canAdjust = false;
+      if (base.isAccountant) {
+        try {
+          const { data: me2, error: e2 } = await supabase.from("company_members").select("can_adjust").eq("company_id", base.companyId).eq("user_id", user.id).maybeSingle();
+          base.canAdjust = !e2 && !!(me2 && me2.can_adjust);
+        } catch (e) {}
+      }
+    }
     base.companyCount = existingRows && existingRows.length ? existingRows.length : 1;
     _membership = base;
     return _membership;

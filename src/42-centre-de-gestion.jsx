@@ -2,7 +2,7 @@
 // @module Centre de gestion
 // @depends AnnouncementsAdminPanel, BadgeDollar, CabinetBillingPanel, CabinetRequestsPanel, GroupedTabNav
 //   SimpleGroupedBarChart, SupervisionPanel, SupportInbox, X, friendlyError, invokeEdgeFunction
-//   logClientError, supabase, useEffect, useState
+//   logClientError, roleLabel, supabase, useEffect, useState
 // @exports CentreDeGestionModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin }) {
@@ -138,6 +138,17 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
         memsFull = memsFull.map((m) => ({ ...m, is_accountant: m.id !== undefined && flagById[m.id] !== undefined ? flagById[m.id] : !!flagByKey[m.company_id + "|" + String(m.email || "").trim().toLowerCase()] }));
       }
     } catch (e) { /* colonne absente : affichage inchangé */ }
+    // Droit de régularisation (colonne facultative ajoutée en v235) : lecture à part, sans effet si absente.
+    try {
+      const adjById = {};
+      for (let from = 0; from < 20000; from += 1000) {
+        const r2 = await supabase.from("company_members").select("id, can_adjust").order("created_at", { ascending: true }).range(from, from + 999);
+        if (r2.error || !r2.data) { break; }
+        r2.data.forEach((r) => { adjById[r.id] = !!r.can_adjust; });
+        if (r2.data.length < 1000) break;
+      }
+      memsFull = memsFull.map((m) => ({ ...m, can_adjust: !!adjById[m.id] }));
+    } catch (e) { /* colonne absente */ }
     setMembers(memsFull);
     setNotes(nts || []);
     setTags(tgs || []);
@@ -575,9 +586,9 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
                         <div style={{ color: "#A39C87" }} className="mb-1">Membres ({compMembers.length})</div>
                         <div className="space-y-0.5">
                           {compMembers.map((m) => (
-                            <div key={m.email} data-testid="member-row" style={{ color: "#152238" }}>{m.email} <span data-testid="member-role" style={{ color: m.is_accountant ? "#5B3FA0" : "#A39C87", fontWeight: m.is_accountant ? 600 : 400 }}>— {m.is_accountant ? "Rôle : Expert-comptable" : m.role}</span>{!m.user_id && <span className="ml-1 text-xs" style={{ color: "#9A7B1E" }}>(invitation en attente)</span>}
+                            <div key={m.email} data-testid="member-row" style={{ color: "#152238" }}>{m.email} <span data-testid="member-role" style={{ color: m.is_accountant ? "#5B3FA0" : "#A39C87", fontWeight: m.is_accountant ? 600 : 400 }}>— {m.is_accountant ? "Rôle : Expert-comptable" : roleLabel(m.role)}</span>{!m.user_id && <span className="ml-1 text-xs" style={{ color: "#9A7B1E" }}>(invitation en attente)</span>}
                               {m.is_accountant && <span data-testid="badge-cabinet" className="ml-2 text-xs px-1.5 py-0.5 rounded" style={{ background: "#EDEAF7", color: "#5B3FA0" }}>Cabinet · {cabinetCount(m.email)} dossier{cabinetCount(m.email) > 1 ? "s" : ""}</span>}
-                              {m.is_accountant && <span className="ml-1 text-xs" style={{ color: "#A39C87" }}>(consultation seule, par conception)</span>}
+                              {m.is_accountant && <span className="ml-1 text-xs" style={{ color: "#A39C87" }}>{m.can_adjust ? "(consultation + écritures de régularisation autorisées)" : "(consultation seule, par conception)"}</span>}
                             </div>
                           ))}
                         </div>
@@ -1126,7 +1137,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="min-w-0">
                       <div className="text-sm truncate" style={{ color: "#152238" }}>{c.email}</div>
-                      <div className="text-xs" style={{ color: "#A39C87" }}>{c.role}</div>
+                      <div className="text-xs" style={{ color: "#A39C87" }}>{roleLabel(c.role)}</div>
                     </div>
                     <div className="flex gap-2 shrink-0 flex-wrap">
                       <button onClick={() => setHistoryForCollab(c.email)} className="text-xs underline" style={{ color: "#152238" }}>Historique</button>

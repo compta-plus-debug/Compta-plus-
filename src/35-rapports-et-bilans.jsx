@@ -3,7 +3,8 @@
 // @depends ComparatifPanel, DeclarationIRPanel, DeclarationTCAPanel, Download, EC_BALANCE_COLS
 //   EC_JOURNAL_COLS, FileDown, GroupedTabNav, Printer, SimpleDonutChart, SimpleLineChart
 //   computeBalances, downloadEtatsFinanciersPDF, downloadTablePDF, ecBalanceRows, ecCsv
-//   ecDownloadCsv, ecJournalRows, fmt, monthLabel, todayStr, useBackNav, useMemo, useState
+//   ecDownloadCsv, ecJournalRows, fmt, loansTotals, monthLabel, todayStr, useBackNav, useMemo
+//   useState
 // @exports RapportsModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function buildLedger(entries, accountCode, from, to) {
@@ -185,7 +186,7 @@ function fluxSplit(entry) {
   return out;
 }
 
-function RapportsModule({ accounts, balances, invoices, purchases, entries, settings, assets, riskProvisions, deferrals, products, clients, showToast, planTier }) {
+function RapportsModule({ accounts, balances, invoices, purchases, entries, settings, assets, riskProvisions, deferrals, loans, products, clients, showToast, planTier }) {
   const [tab, setTab] = useState("resultat");
   useBackNav(tab, setTab, "resultat");
   const [detailMonth, setDetailMonth] = useState("");
@@ -270,10 +271,12 @@ function RapportsModule({ accounts, balances, invoices, purchases, entries, sett
     const riskTotal = (riskProvisions || []).filter((p) => p.status !== "close").reduce((s, p) => s + (Number(p.currentAmount) || 0), 0);
     if (riskTotal > 0) lines.push(`Provisions pour risques et charges en cours : ${fmt(riskTotal)}.`);
     const deferralsRemaining = (deferrals || []).reduce((s, d) => s + (d.totalAmount - (d.amountRecognized || 0)), 0);
+    const lt = loansTotals(loans, todayStr());
+    if (lt.remaining > 0) lines.push(`Emprunts : capital restant dû ${fmt(lt.remaining)}, dont ${fmt(lt.dueWithinYear)} à rembourser dans l'année.`);
     if (deferralsRemaining > 0) lines.push(`Charges/produits constatés d'avance restant à reclasser : ${fmt(deferralsRemaining)}.`);
     lines.push(settings.lastClosingDate ? `Dernier exercice clôturé au : ${settings.lastClosingDate}.` : "Aucun exercice n'a encore été formellement clôturé.");
     return lines;
-  }, [settings, assets, products, clients, riskProvisions, deferrals]);
+  }, [settings, assets, products, clients, riskProvisions, deferrals, loans]);
 
   const salesByMonth = useMemo(() => {
     const byMonth = {};

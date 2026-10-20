@@ -132,7 +132,7 @@ const BK_LABELS = {
   salesStations: "Postes de vente", assets: "Immobilisations", accruals: "Charges à payer / produits à recevoir",
   deferrals: "Charges / produits d'avance", riskProvisions: "Provisions pour risques", entryTemplates: "Modèles d'écritures",
   pendingApprovals: "Approbations en attente", cheques: "Chèques", bizdocs: "Documents commerciaux",
-  payslips: "Bulletins de paie", salaryAdvances: "Avances sur salaire",
+  payslips: "Bulletins de paie", salaryAdvances: "Avances sur salaire", loans: "Emprunts",
 };
 // Empreinte (cyrb53) : détecte un fichier tronqué ou altéré (copier-coller incomplet,
 // transfert interrompu). Ce n'est pas une signature de sécurité.
