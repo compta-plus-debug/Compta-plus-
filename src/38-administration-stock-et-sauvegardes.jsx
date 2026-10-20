@@ -2,8 +2,8 @@
 // @module Administration stock et sauvegardes
 // @depends APP_VERSION, RotateCcw, computeBalances, fmt, isFutureDate, isLocked, todayStr, uid, useEffect
 //   useState
-// @exports BK_LABELS, PartialResetPanel, RestorePointsPanel, RestorePreviewModal, StockMethodPanel
-//   bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify, rpSave
+// @exports BK_LABELS, PartialResetPanel, RestorePreviewModal, bkBalance, bkBuildFile, bkDiff, bkDownload
+//   bkVerify, rpSave
 // ═══ FIN DE L'EN-TÊTE ═══
 // ── Changement de méthode de stock avec écriture de régularisation ─────────
 function StockMethodPanel({ settings, setSettings, accounts, entries, setEntries, products, isPrimaryAdmin, showToast, logAudit }) {
@@ -324,7 +324,7 @@ function RestorePreviewModal({ preview, busy, onCancel, onConfirm }) {
           <label className="flex items-start gap-2 mb-3 cursor-pointer">
             <input type="checkbox" checked={ack} onChange={() => setAck(!ack)} className="mt-0.5" data-testid="restore-ack" />
             <span className="text-xs" style={{ color: "#152238" }}>
-              Je comprends que {total.removed} élément{total.removed > 1 ? "s" : ""} actuel{total.removed > 1 ? "s" : ""} disparaîtr{total.removed > 1 ? "ont" : "a"} et que {total.changed} sera{total.changed > 1 ? "ont" : ""} remplacé{total.changed > 1 ? "s" : ""} par la version du fichier.
+              Je comprends que {total.removed} élément{total.removed > 1 ? "s" : ""} actuel{total.removed > 1 ? "s" : ""} disparaîtr{total.removed > 1 ? "ont" : "a"} et que {total.changed} {total.changed > 1 ? "seront" : "sera"} remplacé{total.changed > 1 ? "s" : ""} par la version du fichier.
             </span>
           </label>
         )}
