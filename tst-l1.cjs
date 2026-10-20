@@ -7,7 +7,7 @@ const found=cand.find(p=>fs.existsSync(p));
 if(!found){console.log('FAIL fichier 46-compta-emprunts.jsx introuvable');process.exit(1);}
 const src=fs.readFileSync(found,'utf8');
 const a=src.indexOf('// <calcul-emprunts>'),b=src.indexOf('// </calcul-emprunts>');
-const lib=new Function(src.slice(a,b)+';return {loanBuildSchedule,loanSummary,loansTotals,loanAccrued,loanRebuildAfterPartial,loanAddMonths,loanAddDays,loanDaysBetween,loanValidDate,loanRound};')();
+const lib=new Function(src.slice(a,b)+';return {loanBuildSchedule,loanSummary,loansTotals,loanAccrued,loanRebuildAfterPartial,loanAddMonths,loanAddDays,loanDaysBetween,loanValidDate,loanRound,loanFxSettle,loanBookRemaining,loanIsFx};')();
 const sum=(rows,k)=>Math.round(rows.reduce((s,r)=>s+r[k],0)*100)/100;
 const base={principal:100000,annualRate:12,count:12,periodMonths:1,firstDate:'2026-02-01',method:'annuite',grace:0,insurance:0};
 let r=lib.loanBuildSchedule(base);
@@ -63,4 +63,31 @@ ok('dates valides',lib.loanValidDate('2026-02-28')&&!lib.loanValidDate('2026-02-
 ok('addDays : changement de mois',lib.loanAddDays('2026-12-31',1)==='2027-01-01');
 const tt=lib.loansTotals([loan,l2],'2026-06-15');
 ok('totaux : somme des capitaux restants',Math.abs(tt.remaining-(lib.loanSummary(loan,'2026-06-15').remaining+lib.loanSummary(l2,'2026-06-15').remaining))<0.01);
+// v237 : emprunts en devise
+const fxl={id:9,currency:'USD',principal:10000,bookHtg:1300000,annualRate:6,startDate:'2026-01-01',firstRowStart:'2026-01-01',periodMonths:1,method:'capital',status:'encours',disbursed:true,rows:lib.loanBuildSchedule({principal:10000,annualRate:6,count:10,periodMonths:1,firstDate:'2026-02-01',method:'capital',grace:0,insurance:0})};
+ok('devise : valeur comptable initiale',lib.loanBookRemaining(fxl)===1300000);
+ok('HTG : pas de valeur comptable séparée',lib.loanBookRemaining({principal:5})===null&&!lib.loanIsFx({principal:5})&&lib.loanIsFx(fxl));
+let f1=lib.loanFxSettle(1300000,10000,{capital:1000,interest:50,insurance:0},140);
+ok('règlement : valeur comptable sortie 130 000',f1.carry===130000,f1);
+ok('règlement : capital 140 000 + intérêts 7 000 = 147 000',f1.capV===140000&&f1.intV===7000&&f1.cash===147000,f1);
+ok('règlement : perte de change 10 000 (dollar plus cher)',f1.diff===10000,f1.diff);
+f1=lib.loanFxSettle(1300000,10000,{capital:1000,interest:50},125);
+ok('règlement : gain de change 5 000 (dollar moins cher)',f1.diff===-5000,f1.diff);
+const eqBal=(r)=>Math.round((r.carry+r.intV+r.insV+r.penV+Math.max(r.diff,0)-(r.cash+Math.max(-r.diff,0)))*100)/100;
+ok('écriture équilibrée dans les deux sens',eqBal(lib.loanFxSettle(1300000,10000,{capital:1000,interest:50,insurance:10,penalty:5},140))===0&&eqBal(lib.loanFxSettle(1300000,10000,{capital:1000,interest:50,insurance:10,penalty:5},125))===0);
+f1=lib.loanFxSettle(1300000,10000,{capital:1000,interest:50},null,147500);
+ok('paiement depuis le compte USD : sortie au coût, répartie',f1.cash===147500&&f1.intV===7023.81&&f1.capV===140476.19,f1);
+const last=lib.loanFxSettle(260000,2000,{capital:2000,interest:10},150);
+ok('dernier règlement : solde exactement la valeur comptable',last.carry===260000&&last.diff===40000,last);
+// cycle complet : 10 paiements à des taux variables, la valeur comptable tombe à zéro
+let cur={...fxl,rows:fxl.rows.map(x=>({...x}))},rates=[131,133,129,135,140,138,142,128,130,136],sumDiff=0,cashTot=0;
+cur.rows.forEach((row,i)=>{const bk=lib.loanBookRemaining(cur),rem=lib.loanSummary(cur,'2026-01-01').remaining;const r=lib.loanFxSettle(bk,rem,{capital:row.capital,interest:row.interest},rates[i]);row.status='payee';row.carry=r.carry;sumDiff+=r.diff;cashTot+=r.capV;});
+cur.status='solde';
+ok('cycle complet : capital total 10 000 USD',Math.abs(cur.rows.reduce((s,x)=>s+x.capital,0)-10000)<0.011);
+ok('cycle complet : somme des valeurs comptables sorties = valeur d\'origine',Math.abs(cur.rows.reduce((s,x)=>s+x.carry,0)-1300000)<0.02,cur.rows.reduce((s,x)=>s+x.carry,0));
+ok('cycle complet : écarts = décaissé capital - valeur d\'origine',Math.abs(sumDiff-(cashTot-1300000))<0.02,[sumDiff,cashTot]);
+const part=lib.loanSummary({...fxl,rows:fxl.rows.map((x,i)=>i<4?{...x,status:'payee',carry:Math.round(x.capital*130*100)/100}:x)},'2026-01-01');
+ok('situation en devise : valeur comptable proportionnelle',part.remaining===6000&&Math.abs(part.remainingBook-780000)<0.05,[part.remaining,part.remainingBook]);
+const mix=lib.loansTotals([loan,{...fxl}],'2026-01-01');
+ok('totaux mixtes : gourdes + valeur comptable',Math.abs(mix.remaining-(lib.loanSummary(loan,'2026-01-01').remaining+1300000))<0.02,mix.remaining);
 console.log('fails='+fails);process.exit(fails?1:0);

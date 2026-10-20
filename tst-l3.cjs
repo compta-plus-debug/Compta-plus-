@@ -1,0 +1,106 @@
+// v237 : emprunts en dollars dans l'application (déblocage, paiement avec écart de change, annulation, compte USD, estimation latente, intérêts courus, remboursement total).
+const {chromium}=require('playwright');const {boot}=require('./tst-harness.cjs');
+let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.stringify(i)));if(!c)fails++};
+(async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
+const accounts=[{code:'512',name:'Banque',type:'Actif'},{code:'530',name:'Caisse',type:'Actif'},{code:'627',name:'Frais bancaires',type:'Charge'},{code:'616',name:'Assurances',type:'Charge'}];
+const seed=[{id:'seedusd',date:'2025-12-01',createdAt:'2025-12-01T10:00:00Z',label:'Achat de dollars',lines:[{account:'5121',debit:2600000,credit:0},{account:'512',debit:0,credit:2600000}],fxc:{type:'buy',usd:20000,rate:130,cost:2600000,commission:0,source:'512'}}];
+const pageInit=new Function("try{localStorage.removeItem('compta-plus-active-tab')}catch(e){};");
+const A=await boot(b,{settings:{companyName:'Prêts SA',currency:'HTG',fxRates:[{id:'r1',date:'2026-01-01',currency:'USD',rate:130}]},primary:true,cats:{accounts:[...accounts,{code:'5121',name:'Banque — compte en dollars (USD)',type:'Actif'}],entries:seed},pageInit});
+const P=A.p;const T=(id)=>P.locator(`[data-testid="${id}"]`);
+await P.getByText('Comptabilité',{exact:true}).first().click();await P.waitForTimeout(500);
+await P.getByRole('button',{name:'Immobilisations & Provisions'}).click();await P.waitForTimeout(300);
+await P.getByRole('button',{name:'Emprunts',exact:true}).click();await P.waitForTimeout(500);
+ok('sélecteur de devise présent',(await T('loan-currency').count())===1);
+// compte USD absent pour un emprunt en gourdes
+ok('emprunt en gourdes : pas de compte USD proposé',!(await T('loan-account').innerText()).includes('5121'),await T('loan-account').innerText());
+await T('loan-currency').selectOption('USD');await P.waitForTimeout(200);
+ok('emprunt USD : compte USD proposé',(await T('loan-account').innerText()).includes('5121'));
+await T('loan-account').selectOption('512');
+await T('loan-name').fill('Prêt USD — machine');await T('loan-principal').fill('10000');await T('loan-rate').fill('6');
+await T('loan-start').fill('2026-01-10');await T('loan-first').fill('2026-02-10');await T('loan-count').fill('10');
+await T('loan-method').selectOption('capital');
+await P.waitForTimeout(200);
+ok('indication de la valeur comptable (1 300 000 au taux 130)',/1[\s  ,.]?300[\s  ,.]?000/.test(await T('loan-fx-hint').innerText()),await T('loan-fx-hint').innerText());
+await T('loan-save').click();await P.waitForTimeout(900);
+ok('emprunt USD enregistré',(await T('loan-card').count())===1);
+let ents=await P.evaluate(()=>window.__srv.getCat('entries'));
+const dis=ents.find(e=>/Déblocage/.test(e.label));
+const dl=(e,c)=>e.lines.filter(l=>l.account===c).reduce((s,l)=>s+l.debit-l.credit,0);
+ok('déblocage : banque +1 300 000 et emprunt -1 300 000',!!dis&&dl(dis,'512')===1300000&&dl(dis,'164')===-1300000,dis&&dis.lines);
+let ln=await P.evaluate(()=>window.__srv.getCat('loans')[0]);
+ok('emprunt : devise USD, valeur d\'origine 1 300 000',ln.currency==='USD'&&ln.bookHtg===1300000&&ln.bookRate===130,ln);
+ok('badge USD et valeur comptable affichés',(await T('loan-fx-badge').count())===1&&/1[\s  ,.]?300[\s  ,.]?000/.test(await T('loan-book-value').first().innerText()));
+ok('capital restant dû affiché en dollars',/10[\s  ,.]?000/.test(await T('loan-remaining').first().innerText())&&/\$|USD/.test(await T('loan-remaining').first().innerText()),await T('loan-remaining').first().innerText());
+ok('cartes récapitulatives en dollars : 10 000 USD, valeur 1 300 000, écart latent nul au taux 130',(await T('loans-fx-summary').count())===1&&/10[\s  ,.]?000/.test(await T('loans-fx-remaining').innerText())&&/1[\s  ,.]?300[\s  ,.]?000/.test(await T('loans-fx-book').innerText())&&/gain 0|perte 0/.test(await T('loans-fx-latent').innerText()),[await T('loans-fx-remaining').innerText(),await T('loans-fx-latent').innerText()]);
+// paiement 1 au taux 140 (perte)
+await T('loan-pay').first().click();await P.waitForTimeout(300);
+await T('pay-date').fill('2026-02-10');await T('pay-rate').fill('140');await P.waitForTimeout(300);
+ok('aperçu : perte de change annoncée',/perte/.test(await T('pay-fx-preview').innerText()),await T('pay-fx-preview').innerText());
+await T('pay-save').click();await P.waitForTimeout(900);
+ents=await P.evaluate(()=>window.__srv.getCat('entries'));
+const p1=ents.find(e=>/Échéance 1\//.test(e.label));
+ok('paiement 1 : capital 130 000 (164), intérêts 7 000, perte 10 000, banque -147 000',!!p1&&dl(p1,'164')===130000&&dl(p1,'6611')===7000&&dl(p1,'666')===10000&&dl(p1,'512')===-147000,p1&&p1.lines);
+ok('paiement 1 équilibré',Math.abs(p1.lines.reduce((s,l)=>s+l.debit-l.credit,0))<0.005);
+const accs=await P.evaluate(()=>window.__srv.getCat('accounts').map(a=>a.code));
+ok('comptes 666 et 6611 créés',['666','6611'].every(c=>accs.includes(c)),accs);
+ln=await P.evaluate(()=>window.__srv.getCat('loans')[0]);
+ok('échéance 1 : carry 130 000 mémorisé',ln.rows[0].status==='payee'&&ln.rows[0].carry===130000&&ln.rows[0].fxDiff===10000,ln.rows[0]);
+ok('valeur comptable restante 1 170 000',/1[\s  ,.]?170[\s  ,.]?000/.test(await T('loan-book-value').first().innerText()),await T('loan-book-value').first().innerText());
+// annulation puis nouveau paiement au taux 125 (gain)
+await T('loan-cancel').first().click();await P.waitForTimeout(900);
+ln=await P.evaluate(()=>window.__srv.getCat('loans')[0]);
+ok('annulation : carry effacé, valeur d\'origine rétablie',ln.rows[0].status==='prevue'&&ln.rows[0].carry===undefined&&/1[\s  ,.]?300[\s  ,.]?000/.test(await T('loan-book-value').first().innerText()),ln.rows[0]);
+await T('loan-pay').first().click();await P.waitForTimeout(300);
+await T('pay-date').fill('2026-02-10');await T('pay-rate').fill('125');await T('pay-save').click();await P.waitForTimeout(900);
+ents=await P.evaluate(()=>window.__srv.getCat('entries'));
+const p1b=ents.filter(e=>/Échéance 1\//.test(e.label)&&!e.reversalOf).pop();
+ok('paiement 1 bis : gain de change 5 000 (766)',dl(p1b,'766')===-5000&&dl(p1b,'512')===-(125*1050)&&dl(p1b,'164')===130000,p1b&&p1b.lines);
+// estimation latente à 135 : reste 9 000 USD, valeur comptable 1 170 000, valeur à 135 = 1 215 000 -> perte latente 45 000
+await T('loan-latent-rate').fill('135');await P.waitForTimeout(300);
+const lt=await T('loan-latent').innerText();
+ok('estimation latente : dette 1 215 000 et perte 45 000, non comptabilisée',/1[\s  ,.]?215[\s  ,.]?000/.test(lt)&&/perte/.test(lt)&&/45[\s  ,.]?000/.test(lt)&&/pas comptabilisé/.test(lt),lt);
+const nbBefore=(await P.evaluate(()=>window.__srv.getCat('entries'))).length;
+// paiement 2 depuis le compte en dollars (coût moyen 130)
+await T('loan-pay').first().click();await P.waitForTimeout(300);
+await T('pay-date').fill('2026-03-10');await T('pay-account').selectOption('5121');await P.waitForTimeout(300);
+ok('compte USD : plus de saisie de taux',(await T('pay-rate').count())===0);
+await T('pay-save').click();await P.waitForTimeout(900);
+ents=await P.evaluate(()=>window.__srv.getCat('entries'));
+const p2=ents.find(e=>/Échéance 2\//.test(e.label));
+ok('paiement 2 depuis 5121 : crédit au coût moyen (1 045 × 130 = 135 850)',!!p2&&dl(p2,'5121')===-135850&&dl(p2,'164')===130000&&dl(p2,'666')===0&&dl(p2,'766')===0,p2&&p2.lines);
+ok('paiement 2 : sortie USD mémorisée (fxc spend)',p2.fxc&&p2.fxc.type==='spend'&&p2.fxc.usd===1045&&p2.fxc.costOut===135850,p2.fxc);
+ok('paiement 2 équilibré',Math.abs(p2.lines.reduce((s,l)=>s+l.debit-l.credit,0))<0.005);
+// intérêts courus avec taux
+await T('loan-accrual-btn').click();await P.waitForTimeout(300);
+await T('accr-date').fill('2026-03-25');await T('accr-rate').fill('132');await P.waitForTimeout(300);
+await T('accr-save').click();await P.waitForTimeout(900);
+ln=await P.evaluate(()=>window.__srv.getCat('loans')[0]);
+const ac=ln.accruals[0];
+ok('intérêts courus : montant en gourdes = USD × 132',!!ac&&ac.rate===132&&Math.abs(ac.amount-Math.round(ac.amountForeign*132*100)/100)<0.011&&ac.amount>0,ac);
+ents=await P.evaluate(()=>window.__srv.getCat('entries'));
+const a1=ents.find(e=>e.id===ac.entryId);
+ok('intérêts courus : 6611 / 1688 du même montant',dl(a1,'6611')===ac.amount&&dl(a1,'1688')===-ac.amount,a1&&a1.lines);
+// remboursement anticipé total depuis la banque à 128
+await T('loan-early-btn').click();await P.waitForTimeout(300);
+await T('early-date').fill('2026-03-28');await T('early-total').check();await T('early-rate').fill('128');await P.waitForTimeout(300);
+ok('aperçu remboursement anticipé : gain de change annoncé',/gain/.test(await T('early-fx-preview').innerText()),await T('early-fx-preview').innerText());
+await T('early-save').click();await P.waitForTimeout(900);
+ln=await P.evaluate(()=>window.__srv.getCat('loans')[0]);
+ents=await P.evaluate(()=>window.__srv.getCat('entries'));
+ok('emprunt soldé',ln.status==='solde'&&ln.rows.every(r=>r.status==='payee'),ln.status);
+const net=(c)=>ents.flatMap(e=>e.lines).filter(l=>l.account===c).reduce((s,l)=>s+l.debit-l.credit,0);
+ok('compte 164 soldé à zéro dans le journal',Math.abs(net('164'))<0.02,net('164'));
+const ea=ents.find(e=>/Remboursement anticipé total/.test(e.label));
+ok('anticipé total : capital 8 000 USD sorti à 1 040 000, gain 16 000',!!ea&&dl(ea,'164')===1040000&&dl(ea,'766')===-16000,ea&&ea.lines);
+ok('toutes les écritures équilibrées',ents.every(e=>Math.abs(e.lines.reduce((s,l)=>s+l.debit-l.credit,0))<0.005));
+// décaissements en dollars : position du compte USD cohérente (déblocage vers 5121)
+await T('loan-currency').selectOption('USD');await T('loan-account').selectOption('5121');
+await T('loan-name').fill('Prêt USD — vers compte dollars');await T('loan-principal').fill('5000');await T('loan-rate').fill('0');await T('loan-fees').fill('100');
+await T('loan-start').fill('2026-04-01');await T('loan-first').fill('2026-05-01');await T('loan-count').fill('5');await T('loan-bookrate').fill('132');
+await T('loan-save').click();await P.waitForTimeout(900);
+ents=await P.evaluate(()=>window.__srv.getCat('entries'));
+const d2=ents.find(e=>/Déblocage/.test(e.label)&&/vers compte dollars/.test(e.label));
+ok('déblocage vers 5121 : 4 900 USD à 132 = 646 800, frais 13 200, emprunt 660 000',!!d2&&dl(d2,'5121')===646800&&dl(d2,'627')===13200&&dl(d2,'164')===-660000,d2&&d2.lines);
+ok('déblocage vers 5121 : mouvement fxc (achat) de 4 900 USD',d2.fxc&&d2.fxc.type==='buy'&&d2.fxc.usd===4900&&d2.fxc.cost===646800,d2.fxc);
+ok('aucune erreur JS',A.errs.length===0,A.errs.slice(0,3));
+await b.close();console.log('fails='+fails);process.exit(fails?1:0)})();
