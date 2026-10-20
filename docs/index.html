@@ -50,12 +50,24 @@
       function showBootError(msg) {
         // Uniquement AVANT le démarrage de l'application : une fois l'application affichée, une erreur
         // ponctuelle (réseau instable, requête échouée) ne doit jamais remplacer toute la page.
-        if (!document.getElementById("boot-status")) { try { console.error(msg); } catch (e) {} return; }
+        // Le détail technique va dans la console (pour le support) ; l'utilisateur ne voit qu'un message simple.
+        try { console.error(msg); } catch (e) {}
+        if (!document.getElementById("boot-status")) return;
         var el = document.getElementById("root");
         if (el) {
+          var off = (typeof navigator !== "undefined" && navigator.onLine === false);
           el.innerHTML =
-            '<div style="font-family: monospace; padding: 24px; color: #A6432F; background:#F7E9E3; white-space: pre-wrap; word-break: break-word;">' +
-            '<b>Erreur au chargement de Compta+ :</b><br><br>' + String(msg) + '</div>';
+            '<div style="font-family: sans-serif; max-width: 460px; margin: 12vh auto; padding: 24px; color: #152238; text-align: center; line-height: 1.5;">' +
+            '<div style="font-size: 20px; font-weight: 600; margin-bottom: 12px;">Connexion internet difficile</div>' +
+            '<p style="margin: 0 0 14px;">' + (off
+              ? "Votre appareil semble hors connexion. Compta+ a besoin d'internet pour s'ouvrir."
+              : "Compta+ n'a pas pu s'ouvrir. Cela vient le plus souvent d'une connexion internet absente ou trop lente.") + '</p>' +
+            '<ul style="text-align: left; margin: 0 0 18px; padding-left: 20px; color: #5C5646; font-size: 14px;">' +
+            '<li>Vérifiez que le Wi-Fi ou les données mobiles sont activés.</li>' +
+            '<li>Rapprochez-vous de votre routeur ou changez de réseau.</li>' +
+            '<li>Patientez quelques secondes, puis réessayez.</li></ul>' +
+            '<button onclick="location.reload()" style="background:#152238;color:#fff;border:0;border-radius:6px;padding:10px 22px;font-size:15px;cursor:pointer;">Réessayer</button>' +
+            '</div>';
         }
       }
       window.addEventListener("error", function (e) {
@@ -65,15 +77,10 @@
         showBootError((e && e.reason && (e.reason.message || e.reason)) || e);
       });
       setTimeout(function () {
-        var el = document.getElementById("boot-status");
-        if (el) {
-          showBootError(
-            "L'application n'a pas démarré après 6 secondes.\n\n" +
-            "Cause probable : le fichier app.min.js est incomplet (upload tronqué) ou une des ressources (React, Supabase) n'a pas pu se charger.\n\n" +
-            "Essayez d'ouvrir app.min.js directement dans le navigateur pour vérifier qu'il n'est pas vide."
-          );
+        if (document.getElementById("boot-status")) {
+          showBootError("Démarrage non terminé après 15 secondes (ressource lente ou indisponible).");
         }
-      }, 6000);
+      }, 15000);
     </script>
 
     <!-- Filet de secours : si le script classique Supabase n'a pas fonctionné, on retente via ESM -->
@@ -90,7 +97,7 @@
          Le paramètre ?v=... force le navigateur ET le CDN de GitHub Pages à recharger
          le fichier à chaque déploiement, au lieu de servir une copie en cache périmée.
          IMPORTANT : change ce numéro (date du jour par ex.) à chaque nouveau déploiement. -->
-    <script src="app.min.js?v=20260830-238"></script>
+    <script src="app.min.js?v=20260830-230"></script>
 
     <script>
       // Garde de côté l'invitation d'installation du navigateur (envoyée une seule fois, parfois avant
@@ -106,7 +113,7 @@
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
           // Même logique : ?v=... force la re-vérification du service worker à chaque déploiement.
-          navigator.serviceWorker.register("sw.js?v=20260830-238").then((registration) => {
+          navigator.serviceWorker.register("sw.js?v=20260830-230").then((registration) => {
             // Vérifie activement une mise à jour dès l'arrivée sur la page et à chaque
             // fois que l'onglet redevient visible — au lieu d'attendre le cycle
             // automatique du navigateur, qui peut prendre jusqu'à 24h et laisser une
