@@ -1,0 +1,37 @@
+// Import de sauvegarde : retour visible à l'écran dans tous les cas (v231).
+const {chromium}=require('playwright');const {boot}=require('./tst-harness.cjs');const fs=require('fs');
+let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.stringify(i)));if(!c)fails++};
+(async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
+const init={settings:{companyName:"Lakay SA",currency:"HTG"},primary:true,pageInit:()=>{try{localStorage.removeItem('compta-plus-active-tab')}catch(e){}}};
+const A=await boot(b,init);
+const go=async(P)=>{await P.getByText('Administration',{exact:true}).first().click();await P.waitForTimeout(500);await P.getByRole('button',{name:'Données & Suivi'}).click();await P.waitForTimeout(300);await P.getByRole('button',{name:'Données',exact:true}).click();await P.waitForTimeout(500)};
+await go(A.p);
+const [dl]=await Promise.all([A.p.waitForEvent('download',{timeout:8000}),A.p.getByRole('button',{name:'Exporter',exact:true}).click()]);
+await dl.saveAs('/tmp/i3-ok.json');
+fs.writeFileSync('/tmp/i3-vide.json','');fs.writeFileSync('/tmp/i3-pasjson.json','ceci n\'est pas du json');fs.writeFileSync('/tmp/i3-autre.json','{"foo":1}');
+fs.writeFileSync('/tmp/i3-casse.json','{"accounts":"oups","entries":[1,2]}');
+const B=await boot(b,{...init,settings:{companyName:"Entreprise vierge",currency:"HTG"}});
+await go(B.p);const inp=B.p.locator('[data-testid="backup-file"]');
+const st=async()=>{const l=B.p.locator('[data-testid="import-status"]');return (await l.count())?await l.innerText():null};
+ok('le sélecteur n\'a plus de filtre de type',(await inp.getAttribute('accept'))===null);
+await inp.setInputFiles('/tmp/i3-vide.json');await B.p.waitForTimeout(700);
+ok('fichier vide : message visible',/vide ou illisible/.test(await st()||''),await st());
+await inp.setInputFiles('/tmp/i3-pasjson.json');await B.p.waitForTimeout(700);
+ok('texte quelconque : message visible',/pas une sauvegarde Compta\+ valide/.test(await st()||''),await st());
+await inp.setInputFiles('/tmp/i3-autre.json');await B.p.waitForTimeout(700);
+ok('JSON étranger : refus visible',/Import refusé/.test(await st()||''),await st());
+await inp.setInputFiles('/tmp/i3-casse.json');await B.p.waitForTimeout(700);
+ok('données invalides : refus visible',/Import refusé/.test(await st()||''),await st());
+await inp.setInputFiles('/tmp/i3-ok.json');await B.p.waitForTimeout(1200);
+ok('bon fichier : fenêtre de restauration ouverte',(await B.p.locator('[data-testid="restore-modal"]').count())===1);
+ok('bon fichier : message d\'état effacé',(await st())===null,await st());
+await B.p.locator('[data-testid="restore-ack"]').check();await B.p.locator('[data-testid="restore-confirm"]').click();await B.p.waitForTimeout(1500);
+ok('restauration appliquée (fenêtre fermée)',(await B.p.locator('[data-testid="restore-modal"]').count())===0);
+ok('nom d\'entreprise restauré',/Lakay SA/.test(await B.p.evaluate(()=>document.body.innerText)));
+// collage du texte
+await B.p.getByRole('button',{name:'Coller le texte à la place'}).click();
+await B.p.locator('textarea').last().fill(fs.readFileSync('/tmp/i3-ok.json','utf8'));
+await B.p.getByRole('button',{name:'Importer ce texte'}).click();await B.p.waitForTimeout(1200);
+ok('collage : fenêtre de restauration ouverte',(await B.p.locator('[data-testid="restore-modal"]').count())===1);
+ok('aucune erreur JS',A.errs.length+B.errs.length===0,[...A.errs,...B.errs].slice(0,3));
+await b.close();console.log('fails='+fails);process.exit(fails?1:0)})();
