@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { controle } from "./controle.mjs";
-import { verifierDependances } from "./dependances.mjs";
+import { verifierDependances, lireEntete, nomsDeclares, sansCommentaires } from "./dependances.mjs";
 
 const require = createRequire(import.meta.url);
 const esbuild = require("esbuild");
@@ -36,16 +36,81 @@ if (dep.problemes.length) { console.error("BLOQUÉ — frontières entre modules
 let source = noms.map((n) => fs.readFileSync(path.join(dossierParties, n), "utf8")).join("");
 
 // 2) Cible TEST : même substitution que l'ancienne publication (première occurrence par ligne)
-if (cible === "test") {
+const appliquerCible = (texte) => {
+  if (cible !== "test") return texte;
   const subs = [
     ["cnmmxpwlgovzbcfqaxqm", "lfpqetfasjqnucklvwah"],
     ["sb_publishable_Ba1KJd2YY-eLaCy1FRECIA_C1DoyAjL", "sb_publishable_dQ2C3wy2LikR2IY2BgSrlQ_Go9Gj9Da"],
   ];
-  source = source.split("\n").map((l) => subs.reduce((acc, [a, b]) => acc.replace(a, b), l)).join("\n");
+  return texte.split("\n").map((l) => subs.reduce((acc, [a, b]) => acc.replace(a, b), l)).join("\n");
+};
+source = appliquerCible(source);
+
+// 2b) Chargement à la demande (chantier 8) : certains écrans lourds sont compilés à part (dossier chunks/).
+// Chaque fichier est une fonction qui reçoit de l'application de départ ce qu'il emprunte (@depends de ses blocs)
+// et rend l'écran principal. Les variables « let » modifiées au fil du temps (ex. _membership) sont lues en direct.
+// CHUNKS=off : tout reste dans un seul fichier (secours).
+const CHUNKS_ON = (process.env.CHUNKS || "on") !== "off";
+const CHUNK_DEFS = {   // identifiant -> numéros des blocs (fichiers NN-….jsx)
+  admin: ["39"], superadmin: ["43"], centre: ["42"], paie: ["27"], gestion: ["31", "32", "33", "34"],
+  compta: ["14", "18", "19", "47"], groupe: ["37"], stock: ["25"], creances: ["26"], caisse: ["21"],
+};
+const version0 = (source.match(/const APP_VERSION = "(20\d{6}-\d{3})"/) || [])[1];
+const chunkFiles = {};   // identifiant -> code compilé
+let coreSource = source;
+if (CHUNKS_ON) {
+  const parNum = (num) => lues.filter((x) => x.nom.startsWith(num + "-"));
+  const dansChunk = new Map();  // nom de fichier -> identifiant
+  for (const [id, nums] of Object.entries(CHUNK_DEFS)) for (const num of nums) {
+    const f = parNum(num); if (f.length !== 1) { console.error("BLOQUÉ — chunk « " + id + " » : bloc " + num + " introuvable."); process.exit(1); }
+    dansChunk.set(f[0].nom, id);
+  }
+  const coreParts = lues.filter((x) => !dansChunk.has(x.nom));
+  // Analyse du vrai code (commentaires retirés par le compilateur), pas des seuls en-têtes : un en-tête incomplet ne doit pas pouvoir casser un chunk.
+  const nettoye = (t) => esbuild.transformSync(t, { loader: "jsx", target: "es2019" }).code;
+  const proprio = new Map(); // nom déclaré au premier niveau -> fichier
+  for (const x of lues) for (const n of nomsDeclares(x.texte)) if (!proprio.has(n)) proprio.set(n, x.nom);
+  const coreTexte = coreParts.map((x) => x.texte).join("");
+  const coreCode = nettoye(coreTexte);
+  const vivantes = new Set([...coreTexte.matchAll(/^(?:let|var)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]));
+  const utilise = (code, n) => new RegExp("(?<![\\w$.])" + n.replace(/\$/g, "\\$") + "(?![\\w$])").test(code);
+  const scopeNoms = new Set(), liveUtilisees = new Set(), stubs = [];
+  for (const [id, nums] of Object.entries(CHUNK_DEFS)) {
+    const parts = lues.filter((x) => dansChunk.get(x.nom) === id);
+    const propres = new Set(); parts.forEach((x) => nomsDeclares(x.texte).forEach((n) => propres.add(n)));
+    const texteChunk = parts.map((x) => x.texte).join("");
+    const codeChunk = nettoye(texteChunk);
+    const besoins = new Set();
+    for (const [n, f] of proprio) {
+      if (propres.has(n) || !utilise(codeChunk, n)) continue;
+      if (dansChunk.has(f)) { console.error("BLOQUÉ — chunk « " + id + " » utilise « " + n + " », qui est dans le chunk « " + dansChunk.get(f) + " »."); process.exit(1); }
+      besoins.add(n);
+    }
+    // ce que l'application de départ utilise de ce chunk (doit être l'écran principal, et lui seul)
+    const entree = [...propres].filter((n) => utilise(coreCode, n)).sort();
+    if (!entree.length) { console.error("BLOQUÉ — chunk « " + id + " » : aucun écran n'est utilisé par l'application de départ."); process.exit(1); }
+    console.log("  chunk " + id + " : écran(s) d'entrée " + entree.join(", ") + " ; emprunte " + besoins.size + " noms");
+    for (const n of besoins) if (vivantes.has(n)) liveUtilisees.add(n); else scopeNoms.add(n);
+    let code = texteChunk;
+    for (const n of besoins) if (vivantes.has(n)) {
+      const re = new RegExp("(?<![\\w$.])" + n.replace(/\$/g, "\\$") + "(?![\\w$])(?!\\s*:)", "g");
+      code = code.replace(re, "__live." + n);
+    }
+    const liste = [...besoins].filter((n) => !vivantes.has(n)).sort();
+    const enveloppe = '(window.__cpc=window.__cpc||{})[' + JSON.stringify(id) + ']={v:' + JSON.stringify(version0) + ',f:function(__c){const {' + liste.join(",") + '}=__c;const __live=__c.__live;\n' + code + '\nreturn {' + entree.join(",") + '};}};';
+    const mini = esbuild.transformSync(appliquerCible(enveloppe), { loader: "jsx", target: "es2019", minify: true, charset: "ascii" }).code;
+    chunkFiles[id] = mini;
+    entree.forEach((n) => stubs.push("const " + n + " = cpLazy(" + JSON.stringify(id) + ", " + JSON.stringify(n) + ");"));
+  }
+  const tete = "const __CP_IDS = " + JSON.stringify(Object.keys(CHUNK_DEFS)) + ";\n";
+  const queue = "\nfunction __cpScope() {\n  const __L = {};\n" + [...liveUtilisees].sort().map((n) => "  Object.defineProperty(__L, " + JSON.stringify(n) + ", { get: () => " + n + ", enumerable: true });\n").join("") +
+    "  return { " + [...scopeNoms].sort().join(", ") + ", __live: __L };\n}\n" + stubs.join("\n") + "\n";
+  coreSource = appliquerCible(tete + coreParts.map((x) => x.texte).join("") + queue);
+  console.log("Chargement à la demande : " + Object.keys(CHUNK_DEFS).length + " fichiers (" + Object.entries(chunkFiles).map(([k, v]) => k + " " + Math.round(v.length / 1024) + " Ko").join(", ") + ").");
 }
 
 // 3) Compilation (même réglages qu'avant)
-const brut = esbuild.transformSync(source, { loader: "jsx", target: "es2019", minify: true }).code;
+const brut = esbuild.transformSync(coreSource, { loader: "jsx", target: "es2019", minify: true }).code;
 const min = "(function(){" + brut + "})();";
 
 // 4) Numéro de version : lu dans l'application, recopié dans index.html
@@ -132,6 +197,11 @@ if (!r.ok) { r.problems.forEach((p) => console.log("  ✗ " + p)); process.exit(
 
 fs.mkdirSync(sortie, { recursive: true });
 fs.writeFileSync(path.join(sortie, "app.min.js"), min);
+fs.rmSync(path.join(sortie, "chunks"), { recursive: true, force: true });
+for (const [id, code] of Object.entries(chunkFiles)) {
+  fs.mkdirSync(path.join(sortie, "chunks"), { recursive: true });
+  fs.writeFileSync(path.join(sortie, "chunks", id + ".js"), code);
+}
 fs.writeFileSync(path.join(sortie, "index.html"), indexFinal);
 for (const [rel, buf] of vendorOut) {
   const dest = path.join(sortie, rel);

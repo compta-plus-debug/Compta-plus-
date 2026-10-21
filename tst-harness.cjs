@@ -4,7 +4,7 @@ global.__ok=ok;global.__fails=()=>fails;
 async function boot(browser,opts={}){
   const ctx=opts.ctx||await browser.newContext({viewport:{width:1100,height:800}});
   const p=await ctx.newPage();if(opts.onPage)opts.onPage(p);const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());
-  await p.route('http://app.test/**',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html><body><div id="root"></div></body></html>'}));await p.goto('http://app.test/');
+  await p.route('http://app.test/**',r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html><body><div id="root"></div></body></html>'}));await p.route('http://app.test/chunks/**',async r=>{const f=require('path').join(require('path').dirname(process.env.APP_JS||(require('fs').existsSync(__dirname+'/../docs/app.min.js')?__dirname+'/../docs/app.min.js':__dirname+'/docs/app.min.js')),'chunks',new URL(r.request().url()).pathname.split('/').pop());if(opts.chunkFail&&opts.chunkFail(f)){return r.abort()}if(require('fs').existsSync(f))return r.fulfill({contentType:'application/javascript',body:require('fs').readFileSync(f,'utf8')});return r.fulfill({status:404,body:''})});await p.goto('http://app.test/');
   await p.addScriptTag({content:fs.readFileSync(__dirname+'/tst-shim.js','utf8')});
   await p.addScriptTag({content:fs.readFileSync(__dirname+'/tst-fake.js','utf8')});
   if(opts.kv){await p.evaluate((kv)=>{window.__srv.kv=kv;},opts.kv);}
