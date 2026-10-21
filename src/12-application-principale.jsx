@@ -12,9 +12,10 @@
 //   clearMembershipCache, computeBalances, computeKpis, dlog, fetchHtgPerUsd, forgetCompanyChoice
 //   friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline
 //   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlSaveMeta, invokeEdgeFunction, logClientError
-//   monthLabel, oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, pjTraceText, resolveMembership
-//   roleLabel, ruleRefusalMessage, sanitizeUserMessage, sealEntries, supabase, todayStr, uid
-//   unwrapVersioned, useBackNav, useEffect, useMemo, useState
+//   monthLabel, oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady
+//   pjTraceText, resolveMembership, roleLabel, ruleRefusalMessage, sanitizeUserMessage
+//   sealEntries, supabase, todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo
+//   useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 function App() {
@@ -753,6 +754,7 @@ function App() {
   };
 
   useEffect(() => {
+    perfMarkMount();
     (async () => {
       // Vérification explicite AVANT tout chargement de données : s'il faut demander
       // à l'utilisateur de choisir entre plusieurs entreprises, on s'arrête ici tout
@@ -983,6 +985,7 @@ function App() {
         // diagnostic sur l'écran de connexion puisse encore l'afficher.
         try { sessionStorage.setItem("compta-plus-last-membership-error", msg); } catch (err) {}
       }
+      perfMarkReady();
       setLoaded(true);
     })();
   }, []);

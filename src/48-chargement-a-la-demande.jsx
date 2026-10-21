@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Chargement a la demande
 // @depends APP_VERSION, useEffect, useState
-// @exports —
+// @exports CP_PERF
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Chargement à la demande des gros modules (chantier 8) ---
 // Les écrans lourds et rarement ouverts au démarrage (Paie, Administration, Comptabilité, Gestion…)

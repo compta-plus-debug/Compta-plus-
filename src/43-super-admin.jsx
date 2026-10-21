@@ -8,6 +8,8 @@
 function SuperAdminModule({ showToast }) {
   const [tab, setTab] = useState("dashboard"); // dashboard | entreprises | rapports | erreurs
   const [errorLogs, setErrorLogs] = useState(null); // null = pas encore chargé
+  const [perf, setPerf] = useState(null); // null = pas chargé ; {loading} | {data} | {error}
+  const [perfDays, setPerfDays] = useState(7);
   const [relAll, setRelAll] = useState(null); // null = pas lancé ; {loading} | {rows} | {error}
   const [relDetail, setRelDetail] = useState({}); // company_id -> lignes de détail
   const [signupFailures, setSignupFailures] = useState(null); // null = pas encore chargé
@@ -63,6 +65,13 @@ function SuperAdminModule({ showToast }) {
     const { data, error } = await supabase.from("payments").select("*").order("date", { ascending: false });
     if (error) { setAllPayments([]); return; }
     setAllPayments(data || []);
+  };
+
+  const loadPerf = async () => {
+    setPerf({ loading: true });
+    const { data, error } = await supabase.rpc("perf_summary", { p_days: perfDays });
+    if (error) { setPerf({ error: true }); return; }
+    setPerf({ data: data || { total: 0 } });
   };
 
   const loadErrorLogs = async () => {
@@ -144,6 +153,7 @@ function SuperAdminModule({ showToast }) {
   // ces journaux ne sont consultés qu'occasionnellement, contrairement au
   // tableau de bord et aux entreprises.
   useEffect(() => { if (tab === "erreurs" && errorLogs === null) loadErrorLogs(); }, [tab]);
+  useEffect(() => { if (tab === "perf") loadPerf(); }, [tab, perfDays]);
   useEffect(() => { if (tab === "inscriptions" && signupFailures === null) loadSignupFailures(); }, [tab]);
   useEffect(() => { if (tab === "inscriptions" && trialSignups === null) loadTrialSignups(); }, [tab]);
   useEffect(() => { if ((tab === "journal" || tab === "suivi") && superLog === null) loadSuperLog(); }, [tab]);
@@ -391,7 +401,7 @@ function SuperAdminModule({ showToast }) {
           const SA_GROUPS = [
             { id: "activite", label: "Activité et finances", tabs: [["dashboard", "Tableau de bord"], ["entreprises", "Entreprises"], ["rapports", "Rapports et analyse"]] },
             { id: "essais", label: "Essais et inscriptions", tabs: [["suivi", "Suivi des essais"], ["inscriptions", "Inscriptions et essais"]] },
-            { id: "controle", label: "Contrôle et sécurité", tabs: [["journal", "Journal"], ["erreurs", "Erreurs"], ["integrite", "Intégrité des données"]] },
+            { id: "controle", label: "Contrôle et sécurité", tabs: [["journal", "Journal"], ["erreurs", "Erreurs"], ["perf", "Performances"], ["integrite", "Intégrité des données"]] },
           ];
           const grp = SA_GROUPS.find((g) => g.tabs.some(([id]) => id === tab)) || SA_GROUPS[0];
           return (
@@ -824,6 +834,60 @@ function SuperAdminModule({ showToast }) {
             )}
           </div>
         )}
+
+        {tab === "perf" && (() => {
+          const sec = (ms) => (ms == null ? "—" : (Number(ms) / 1000).toFixed(1).replace(".", ",") + " s");
+          const d = perf && perf.data;
+          const Tbl = ({ title, cols, rows, testid }) => (
+            <div className="mt-5" data-testid={testid}>
+              <div className="text-xs font-semibold mb-2" style={{ color: "#152238" }}>{title}</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs" style={{ minWidth: 360 }}>
+                  <thead><tr style={{ color: "#8A8370", textAlign: "left" }}>{cols.map((c) => <th key={c} className="py-1 pr-3 font-medium">{c}</th>)}</tr></thead>
+                  <tbody>{rows.map((r, i) => <tr key={i} style={{ borderTop: "1px solid #EEE9DA" }}>{r.map((v, j) => <td key={j} className="py-1 pr-3">{v}</td>)}</tr>)}</tbody>
+                </table>
+              </div>
+            </div>
+          );
+          return (
+            <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1", minWidth: 0, overflowWrap: "anywhere" }} data-testid="perf-panel">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-sm font-semibold" style={{ color: "#152238" }}>Performances de chargement</div>
+                <select value={perfDays} onChange={(e) => setPerfDays(Number(e.target.value))} data-testid="perf-days" className="text-xs rounded px-2 py-1" style={{ border: "1px solid #E4DFD1" }}>
+                  <option value={1}>24 dernières heures</option>
+                  <option value={7}>7 derniers jours</option>
+                  <option value={30}>30 derniers jours</option>
+                </select>
+              </div>
+              <p className="text-xs mt-1" style={{ color: "#8A8370" }}>
+                Temps mesuré chez vos utilisateurs entre l'ouverture de l'application et l'affichage de leurs données. Seules des durées sont enregistrées, jamais de données comptables.
+              </p>
+              {!perf || perf.loading ? (
+                <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }}>Chargement…</div>
+              ) : perf.error ? (
+                <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }} data-testid="perf-unavailable">Les mesures ne sont pas encore disponibles.</div>
+              ) : !d.total ? (
+                <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }} data-testid="perf-empty">Aucune mesure sur cette période.</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4" data-testid="perf-cards">
+                    {[["Ouvertures mesurées", d.total], ["Temps médian", sec(d.p50)], ["9 ouvertures sur 10 en moins de", sec(d.p90)], ["Ouvertures lentes", d.total ? Math.round((100 * (d.slow || 0)) / d.total) + " %" : "—"]].map(([l, v]) => (
+                      <div key={l} className="rounded-lg p-3" style={{ background: "#F7F4EA" }}>
+                        <div className="text-xs" style={{ color: "#8A8370" }}>{l}</div>
+                        <div className="text-lg font-semibold" style={{ color: "#152238" }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {d.failures > 0 && <p className="text-xs mt-3" style={{ color: "#9A3412" }} data-testid="perf-failures">{d.failures} écran(s) n'ont pas pu se charger sur la période (connexion instable ou fichier manquant après une mise à jour).</p>}
+                  <Tbl testid="perf-versions" title="Par version de l'application" cols={["Version", "Mesures", "Médian", "9 sur 10 sous", "Lentes"]} rows={(d.by_version || []).map((r) => [r.app_version, r.n, sec(r.p50), sec(r.p90), r.slow])} />
+                  <Tbl testid="perf-net" title="Par type de connexion" cols={["Connexion", "Mesures", "Médian", "9 sur 10 sous"]} rows={(d.by_net || []).map((r) => [r.net || "inconnue", r.n, sec(r.p50), sec(r.p90)])} />
+                  <Tbl testid="perf-chunks" title="Écrans ouverts à la demande (durée de chargement)" cols={["Écran", "Mesures", "Médian", "9 sur 10 sous"]} rows={(d.chunks || []).map((r) => [({ admin: "Administration", superadmin: "Super admin", centre: "Centre de gestion", paie: "Salaires", gestion: "Gestion avancée", compta: "Comptabilité", groupe: "Groupe", stock: "Stock", creances: "Comptes clients", caisse: "Caisse et banque" })[r.id] || r.id, r.n, sec(r.p50), sec(r.p90)])} />
+                  <Tbl testid="perf-daily" title="Par jour" cols={["Jour", "Mesures", "Médian", "9 sur 10 sous"]} rows={(d.daily || []).map((r) => [r.day, r.n, sec(r.p50), sec(r.p90)])} />
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {tab === "erreurs" && (
           <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1", minWidth: 0, overflowWrap: "anywhere" }} data-testid="err-panel">
