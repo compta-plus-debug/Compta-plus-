@@ -13,7 +13,8 @@ const permet=(d,url)=>{const u=new URL(url);const liste=dir[d]||dir['default-src
  const mm=s.match(/^(https?|wss?):\/\/(\*\.)?([^/]+)$/);if(!mm)return false;if(u.protocol!==mm[1]+':')return false;return mm[2]?u.hostname.endsWith('.'+mm[3]):u.hostname===mm[3]})};
 // scripts externes de la page
 const scripts=[...html.matchAll(/<script[^>]+src="(https:[^"]+)"/g)].map(x=>x[1]);
-ok('seul script externe : Tailwind (les bibliothèques sont hébergées avec le site)',scripts.length===1&&/cdn\.tailwindcss\.com/.test(scripts[0]),scripts);
+ok('aucun script externe (bibliothèques et feuille de styles hébergées avec le site)',scripts.length===0,scripts);
+ok('script-src sans unsafe-eval ni service externe',!(dir['script-src']||[]).some(x=>x=="'unsafe-eval'"||/^https?:/.test(x)),dir['script-src']);
 ok('script-src sans unsafe-inline',!(dir['script-src']||[]).includes("'unsafe-inline'"),dir['script-src']);
 ok('scripts incorporés autorisés par empreinte',[...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].every(m=>(dir['script-src']||[]).includes("'sha256-"+require('crypto').createHash('sha256').update(m[1],'utf8').digest('base64')+"'")));
 ok('plus aucun hébergeur de bibliothèques ni de polices autorisé',!/unpkg|jsdelivr|cdnjs|googleapis|gstatic/.test(m?m[1]:''));

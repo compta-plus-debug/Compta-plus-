@@ -124,7 +124,8 @@ if (!cheminIndex) { console.error("Modèle de page introuvable (src/index.modele
 console.log("Modèle de page : " + path.relative(racine, cheminIndex));
 const index = fs.readFileSync(cheminIndex, "utf8")
   .replace(/(app\.min\.js\?v=)20\d{6}-\d{3}/g, "$1" + version)
-  .replace(/(sw\.js\?v=)20\d{6}-\d{3}/g, "$1" + version);
+  .replace(/(sw\.js\?v=)20\d{6}-\d{3}/g, "$1" + version)
+  .replace(/(tailwind\.css\?v=)20\d{6}-\d{3}/g, "$1" + version);
 
 // 4b) Bibliothèques et polices hébergées avec le site (chantier 6)
 // Elles sont copiées depuis les paquets npm (versions fixées dans package.json) vers vendor/ et fonts/,
@@ -170,11 +171,46 @@ if (vendorOn) {
     vendorOut.push(["fonts/" + nom, fs.readFileSync(f)]);
   }
   if (manque.length) { console.error("BLOQUÉ — paquets manquants dans node_modules (npm install a-t-il été lancé ?) :\n  " + manque.join("\n  ")); process.exit(1); }
-  if (/integrity="sha384-PLACEHOLDER"/.test(indexFinal)) { console.error("BLOQUÉ — une empreinte SRI n'a pas été calculée."); process.exit(1); }
+  if (/<script[^>]*integrity="sha384-PLACEHOLDER"/.test(indexFinal)) { console.error("BLOQUÉ — une empreinte SRI n'a pas été calculée."); process.exit(1); }
   console.log("Bibliothèques hébergées : " + VENDOR_LIBS.length + " fichiers, polices : " + VENDOR_FONTS.length + " fichiers (empreintes SRI inscrites).");
 } else {
   console.log("Bibliothèques hébergées : étape sautée (VENDOR=skip).");
 }
+
+// 4b-bis) Feuille de styles (chantier 9) : Tailwind 3.4.17 (exécutable autonome, version fixée) génère tailwind.css
+// à partir des classes réellement présentes dans les sources ; plus de script externe ni de 'unsafe-eval'.
+// TAILWIND_BIN : chemin de l'exécutable (la construction automatique le télécharge et vérifie son empreinte).
+// TAILWIND=skip : saute cette étape (poste de test sans l'exécutable) ; en construction automatique, elle est obligatoire.
+import { execFileSync } from "node:child_process";
+import os from "node:os";
+const TAILWIND_VERSION = "3.4.17";
+if (/tailwind\.css\?v=/.test(indexFinal)) {
+  const bin = process.env.TAILWIND_BIN || "";
+  if ((process.env.TAILWIND || "on") === "skip" || (!bin && !vendorOn)) {
+    console.log("Feuille de styles : étape sautée (TAILWIND=skip ou VENDOR=skip sans TAILWIND_BIN).");
+  } else {
+    if (!bin || !fs.existsSync(bin)) { console.error("BLOQUÉ — générateur de styles introuvable (variable TAILWIND_BIN)."); process.exit(1); }
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "tw-"));
+    const cfg = path.join(tmp, "tailwind.config.cjs"), entree = path.join(tmp, "entree.css"), sortieCss = path.join(tmp, "tailwind.css");
+    const contenus = [path.join(dossierParties, "*.jsx"), cheminIndex];
+    fs.writeFileSync(cfg, "module.exports = " + JSON.stringify({ content: contenus, theme: { extend: {} }, plugins: [] }) + ";\n");
+    fs.writeFileSync(entree, "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n");
+    let v = "";
+    try { v = execFileSync(bin, ["--help"], { encoding: "utf8" }); } catch (e) { v = String((e && e.stdout) || ""); }
+    if (!v.includes("tailwindcss v" + TAILWIND_VERSION)) { console.error("BLOQUÉ — le générateur de styles n'est pas en version " + TAILWIND_VERSION + "."); process.exit(1); }
+    try { execFileSync(bin, ["-c", cfg, "-i", entree, "-o", sortieCss, "--minify"], { stdio: ["ignore", "pipe", "pipe"], cwd: racine }); }
+    catch (e) { console.error("BLOQUÉ — la génération des styles a échoué :\n" + String((e && e.stderr) || e)); process.exit(1); }
+    const css = fs.readFileSync(sortieCss);
+    if (css.length < 5000) { console.error("BLOQUÉ — feuille de styles anormalement petite (" + css.length + " octets)."); process.exit(1); }
+    vendorOut.push(["tailwind.css", css]);
+    const sriCss = "sha384-" + crypto.createHash("sha384").update(css).digest("base64");
+    indexFinal = indexFinal.replace(/(<link rel="stylesheet" href="tailwind\.css\?v=[^"]*" integrity=")[^"]*(")/, "$1" + sriCss + "$2");
+    fs.rmSync(tmp, { recursive: true, force: true });
+    console.log("Feuille de styles : tailwind.css (" + Math.round(css.length / 1024) + " Ko, Tailwind " + TAILWIND_VERSION + ", empreinte SRI inscrite).");
+  }
+}
+
+if (vendorOn && /integrity="sha384-PLACEHOLDER"/.test(indexFinal)) { console.error("BLOQUÉ — une empreinte SRI n'a pas été calculée (feuille de styles)."); process.exit(1); }
 
 // 4c) Politique de sécurité : les scripts incorporés à index.html sont autorisés par leur empreinte sha256
 // (recalculée ici, après la mise à jour des numéros de version), sans 'unsafe-inline'.
