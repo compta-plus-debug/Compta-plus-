@@ -28,7 +28,7 @@ function LandingPage({ onStart }) {
   ];
   return (
     <div style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)", fontFamily: "'Source Sans Pro', 'Inter', sans-serif", minHeight: "100vh", color: "#152238" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap'); .lp-display { font-family: 'Spectral', serif; }`}</style>
+      <style>{`.lp-display { font-family: 'Spectral', serif; }`}</style>
 
       <header className="flex items-center justify-between px-6 py-5 max-w-6xl mx-auto">
         <div className="flex items-center gap-2">

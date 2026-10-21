@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Politique de sécurité de la page : seules les sources listées peuvent charger des scripts,
+         des styles, des polices ou joindre le réseau. Toute autre source (script injecté, formulaire
+         détourné, objet incorporé) est refusée par le navigateur.
+         Les scripts incorporés à cette page sont autorisés uniquement par leur empreinte (sha256),
+         recalculée automatiquement à chaque construction du site (build.mjs). Les bibliothèques
+         (React, Supabase, PDF, Excel, scan) et les polices sont hébergées avec le site (vendor/, fonts/),
+         vérifiées par empreinte (SRI) : plus aucun service externe, sauf Tailwind (génération des styles). -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co https://open.er-api.com; worker-src 'self' blob:; frame-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <title>Compta+ — ERP Comptabilité</title>
+    <meta name="theme-color" content="#14458F" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="icon" href="icons/icon-192.png" />
+    <style>
+      /* Filet de sécurité anti-débordement : empêche la PAGE ENTIÈRE de défiler
+         horizontalement si un élément déborde par erreur (ex. bug "CSS Grid blowout").
+         N'affecte pas les tableaux qui ont volontairement leur propre défilement
+         horizontal interne (overflow-x-auto), seulement le défilement de la page. */
+      html, body { max-width: 100%; overflow-x: hidden; overscroll-behavior-x: none; }
+      /* Empêche le geste natif "retour" du navigateur (glissement depuis le bord de l'écran)
+         d'entrer en conflit avec le tiroir de navigation de l'application, qui utilise le
+         même geste horizontal depuis le bord gauche. */
+      html, body { touch-action: pan-y; }
+      /* Polices hébergées avec le site (aucun appel à Google Fonts). */
+      @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/inter-latin-400-normal.woff2) format('woff2'); }
+      @font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/inter-latin-500-normal.woff2) format('woff2'); }
+      @font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/inter-latin-600-normal.woff2) format('woff2'); }
+      @font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/inter-latin-700-normal.woff2) format('woff2'); }
+      @font-face { font-family: 'Spectral'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/spectral-latin-500-normal.woff2) format('woff2'); }
+      @font-face { font-family: 'Spectral'; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/spectral-latin-600-normal.woff2) format('woff2'); }
+      @font-face { font-family: 'Spectral'; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/spectral-latin-700-normal.woff2) format('woff2'); }
+      @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format('woff2'); }
+      @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-mono-latin-600-normal.woff2) format('woff2'); }
+    </style>
+
+    <!-- Tailwind CSS (CDN — génère les styles utilitaires utilisés par l'app, ex: flex, w-64, px-5) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Bibliothèques hébergées avec le site (dossier vendor/, copiées depuis les paquets npm à chaque
+         construction). L'empreinte « integrity » est recalculée automatiquement par build.mjs. -->
+    <script src="vendor/react.production.min.js" integrity="sha384-PLACEHOLDER" crossorigin="anonymous"></script>
+    <script src="vendor/react-dom.production.min.js" integrity="sha384-PLACEHOLDER" crossorigin="anonymous"></script>
+    <script src="vendor/supabase.js" integrity="sha384-PLACEHOLDER" crossorigin="anonymous"></script>
+    <script src="vendor/jspdf.umd.min.js" integrity="sha384-PLACEHOLDER" crossorigin="anonymous"></script>
+    <script src="vendor/jspdf.plugin.autotable.min.js" integrity="sha384-PLACEHOLDER" crossorigin="anonymous"></script>
+    <script src="vendor/html5-qrcode.min.js" integrity="sha384-PLACEHOLDER" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot-status" style="font-family: sans-serif; padding: 24px; color: #152238;">Chargement de Compta+…</div>
+    </div>
+
+    <!-- Filet de sécurité : affiche toute erreur directement sur la page, sans besoin des outils de développement -->
+    <script>
+      function showBootError(msg) {
+        // Uniquement AVANT le démarrage de l'application : une fois l'application affichée, une erreur
+        // ponctuelle (réseau instable, requête échouée) ne doit jamais remplacer toute la page.
+        // Le détail technique va dans la console (pour le support) ; l'utilisateur ne voit qu'un message simple.
+        try { console.error(msg); } catch (e) {}
+        if (!document.getElementById("boot-status")) return;
+        var el = document.getElementById("root");
+        if (el) {
+          var off = (typeof navigator !== "undefined" && navigator.onLine === false);
+          el.innerHTML =
+            '<div style="font-family: sans-serif; max-width: 460px; margin: 12vh auto; padding: 24px; color: #152238; text-align: center; line-height: 1.5;">' +
+            '<div style="font-size: 20px; font-weight: 600; margin-bottom: 12px;">Connexion internet difficile</div>' +
+            '<p style="margin: 0 0 14px;">' + (off
+              ? "Votre appareil semble hors connexion. Compta+ a besoin d'internet pour s'ouvrir."
+              : "Compta+ n'a pas pu s'ouvrir. Cela vient le plus souvent d'une connexion internet absente ou trop lente.") + '</p>' +
+            '<ul style="text-align: left; margin: 0 0 18px; padding-left: 20px; color: #5C5646; font-size: 14px;">' +
+            '<li>Vérifiez que le Wi-Fi ou les données mobiles sont activés.</li>' +
+            '<li>Rapprochez-vous de votre routeur ou changez de réseau.</li>' +
+            '<li>Patientez quelques secondes, puis réessayez.</li></ul>' +
+            '<button id="boot-retry" style="background:#152238;color:#fff;border:0;border-radius:6px;padding:10px 22px;font-size:15px;cursor:pointer;">Réessayer</button>' +
+            '</div>';
+          var rb = document.getElementById("boot-retry");
+          if (rb) rb.addEventListener("click", function () { location.reload(); });
+        }
+      }
+      window.addEventListener("error", function (e) {
+        showBootError((e && e.message) || e);
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        showBootError((e && e.reason && (e.reason.message || e.reason)) || e);
+      });
+      setTimeout(function () {
+        if (document.getElementById("boot-status")) {
+          showBootError("Démarrage non terminé après 15 secondes (ressource lente ou indisponible).");
+        }
+      }, 15000);
+    </script>
+
+
+    <!-- L'application : code source pré-compilé et minifié (app.min.js), pas le fichier
+         app.jsx lisible — pour ne pas exposer publiquement la logique commentée du logiciel.
+         Le paramètre ?v=... force le navigateur ET le CDN de GitHub Pages à recharger
+         le fichier à chaque déploiement, au lieu de servir une copie en cache périmée.
+         IMPORTANT : change ce numéro (date du jour par ex.) à chaque nouveau déploiement. -->
+    <script src="app.min.js?v=20260830-230"></script>
+
+    <script>
+      // Garde de côté l'invitation d'installation du navigateur (envoyée une seule fois, parfois avant
+      // que l'application soit chargée) pour que le bouton « Installer l'application » fonctionne.
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        window.__deferredInstall = e;
+        window.dispatchEvent(new Event("compta-plus-install-ready"));
+      });
+      window.addEventListener("appinstalled", () => { window.__deferredInstall = null; });
+    </script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          // Même logique : ?v=... force la re-vérification du service worker à chaque déploiement.
+          navigator.serviceWorker.register("sw.js?v=20260830-230").then((registration) => {
+            // Vérifie activement une mise à jour dès l'arrivée sur la page et à chaque
+            // fois que l'onglet redevient visible — au lieu d'attendre le cycle
+            // automatique du navigateur, qui peut prendre jusqu'à 24h et laisser une
+            // version périmée tourner silencieusement pendant tout ce temps.
+            // Un échec ponctuel de cette vérification (réseau instable, etc.) est
+            // normal et sans conséquence — le prochain appel réessaiera. Sans ce
+            // .catch(), un simple raté réseau remontait comme une "erreur" dans le
+            // journal, alors qu'il ne s'agit que d'une vérification de routine.
+            registration.update().catch(() => {});
+            document.addEventListener("visibilitychange", () => {
+              if (document.visibilityState === "visible") registration.update().catch(() => {});
+            });
+            // Dès qu'une nouvelle version est installée (pas la toute première fois),
+            // prévient l'app React via un événement — elle affiche alors une bannière
+            // "Nouvelle version disponible" plutôt que de laisser l'ancienne tourner
+            // sans que personne ne s'en rende compte.
+            registration.addEventListener("updatefound", () => {
+              const newWorker = registration.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener("statechange", () => {
+                if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                  window.dispatchEvent(new Event("compta-plus-update-available"));
+                }
+              });
+            });
+          }).catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -2159,7 +2159,6 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)", fontFamily: "'Source Sans Pro', 'Inter', sans-serif" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
         .tabular { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
         .display { font-family: 'Spectral', serif; }
         .print-only { display: none; }

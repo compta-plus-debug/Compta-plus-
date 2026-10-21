@@ -412,7 +412,7 @@ function bzLoadXlsx() {
   if (_bzXlsxP) return _bzXlsxP;
   _bzXlsxP = new Promise((res, rej) => {
     const sc = document.createElement("script");
-    sc.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; sc.crossOrigin = "anonymous";
+    sc.src = "vendor/xlsx.full.min.js";
     sc.onload = () => (window.XLSX ? res(window.XLSX) : rej(new Error("Lecteur Excel indisponible.")));
     sc.onerror = () => { _bzXlsxP = null; rej(new Error("Lecteur Excel non chargé (connexion ?). Enregistrez le relevé en CSV puis réessayez.")); };
     document.head.appendChild(sc);
