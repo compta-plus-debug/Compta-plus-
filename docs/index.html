@@ -9,8 +9,9 @@
          Les scripts incorporés à cette page sont autorisés uniquement par leur empreinte (sha256),
          recalculée automatiquement à chaque construction du site (build.mjs). Les bibliothèques
          (React, Supabase, PDF, Excel, scan) et les polices sont hébergées avec le site (vendor/, fonts/),
-         vérifiées par empreinte (SRI) : plus aucun service externe, sauf Tailwind (génération des styles). -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com 'sha256-bTQyHIZ2R7uoYQM2H8sYxr89RSbDujDOC7d1OelAohM=' 'sha256-eXr4C+bVRYN/GIDAjratxPyxqUTafUm6bs4NX/l6o4o=' 'sha256-x4QrXAUcc+/x3RoxLuGFojVHrWM2Wb8YOcAd27zFBz8='; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co https://open.er-api.com; worker-src 'self' blob:; frame-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+         vérifiées par empreinte (SRI) ; la feuille de styles (tailwind.css) est générée à la construction du site :
+         plus aucun service externe, et plus aucune exécution de code généré à la volée. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-bTQyHIZ2R7uoYQM2H8sYxr89RSbDujDOC7d1OelAohM=' 'sha256-eXr4C+bVRYN/GIDAjratxPyxqUTafUm6bs4NX/l6o4o=' 'sha256-jjR4tKqwG6EBuXg0VHO+VpvC6l9izO9cgrWdsL5pgHo='; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co https://open.er-api.com; worker-src 'self' blob:; frame-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <title>Compta+ — ERP Comptabilité</title>
     <meta name="theme-color" content="#14458F" />
     <link rel="manifest" href="manifest.json" />
@@ -38,8 +39,10 @@
       @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-mono-latin-600-normal.woff2) format('woff2'); }
     </style>
 
-    <!-- Tailwind CSS (CDN — génère les styles utilitaires utilisés par l'app, ex: flex, w-64, px-5) -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Styles utilitaires (flex, w-64, px-5…) : feuille générée par build.mjs à partir des classes réellement
+         utilisées par l'application (Tailwind 3.4.17), hébergée avec le site. L'empreinte « integrity » et le
+         numéro de version sont recalculés automatiquement à chaque construction. -->
+    <link rel="stylesheet" href="tailwind.css?v=20260830-243" integrity="sha384-yKSh6qjt+4rIZLlsnZW/yMuiWz23IyglDDrZOmz1UhulPjzdCnFzBmG38kiCJ8qq" crossorigin="anonymous" />
 
     <!-- Bibliothèques hébergées avec le site (dossier vendor/, copiées depuis les paquets npm à chaque
          construction). L'empreinte « integrity » est recalculée automatiquement par build.mjs. -->
@@ -101,7 +104,7 @@
          Le paramètre ?v=... force le navigateur ET le CDN de GitHub Pages à recharger
          le fichier à chaque déploiement, au lieu de servir une copie en cache périmée.
          IMPORTANT : change ce numéro (date du jour par ex.) à chaque nouveau déploiement. -->
-    <script src="app.min.js?v=20260830-242"></script>
+    <script src="app.min.js?v=20260830-243"></script>
 
     <script>
       // Garde de côté l'invitation d'installation du navigateur (envoyée une seule fois, parfois avant
@@ -117,7 +120,7 @@
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
           // Même logique : ?v=... force la re-vérification du service worker à chaque déploiement.
-          navigator.serviceWorker.register("sw.js?v=20260830-242").then((registration) => {
+          navigator.serviceWorker.register("sw.js?v=20260830-243").then((registration) => {
             // Vérifie activement une mise à jour dès l'arrivée sur la page et à chaque
             // fois que l'onglet redevient visible — au lieu d'attendre le cycle
             // automatique du navigateur, qui peut prendre jusqu'à 24h et laisser une
