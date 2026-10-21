@@ -8,6 +8,7 @@ on:
       - "src/**"
       - "build/**"
       - "*.jsx"
+      - "package.json"
       - "build.mjs"
       - "controle.mjs"
       - "dependances.mjs"
@@ -62,12 +63,14 @@ jobs:
           path: |
             docs/app.min.js
             docs/index.html
+            docs/vendor
+            docs/fonts
 
       - name: Publier les fichiers compilés dans docs/
         run: |
           git config user.name "construction-automatique"
           git config user.email "actions@users.noreply.github.com"
-          git add docs/app.min.js docs/index.html
+          git add docs/app.min.js docs/index.html docs/vendor docs/fonts
           if git diff --cached --quiet; then
             echo "Aucun changement à publier."
           else
