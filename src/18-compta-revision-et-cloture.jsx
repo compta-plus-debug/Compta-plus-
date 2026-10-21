@@ -398,6 +398,7 @@ function ClotureAnnuellePanel({ accounts, entries, setEntries, settings, setSett
     { ok: unknownAccts.length === 0, level: "warn", label: unknownAccts.length === 0 ? "Tous les comptes utilisés existent dans le plan comptable." : `Comptes utilisés mais absents du plan comptable : ${unknownAccts.join(", ")}.` },
     { ok: pendingOthers.length === 0, level: "warn", label: pendingOthers.length === 0 ? "Aucune approbation en attente." : `${pendingOthers.length} approbation(s) en attente : traitez-les avant de clôturer.` },
     ...(lateEntries > 0 ? [{ ok: true, level: "info", label: `${lateEntries} écriture(s) datée(s) après le ${closingDate} : elles ne sont pas incluses dans cette clôture.` }] : []),
+    ...((entries || []).some((e) => e.fx || e.fxc || e.loanFx) && !(entries || []).some((e) => e.exoReval && e.exoReval.asOf === closingDate && !e.reversalOf) ? [{ ok: true, level: "info", label: "Des opérations en devise existent : avant de clôturer, consultez l'état de réévaluation (Clôture → Exercices clos → Réévaluation des devises) pour le soumettre à votre expert-comptable." }] : []),
     ...(() => {
       // Contrôle stock ↔ compte 370 : comparable seulement si aucune écriture n'est postérieure à la date de clôture
       // (le stock en rayon est celui d'aujourd'hui).
@@ -432,7 +433,7 @@ function ClotureAnnuellePanel({ accounts, entries, setEntries, settings, setSett
       label: `Clôture de l'exercice au ${closingDate} — Résultat : ${fmt(resultat)}`,
       lines,
     };
-    const newSettings = { lastClosingDate: closingDate, lockDate: closingDate };
+    const newSettings = { lastClosingDate: closingDate, lockDate: closingDate, exerciseReopen: null };
 
     // Double validation (forfait Assisté) : tout est déjà calculé, seule
     // l'application (écriture + verrouillage de la période) attend l'approbation

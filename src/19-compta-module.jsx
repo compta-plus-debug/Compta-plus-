@@ -2,13 +2,13 @@
 // @module Compta module
 // @depends AccrualsPanel, AffectationResultatPanel, AssistantPanel, AssistedPrincipleReminder
 //   BankReconciliationPanel, CheckCircle2, Circle, ClotureAnnuellePanel, DeferralsPanel
-//   DevisesPanel, GENESIS_HASH, GroupedTabNav, ImmobilisationsPanel, LettragePanel, LoansPanel
-//   Lock, PendingRecommendationsBanner, Plus, RecordedStamp, RevisionPanel, RiskProvisionsPanel
-//   RotateCcw, X, _membership, buildReversedCorrectedLines, buildReversedCorrection
-//   canonicalEntryContent, cleanSuggestionLabel, detectAmountAnomaly, detectDuplicateAnomaly
-//   detectRareAccountAnomaly, detectReversedAnomaly, fmt, isFutureDate, isLocked, sha256Hex
-//   simpleEntry, suggestAccountFromHistory, todayStr, uid, useAssistedAnomalyGate, useBackNav
-//   useEffect, useState, verifyChain, verifyChainFull
+//   DevisesPanel, ExercicesPanel, GENESIS_HASH, GroupedTabNav, ImmobilisationsPanel, LettragePanel
+//   LoansPanel, Lock, PendingRecommendationsBanner, Plus, RecordedStamp, RevisionPanel
+//   RiskProvisionsPanel, RotateCcw, X, _membership, buildReversedCorrectedLines
+//   buildReversedCorrection, canonicalEntryContent, cleanSuggestionLabel, detectAmountAnomaly
+//   detectDuplicateAnomaly, detectRareAccountAnomaly, detectReversedAnomaly, fmt, isFutureDate
+//   isLocked, sha256Hex, simpleEntry, suggestAccountFromHistory, todayStr, uid
+//   useAssistedAnomalyGate, useBackNav, useEffect, useState, verifyChain, verifyChainFull
 // @exports ComptaModule
 // ═══ FIN DE L'EN-TÊTE ═══
 const ADJUST_TABS = ["journal", "plan", "immobilisations", "regularisations", "avances", "risques"];
@@ -449,7 +449,7 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries: setEntriesPr
         groups={[
           { label: "Écritures", color: { bg: "#152238", text: "#fff", light: "#E8EAF0", lightText: "#152238" }, tabs: [["journal", "Journal des écritures"], ["plan", "Plan comptable"], ["associes", "Associés (capital)"], ["devises", "Opérations en devise"], ["rapprochement", "Rapprochement bancaire"], ["lettrage", "Lettrage"], ["revision", "Révision (cabinet)"], ...(assistantActive ? [["assistant", `Assistant de contrôle${(assistantFindings || []).length ? ` (${(assistantFindings || []).length})` : ""}`]] : [])] },
           { label: "Immobilisations & Provisions", color: { bg: "#0F6B5C", text: "#fff", light: "#E6F1EE", lightText: "#0F6B5C" }, tabs: [["immobilisations", "Immobilisations"], ["regularisations", "Régularisations"], ["avances", "Charges/produits d'avance"], ["risques", "Provisions pour risques"], ["emprunts", "Emprunts"]] },
-          { label: "Clôture", color: { bg: "#5B3FA0", text: "#fff", light: "#EDEAF7", lightText: "#5B3FA0" }, tabs: [["cloture", "Clôture annuelle"], ["affectation", "Affectation du résultat"]] },
+          { label: "Clôture", color: { bg: "#5B3FA0", text: "#fff", light: "#EDEAF7", lightText: "#5B3FA0" }, tabs: [["cloture", "Clôture annuelle"], ["affectation", "Affectation du résultat"], ["exercices", "Exercices clos"]] },
         ]}
       />
 
@@ -977,6 +977,10 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries: setEntriesPr
 
       {tab === "cloture" && (
         <ClotureAnnuellePanel accounts={accounts} entries={entries} setEntries={setEntries} settings={settings} setSettings={setSettings} role={role} showToast={showToast} logAudit={logAudit} planTier={planTier} currentUserEmail={currentUserEmail} pendingApprovals={pendingApprovals} setPendingApprovals={setPendingApprovals} products={products} />
+      )}
+
+      {tab === "exercices" && (
+        <ExercicesPanel accounts={accounts} setAccounts={setAccounts} entries={entries} setEntries={setEntries} settings={settings} setSettings={setSettings} loans={loans} role={role} planTier={planTier} currentUserEmail={currentUserEmail} pendingApprovals={pendingApprovals} setPendingApprovals={setPendingApprovals} showToast={showToast} logAudit={logAudit} />
       )}
 
       {tab === "affectation" && (

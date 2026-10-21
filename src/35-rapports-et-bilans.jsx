@@ -5,7 +5,7 @@
 //   computeBalances, downloadEtatsFinanciersPDF, downloadTablePDF, ecBalanceRows, ecCsv
 //   ecDownloadCsv, ecJournalRows, fmt, loansTotals, monthLabel, todayStr, useBackNav, useMemo
 //   useState
-// @exports RapportsModule
+// @exports BilanClasseView, RapportsModule, bilanClasse
 // ═══ FIN DE L'EN-TÊTE ═══
 function buildLedger(entries, accountCode, from, to) {
   const lines = [];

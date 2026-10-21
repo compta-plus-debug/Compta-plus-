@@ -1479,6 +1479,9 @@ function AdminModule({
           } else if (approval.type === "cloture_annuelle") {
             setEntries((prev) => [...prev, p.entry]);
             setSettings((prev) => ({ ...prev, ...p.newSettings }));
+          } else if (approval.type === "reouverture_exercice") {
+            setEntries((prev) => [...prev.map((x) => (x.id === p.origId ? { ...x, cancelledBy: p.entry.id } : x)), p.entry]);
+            setSettings((prev) => ({ ...prev, ...p.newSettings }));
           } else if (approval.type === "affectation_resultat") {
             if (p.accountsToAdd && p.accountsToAdd.length) setAccounts((prev) => [...prev, ...p.accountsToAdd]);
             setEntries((prev) => [...prev, p.entry]);
@@ -1499,7 +1502,7 @@ function AdminModule({
           showToast("Demande rejetée.");
         };
 
-        const typeLabels = { perte_definitive: "Perte définitive de créance", cloture_annuelle: "Clôture annuelle", affectation_resultat: "Affectation du résultat" };
+        const typeLabels = { perte_definitive: "Perte définitive de créance", cloture_annuelle: "Clôture annuelle", reouverture_exercice: "Réouverture d'exercice", affectation_resultat: "Affectation du résultat" };
 
         return (
           <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>

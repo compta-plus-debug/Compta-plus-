@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Compta devises
 // @depends CURRENCIES, fmt, isFutureDate, isLocked, todayStr, uid, useMemo, useState
-// @exports DevisesPanel, FX_GAIN_ACCOUNT, FX_LOSS_ACCOUNT, FX_USD_ACCOUNT, fmtFx, fmtRate, fxRateOn
-//   fxcCostOut, fxcPosition
+// @exports DevisesPanel, FX_GAIN_ACCOUNT, FX_LOSS_ACCOUNT, FX_USD_ACCOUNT, fmtFx, fmtRate, fxDocs
+//   fxRateOn, fxcCostOut, fxcPosition
 // ═══ FIN DE L'EN-TÊTE ═══
 // ── Chantier E : opérations en devise et écarts de change ───────────────────
 // Principe : une créance client ou une dette fournisseur en devise est enregistrée
