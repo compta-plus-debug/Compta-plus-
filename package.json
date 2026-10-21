@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Compta+ — sources découpées par domaine, compilées par build/build.mjs",
+  "description": "Compta+ — sources découpées par domaine, compilées par build/build.mjs ; bibliothèques hébergées copiées depuis npm (dossier vendor/)",
   "scripts": {
     "build": "node build/build.mjs",
     "build:test": "node build/build.mjs test",
@@ -13,5 +13,17 @@
   "devDependencies": {
     "esbuild": "0.28.2",
     "playwright": "1.56.0"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@supabase/supabase-js": "2.112.3",
+    "jspdf": "2.5.1",
+    "jspdf-autotable": "3.8.2",
+    "html5-qrcode": "2.3.8",
+    "xlsx": "0.18.5",
+    "@fontsource/inter": "5",
+    "@fontsource/spectral": "5",
+    "@fontsource/ibm-plex-mono": "5"
   }
 }

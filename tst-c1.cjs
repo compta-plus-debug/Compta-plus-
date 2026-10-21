@@ -12,12 +12,16 @@ const permet=(d,url)=>{const u=new URL(url);const liste=dir[d]||dir['default-src
  const mm=s.match(/^(https?|wss?):\/\/(\*\.)?([^/]+)$/);if(!mm)return false;if(u.protocol!==mm[1]+':')return false;return mm[2]?u.hostname.endsWith('.'+mm[3]):u.hostname===mm[3]})};
 // scripts externes de la page
 const scripts=[...html.matchAll(/<script[^>]+src="(https:[^"]+)"/g)].map(x=>x[1]);
-ok('scripts externes trouvés',scripts.length>=6,scripts.length);
+ok('seul script externe : Tailwind (les bibliothèques sont hébergées avec le site)',scripts.length===1&&/cdn\.tailwindcss\.com/.test(scripts[0]),scripts);
+ok('script-src sans unsafe-inline',!(dir['script-src']||[]).includes("'unsafe-inline'"),dir['script-src']);
+ok('scripts incorporés autorisés par empreinte',[...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].every(m=>(dir['script-src']||[]).includes("'sha256-"+require('crypto').createHash('sha256').update(m[1],'utf8').digest('base64')+"'")));
+ok('plus aucun hébergeur de bibliothèques ni de polices autorisé',!/unpkg|jsdelivr|cdnjs|googleapis|gstatic/.test(m?m[1]:''));
+ok('chaque bibliothèque a une empreinte SRI',[...html.matchAll(/<script src="vendor\/[^"]+" integrity="([^"]+)"/g)].every(x=>/^sha384-[A-Za-z0-9+\/=]{64}$/.test(x[1]))||/PLACEHOLDER/.test(html));
 scripts.forEach(u=>ok('script autorisé : '+new URL(u).host,permet('script-src',u),u));
 [...html.matchAll(/<link[^>]+href="(https:[^"]+)"/g)].forEach(x=>ok('feuille autorisée : '+new URL(x[1]).host,permet('style-src',x[1])||permet('font-src',x[1]),x[1]));
 // réseau utilisé par l'application
 const hotes=[...new Set([...js.matchAll(/https?:\/\/[a-zA-Z0-9.-]+/g)].map(x=>x[0]))];
-const connus=['https://wa.me','https://comptaplus.app','https://fonts.googleapis.com','https://cdnjs.cloudflare.com'];
+const connus=['https://wa.me','https://comptaplus.app'];
 hotes.forEach(h=>{if(/supabase\.co$/.test(h)||h==='https://open.er-api.com')ok('réseau autorisé : '+h,permet('connect-src',h+'/x'),h);
  else ok('adresse connue (lien, pas de requête automatique) : '+h,connus.includes(h),h)});
 ok('aucun objet incorporé',(dir['object-src']||[])[0]==="'none'");

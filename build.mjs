@@ -52,19 +52,90 @@ const min = "(function(){" + brut + "})();";
 const m = source.match(/const APP_VERSION = "(20\d{6}-\d{3})"/);
 if (!m) { console.error("APP_VERSION introuvable."); process.exit(1); }
 const version = m[1];
-const cheminIndex = path.join(racine, "docs", "index.html");
-if (!fs.existsSync(cheminIndex)) { console.error("docs/index.html introuvable."); process.exit(1); }
+// Le modèle de la page est src/index.modele.html (s'il existe) ; la page publiée docs/index.html n'est alors
+// remplacée qu'au moment où les bibliothèques hébergées sont, elles aussi, publiées (jamais l'une sans l'autre).
+const cheminIndex = [path.join(dossierParties, "index.modele.html"), path.join(racine, "docs", "index.html")].find((f) => fs.existsSync(f));
+if (!cheminIndex) { console.error("Modèle de page introuvable (src/index.modele.html ou docs/index.html)."); process.exit(1); }
+console.log("Modèle de page : " + path.relative(racine, cheminIndex));
 const index = fs.readFileSync(cheminIndex, "utf8")
   .replace(/(app\.min\.js\?v=)20\d{6}-\d{3}/g, "$1" + version)
   .replace(/(sw\.js\?v=)20\d{6}-\d{3}/g, "$1" + version);
 
+// 4b) Bibliothèques et polices hébergées avec le site (chantier 6)
+// Elles sont copiées depuis les paquets npm (versions fixées dans package.json) vers vendor/ et fonts/,
+// puis l'empreinte SRI (sha384) de chaque bibliothèque est inscrite dans index.html.
+// VENDOR=skip : saute cette étape (poste sans accès aux paquets) ; en construction automatique, elle est obligatoire.
+import crypto from "node:crypto";
+const VENDOR_LIBS = [
+  ["react.production.min.js", "react/umd/react.production.min.js"],
+  ["react-dom.production.min.js", "react-dom/umd/react-dom.production.min.js"],
+  ["supabase.js", "@supabase/supabase-js/dist/umd/supabase.js"],
+  ["jspdf.umd.min.js", "jspdf/dist/jspdf.umd.min.js"],
+  ["jspdf.plugin.autotable.min.js", "jspdf-autotable/dist/jspdf.plugin.autotable.min.js"],
+  ["html5-qrcode.min.js", "html5-qrcode/html5-qrcode.min.js"],
+  ["xlsx.full.min.js", "xlsx/dist/xlsx.full.min.js"],
+];
+const VENDOR_FONTS = [
+  ...[400, 500, 600, 700].map((w) => ["inter-latin-" + w + "-normal.woff2", "@fontsource/inter/files/inter-latin-" + w + "-normal.woff2"]),
+  ...[500, 600, 700].map((w) => ["spectral-latin-" + w + "-normal.woff2", "@fontsource/spectral/files/spectral-latin-" + w + "-normal.woff2"]),
+  ...[500, 600].map((w) => ["ibm-plex-mono-latin-" + w + "-normal.woff2", "@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-" + w + "-normal.woff2"]),
+];
+const vendorOn = (process.env.VENDOR || "on") !== "skip";
+const vendorOut = []; // [chemin relatif dans la sortie, contenu]
+let indexFinal = index;
+if (vendorOn) {
+  const nm = path.join(racine, "node_modules");
+  const manque = [];
+  for (const [nom, src] of VENDOR_LIBS) {
+    const f = path.join(nm, src);
+    if (!fs.existsSync(f)) { manque.push(src); continue; }
+    const buf = fs.readFileSync(f);
+    vendorOut.push(["vendor/" + nom, buf]);
+    const sri = "sha384-" + crypto.createHash("sha384").update(buf).digest("base64");
+    const re = new RegExp('(<script src="vendor/' + nom.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '" integrity=")[^"]*(")');
+    if (!re.test(indexFinal)) {
+      if (nom === "xlsx.full.min.js") continue; // chargé à la demande par l'application : pas de balise dans index.html
+      console.error("BLOQUÉ — index.html ne référence pas vendor/" + nom); process.exit(1);
+    }
+    indexFinal = indexFinal.replace(re, "$1" + sri + "$2");
+  }
+  for (const [nom, src] of VENDOR_FONTS) {
+    const f = path.join(nm, src);
+    if (!fs.existsSync(f)) { manque.push(src); continue; }
+    vendorOut.push(["fonts/" + nom, fs.readFileSync(f)]);
+  }
+  if (manque.length) { console.error("BLOQUÉ — paquets manquants dans node_modules (npm install a-t-il été lancé ?) :\n  " + manque.join("\n  ")); process.exit(1); }
+  if (/integrity="sha384-PLACEHOLDER"/.test(indexFinal)) { console.error("BLOQUÉ — une empreinte SRI n'a pas été calculée."); process.exit(1); }
+  console.log("Bibliothèques hébergées : " + VENDOR_LIBS.length + " fichiers, polices : " + VENDOR_FONTS.length + " fichiers (empreintes SRI inscrites).");
+} else {
+  console.log("Bibliothèques hébergées : étape sautée (VENDOR=skip).");
+}
+
+// 4c) Politique de sécurité : les scripts incorporés à index.html sont autorisés par leur empreinte sha256
+// (recalculée ici, après la mise à jour des numéros de version), sans 'unsafe-inline'.
+{
+  const inline = [...indexFinal.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  const hashes = [...new Set(inline.map((t) => "'sha256-" + crypto.createHash("sha256").update(t, "utf8").digest("base64") + "'"))];
+  const reCsp = /(<meta http-equiv="Content-Security-Policy" content="[^"]*?script-src )([^;"]*)/;
+  const mm = indexFinal.match(reCsp);
+  if (!mm) { console.error("BLOQUÉ — politique de sécurité introuvable dans index.html."); process.exit(1); }
+  const garde = mm[2].split(/\s+/).filter((t) => t && !t.startsWith("'sha256-") && t !== "'unsafe-inline'");
+  indexFinal = indexFinal.replace(reCsp, "$1" + [...garde, ...hashes].join(" "));
+  console.log("Politique de sécurité : " + hashes.length + " script(s) incorporé(s) autorisé(s) par empreinte.");
+}
+
 // 5) Contrôle avant d'écrire quoi que ce soit
-const r = controle(cible, { "app.min.js": min, "app.jsx": source, "index.html": index });
+const r = controle(cible, { "app.min.js": min, "app.jsx": source, "index.html": indexFinal });
 console.log((r.ok ? "OK" : "BLOQUÉ") + " — cible " + cible.toUpperCase() + " — version " + version + " — " + noms.length + " parties");
 r.warnings.forEach((w) => console.log("  ! " + w));
 if (!r.ok) { r.problems.forEach((p) => console.log("  ✗ " + p)); process.exit(1); }
 
 fs.mkdirSync(sortie, { recursive: true });
 fs.writeFileSync(path.join(sortie, "app.min.js"), min);
-fs.writeFileSync(path.join(sortie, "index.html"), index);
+fs.writeFileSync(path.join(sortie, "index.html"), indexFinal);
+for (const [rel, buf] of vendorOut) {
+  const dest = path.join(sortie, rel);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, buf);
+}
 console.log("Écrit : " + path.join(sortie, "app.min.js") + " (" + Math.round(min.length / 1024) + " Ko) et index.html");
