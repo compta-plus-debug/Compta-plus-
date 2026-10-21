@@ -9,8 +9,9 @@
          Les scripts incorporés à cette page sont autorisés uniquement par leur empreinte (sha256),
          recalculée automatiquement à chaque construction du site (build.mjs). Les bibliothèques
          (React, Supabase, PDF, Excel, scan) et les polices sont hébergées avec le site (vendor/, fonts/),
-         vérifiées par empreinte (SRI) : plus aucun service externe, sauf Tailwind (génération des styles). -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co https://open.er-api.com; worker-src 'self' blob:; frame-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
+         vérifiées par empreinte (SRI) ; la feuille de styles (tailwind.css) est générée à la construction du site :
+         plus aucun service externe, et plus aucune exécution de code généré à la volée. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co https://open.er-api.com; worker-src 'self' blob:; frame-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <title>Compta+ — ERP Comptabilité</title>
     <meta name="theme-color" content="#14458F" />
     <link rel="manifest" href="manifest.json" />
@@ -38,8 +39,10 @@
       @font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-mono-latin-600-normal.woff2) format('woff2'); }
     </style>
 
-    <!-- Tailwind CSS (CDN — génère les styles utilitaires utilisés par l'app, ex: flex, w-64, px-5) -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Styles utilitaires (flex, w-64, px-5…) : feuille générée par build.mjs à partir des classes réellement
+         utilisées par l'application (Tailwind 3.4.17), hébergée avec le site. L'empreinte « integrity » et le
+         numéro de version sont recalculés automatiquement à chaque construction. -->
+    <link rel="stylesheet" href="tailwind.css?v=20260830-243" integrity="sha384-PLACEHOLDER" crossorigin="anonymous" />
 
     <!-- Bibliothèques hébergées avec le site (dossier vendor/, copiées depuis les paquets npm à chaque
          construction). L'empreinte « integrity » est recalculée automatiquement par build.mjs. -->
