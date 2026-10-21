@@ -38,6 +38,15 @@ jobs:
       - name: Installer le compilateur
         run: npm install --no-audit --no-fund --no-package-lock
 
+      # Générateur de styles Tailwind (exécutable officiel, version fixée) : il produit docs/tailwind.css,
+      # qui remplace le script externe cdn.tailwindcss.com. L'empreinte est vérifiée avant toute utilisation.
+      - name: Installer le générateur de styles (Tailwind 3.4.17)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64"
+          echo "7d24f7fa191d2193b78cd5f5a42a6093e14409521908529f42d80b11fde1f1d4 $RUNNER_TEMP/tailwindcss" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/tailwindcss"
+          echo "TAILWIND_BIN=$RUNNER_TEMP/tailwindcss" >> "$GITHUB_ENV"
+
       - name: Compiler
         run: |
           if [[ "${GITHUB_REPOSITORY}" == *"--test" ]]; then CIBLE=test; else CIBLE=prod; fi
@@ -63,6 +72,7 @@ jobs:
           path: |
             docs/app.min.js
             docs/index.html
+            docs/tailwind.css
             docs/vendor
             docs/fonts
             docs/chunks
@@ -71,7 +81,7 @@ jobs:
         run: |
           git config user.name "construction-automatique"
           git config user.email "actions@users.noreply.github.com"
-          git add -A docs/app.min.js docs/index.html docs/vendor docs/fonts docs/chunks
+          git add -A docs/app.min.js docs/index.html docs/tailwind.css docs/vendor docs/fonts docs/chunks
           if git diff --cached --quiet; then
             echo "Aucun changement à publier."
           else
