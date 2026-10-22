@@ -901,6 +901,9 @@ function App() {
         try { sessionStorage.removeItem("compta-plus-last-membership-error"); } catch (err) {}
         const membership = await resolveMembership();
         if (!offlineBootRef.current) hlSaveMeta(membership);
+        // Ouverture à partir de l'identité mémorisée (réseau absent ou trop faible) : l'écran de choix entre blocs
+        // (Groupe, Centre de gestion…) a besoin d'internet ; on ouvre directement l'entreprise mémorisée.
+        if (offlineBootRef.current) setPlatformLanding(false);
         try { sessionStorage.setItem("compta-plus-reached-needs-welcome", membership.isNewCompany ? "oui" : "non-nouvelle-entreprise"); } catch (err) {}
         setRole(membership.role);
         setCurrentUserEmail(membership.email || "");

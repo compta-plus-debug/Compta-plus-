@@ -42,7 +42,7 @@
     <!-- Styles utilitaires (flex, w-64, px-5…) : feuille générée par build.mjs à partir des classes réellement
          utilisées par l'application (Tailwind 3.4.17), hébergée avec le site. L'empreinte « integrity » et le
          numéro de version sont recalculés automatiquement à chaque construction. -->
-    <link rel="stylesheet" href="tailwind.css?v=20260830-250" integrity="sha384-PLACEHOLDER" crossorigin="anonymous" />
+    <link rel="stylesheet" href="tailwind.css?v=20260830-251" integrity="sha384-PLACEHOLDER" crossorigin="anonymous" />
 
     <!-- Bibliothèques hébergées avec le site (dossier vendor/, copiées depuis les paquets npm à chaque
          construction). L'empreinte « integrity » est recalculée automatiquement par build.mjs. -->
@@ -91,11 +91,17 @@
       window.addEventListener("unhandledrejection", function (e) {
         showBootError((e && e.reason && (e.reason.message || e.reason)) || e);
       });
+      // Connexion lente : on rassure d'abord (l'application continue de se charger, elle peut s'ouvrir seule), et on
+      // n'affiche l'écran « Connexion internet difficile » que si rien n'a démarré après une minute.
+      setTimeout(function () {
+        var st = document.getElementById("boot-status");
+        if (st) st.textContent = "Connexion lente — Compta+ continue de se charger, merci de patienter…";
+      }, 12000);
       setTimeout(function () {
         if (document.getElementById("boot-status")) {
-          showBootError("Démarrage non terminé après 15 secondes (ressource lente ou indisponible).");
+          showBootError("Démarrage non terminé après 60 secondes (ressource lente ou indisponible).");
         }
-      }, 15000);
+      }, 60000);
     </script>
 
 
