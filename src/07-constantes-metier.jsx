@@ -150,6 +150,7 @@ const DEFAULT_SETTINGS = {
   companyAddress: "",
   companyPhone: "",
   companyEmail: "",
+  tcaFranchise: false, // Entreprise en franchise de TCA (CA < 10 M HTG) : pas de TCA facturée, mention légale sur la facture
   companyNIF: "", // Numéro d'Identification Fiscale — requis pour la déclaration TCA
   companyVille: "",
   companySecteurCode: "",

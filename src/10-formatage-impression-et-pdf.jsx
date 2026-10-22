@@ -1,10 +1,16 @@
 // ═══ MODULE ═══
 // @module Formatage impression et pdf
 // @depends CURRENCIES, CURRENT_CURRENCY, todayStr
-// @exports HEADER_RGB, RecordedStamp, connectThermalPrinter, disconnectThermalPrinter
-//   downloadEtatsFinanciersPDF, downloadInvoicePDF, downloadTablePDF, fmt
-//   getRememberedPrinterName, isThermalPrinterConnected, pdfSafe, printInvoiceBluetooth
+// @exports HEADER_RGB, MENTION_FRANCHISE_TCA, RecordedStamp, connectThermalPrinter
+//   disconnectThermalPrinter, downloadEtatsFinanciersPDF, downloadInvoicePDF, downloadTablePDF
+//   fmt, getRememberedPrinterName, isThermalPrinterConnected, nifLigne, pdfSafe
+//   printInvoiceBluetooth
 // ═══ FIN DE L'EN-TÊTE ═══
+// Mentions fiscales de la facture (nouveau Code fiscal : identité du vendeur et NIF obligatoires ; entreprise en
+// franchise de TCA : mention « TCA non applicable - article 193 du CGI »). Sources à confirmer dans le texte officiel.
+const MENTION_FRANCHISE_TCA = "TCA non applicable - article 193 du CGI";
+function nifLigne(settings) { return settings && String(settings.companyNIF || "").trim() ? "NIF : " + String(settings.companyNIF).trim() : ""; }
+
 const fmt = (n) => {
   const code = CURRENT_CURRENCY;
   const locale = CURRENCIES[code]?.locale || "fr-FR";
@@ -226,6 +232,7 @@ function buildInvoiceEscPos(inv, settings, charsPerLine = 32) {
   if (settings.companyAddress) wrapPlain(settings.companyAddress, charsPerLine).forEach(line);
   const contact = [settings.companyPhone, settings.companyEmail].filter(Boolean).join(" - ");
   if (contact) wrapPlain(contact, charsPerLine).forEach(line);
+  if (nifLigne(settings)) line(nifLigne(settings));
   push(ESC_ALIGN(0));
   dashLine();
 
@@ -257,6 +264,7 @@ function buildInvoiceEscPos(inv, settings, charsPerLine = 32) {
     const balance = Math.max(0, (inv.total || 0) - paidTotal);
     line(`Versé : ${fmt(paidTotal)} - Solde dû : ${fmt(balance)}`);
   }
+  if (settings.tcaFranchise) wrapPlain(MENTION_FRANCHISE_TCA, charsPerLine).forEach(line);
   line("Merci de votre confiance !");
   if (settings.invoiceFooterNote && settings.invoiceFooterNote.trim()) {
     wrapPlain(settings.invoiceFooterNote.trim(), charsPerLine).forEach(line);
@@ -322,6 +330,7 @@ function downloadInvoiceTicketPDF(inv, settings, widthMm) {
   if (settings.companyAddress) { doc.text(pdfSafe(settings.companyAddress), cx, y, { align: "center" }); y += 3.5; }
   const contact = [settings.companyPhone, settings.companyEmail].filter(Boolean).join(" · ");
   if (contact) { doc.text(pdfSafe(contact), cx, y, { align: "center" }); y += 3.5; }
+  if (nifLigne(settings)) { doc.text(pdfSafe(nifLigne(settings)), cx, y, { align: "center" }); y += 3.5; }
   y += 1;
   dashLine();
 
@@ -361,6 +370,7 @@ function downloadInvoiceTicketPDF(inv, settings, widthMm) {
     const balance = Math.max(0, (inv.total || 0) - paidTotal);
     doc.text(pdfSafe(`Versé : ${fmt(paidTotal)} — Solde dû : ${fmt(balance)}`), cx, y, { align: "center" }); y += 4;
   }
+  if (settings.tcaFranchise) { doc.text(pdfSafe(MENTION_FRANCHISE_TCA), cx, y, { align: "center" }); y += 4; }
   doc.text("Merci de votre confiance !", cx, y, { align: "center" });
   if (settings.invoiceFooterNote && settings.invoiceFooterNote.trim()) {
     y += 5;
@@ -392,6 +402,7 @@ function downloadInvoicePDF(inv, settings) {
   if (settings.companyAddress) { doc.text(pdfSafe(settings.companyAddress), headerX, y); y += 5; }
   const contact = [settings.companyPhone, settings.companyEmail].filter(Boolean).join("  ·  ");
   if (contact) { doc.text(pdfSafe(contact), headerX, y); y += 5; }
+  if (nifLigne(settings)) { doc.text(pdfSafe(nifLigne(settings)), headerX, y); y += 5; }
   // Bloc "FACTURE / N° / date" aligné à droite sur la marge de page (pas seulement
   // aligné à gauche sur un même point de départ) — évite l'effet "en escalier" que
   // donnaient des lignes de largeurs différentes toutes démarrées au même endroit.
@@ -443,6 +454,7 @@ function downloadInvoicePDF(inv, settings) {
     const noteLines = doc.splitTextToSize(pdfSafe(settings.invoiceFooterNote.trim()), 180);
     noteLines.forEach((line) => { doc.text(line, 14, ty); ty += 4.5; });
   }
+  if (settings.tcaFranchise) { ty += 8; doc.setFontSize(9); doc.setTextColor(90, 90, 90); doc.text(pdfSafe(MENTION_FRANCHISE_TCA), 14, ty); }
   doc.save(`Facture-${inv.number}.pdf`);
 }
 

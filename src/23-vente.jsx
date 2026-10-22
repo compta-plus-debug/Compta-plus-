@@ -1,16 +1,40 @@
 // ═══ MODULE ═══
 // @module Vente
 // @depends AssistedPrincipleReminder, BarcodeScannerModal, BluetoothIcon, BluetoothPrinterCard
-//   CheckCircle2, ChequeDialog, Download, History, ImageIcon, Lock, Minus, OFL_EVT, OflPanel
-//   Pencil, PendingRecommendationsBanner, Plus, Printer, ProductHistoryModal, Receipt
-//   RecordedStamp, RotateCcw, ScanLine, TAX_SYSTEMS, Trash2, X, _membership, balanceDue
+//   CheckCircle2, ChequeDialog, Download, History, ImageIcon, Lock, MENTION_FRANCHISE_TCA, Minus
+//   OFL_EVT, OflPanel, Pencil, PendingRecommendationsBanner, Plus, Printer, ProductHistoryModal
+//   Receipt, RecordedStamp, RotateCcw, ScanLine, TAX_SYSTEMS, Trash2, X, _membership, balanceDue
 //   detectAmountAnomaly, detectDuplicateAnomaly, detectTaxAnomaly, downloadInvoicePDF, fmt
-//   isFutureDate, isLocked, makeChequeRecord, normalizeClientName, oflCompanyId, oflEnqueue
-//   oflFinal, oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved, oflTimeout
-//   printInvoiceBluetooth, resizeImage, simpleEntry, suggestSimilarTiers, supabase, todayStr, uid
-//   useAssistedAnomalyGate, useBackNav, useEffect, useMemo, useState
+//   isFutureDate, isLocked, makeChequeRecord, nifLigne, normalizeClientName, oflCompanyId
+//   oflEnqueue, oflFinal, oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved
+//   oflTimeout, printInvoiceBluetooth, resizeImage, simpleEntry, suggestSimilarTiers, supabase
+//   todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useMemo, useState
 // @exports VenteModule
 // ═══ FIN DE L'EN-TÊTE ═══
+// Brouillon de vente : le panier en cours (produits, client, mode de paiement, remises, frais) est gardé quand on
+// ouvre un autre module (ex. Comptes clients pour vérifier une dette) puis qu'on revient à la caisse, et résiste
+// à un rechargement de la page. Il est propre à l'entreprise et au compte connecté, expire après 6 heures,
+// et se vide de lui-même dès que la vente est enregistrée ou le panier vidé.
+const POS_DRAFT_TTL_MS = 6 * 3600 * 1000;
+const _posDrafts = {};
+function posDraftKey(email) { return "compta-plus-pos-draft:" + ((_membership && _membership.companyId) || "x") + ":" + (email || ""); }
+function posDraftLoad(key) {
+  try {
+    let d = _posDrafts[key];
+    if (!d) { const raw = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(key) : null; d = raw ? JSON.parse(raw) : null; }
+    if (!d || !Array.isArray(d.cart) || !d.cart.length || Date.now() - (d.t || 0) > POS_DRAFT_TTL_MS) return null;
+    return d;
+  } catch (e) { return null; }
+}
+function posDraftSave(key, data) {
+  const d = { ...data, t: Date.now() };
+  _posDrafts[key] = d;
+  try {
+    if (typeof sessionStorage === "undefined") return;
+    if (data.cart.length) sessionStorage.setItem(key, JSON.stringify(d)); else sessionStorage.removeItem(key);
+  } catch (e) { /* stockage plein ou indisponible : le brouillon en mémoire suffit */ }
+}
+
 function VenteModule({ setCheques, accounts, entries, setEntries, products: productsProp, setProducts, productImages, setProductImages, invoices, setInvoices, movements, setMovements, settings, setSettings, salesStations, stationId, setStationId, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation }) {
   const anomalyGate = useAssistedAnomalyGate();
   // --- Vente hors ligne : file locale, stock réservé, état de connexion ---
@@ -33,13 +57,22 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
   const [historyProductId, setHistoryProductId] = useState(null);
   const [reportDate, setReportDate] = useState(todayStr());
   const [stationFilter, setStationFilter] = useState(""); // filtre optionnel du Rapport journalier POS par poste de vente
-  const [cart, setCart] = useState([]); // [{productId, qty}]
-  const [client, setClient] = useState("");
-  const [paymentMode, setPaymentMode] = useState("caisse"); // caisse | banque | credit
-  const [partialPaymentAmount, setPartialPaymentAmount] = useState("");
-  const [partialPaymentAccount, setPartialPaymentAccount] = useState("caisse"); // caisse | banque
+  const draftKey = posDraftKey(currentUserEmail);
+  const draftRef = React.useRef(undefined);
+  if (draftRef.current === undefined) {
+    const d0 = posDraftLoad(draftKey);
+    // on ne reprend que les articles encore présents au catalogue
+    draftRef.current = d0 ? { ...d0, cart: d0.cart.filter((l) => productsProp.some((p) => p.id === l.productId)) } : null;
+    if (draftRef.current && !draftRef.current.cart.length) draftRef.current = null;
+  }
+  const dr = draftRef.current;
+  const [cart, setCart] = useState(() => (dr ? dr.cart : [])); // [{productId, qty}]
+  const [client, setClient] = useState(() => (dr && dr.client) || "");
+  const [paymentMode, setPaymentMode] = useState(() => (dr && dr.paymentMode) || "caisse"); // caisse | banque | credit
+  const [partialPaymentAmount, setPartialPaymentAmount] = useState(() => (dr && dr.partialPaymentAmount) || "");
+  const [partialPaymentAccount, setPartialPaymentAccount] = useState(() => (dr && dr.partialPaymentAccount) || "caisse"); // caisse | banque
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
-  const [saleDate, setSaleDate] = useState(todayStr());
+  const [saleDate, setSaleDate] = useState(() => (dr && dr.saleDate && !isFutureDate(dr.saleDate) ? dr.saleDate : todayStr()));
   // Empêche un double-clic (ou double-tap sur écran tactile) de déclencher deux
   // ventes coup sur coup : la seconde lirait un numéro de facture et un état encore
   // périmés avant que l'écran n'ait fini de se mettre à jour après la première.
@@ -116,7 +149,7 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
   };
 
   const taxLabel = TAX_SYSTEMS[settings.taxSystem]?.label || "Taxe";
-  const taxActive = settings.taxSystem !== "aucune";
+  const taxActive = settings.taxSystem !== "aucune" && !settings.tcaFranchise;
 
   const addToCart = (productId) => {
     const p = products.find((pr) => pr.id === productId);
@@ -198,9 +231,14 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
   };
   const removeLine = (productId) => setCart((c) => c.filter((l) => l.productId !== productId));
 
-  const [globalDiscountPct, setGlobalDiscountPct] = useState(0);
-  const [globalDiscountAmt, setGlobalDiscountAmt] = useState(0);
-  const [fees, setFees] = useState([]); // { id, label, amount, account }
+  const [globalDiscountPct, setGlobalDiscountPct] = useState(() => (dr && dr.globalDiscountPct) || 0);
+  const [globalDiscountAmt, setGlobalDiscountAmt] = useState(() => (dr && dr.globalDiscountAmt) || 0);
+  const [fees, setFees] = useState(() => (dr && Array.isArray(dr.fees) ? dr.fees : [])); // { id, label, amount, account }
+  // Garde le brouillon à jour (sauf pendant la modification d'une facture déjà enregistrée).
+  useEffect(() => {
+    if (editingInvoiceId) return;
+    posDraftSave(draftKey, { cart, client, paymentMode, partialPaymentAmount, partialPaymentAccount, saleDate, globalDiscountPct, globalDiscountAmt, fees });
+  }, [draftKey, editingInvoiceId, cart, client, paymentMode, partialPaymentAmount, partialPaymentAccount, saleDate, globalDiscountPct, globalDiscountAmt, fees]);
   const revenueAccounts = accounts.filter((a) => a.type === "Produit");
   const addFee = () => setFees((f) => [...f, { id: uid(), label: "", amount: "", account: revenueAccounts[0]?.code }]);
   const updateFee = (id, patch) => setFees((f) => f.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -1833,6 +1871,7 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
             {(settings.companyPhone || settings.companyEmail) && (
               <div style={{ fontSize: 8 }}>{[settings.companyPhone, settings.companyEmail].filter(Boolean).join(" · ")}</div>
             )}
+            {nifLigne(settings) && <div style={{ fontSize: 8 }} data-testid="print-nif">{nifLigne(settings)}</div>}
           </div>
           <div style={{ borderTop: "1px dashed #000", margin: "4px 0" }} />
           <div>Facture N° {printInvoice.number}</div>
@@ -1864,6 +1903,7 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
             {(printInvoice.payments || []).length > 0 && (
               <>Versé : {fmt(printInvoice.payments.reduce((s, p) => s + p.amount, 0))} — Solde dû : {fmt(Math.max(0, (printInvoice.total || 0) - printInvoice.payments.reduce((s, p) => s + p.amount, 0)))}<br /></>
             )}
+            {settings.tcaFranchise && <><span data-testid="print-franchise">{MENTION_FRANCHISE_TCA}</span><br /></>}
             Merci de votre confiance !
             {settings.invoiceFooterNote && settings.invoiceFooterNote.trim() && (
               <><br />{settings.invoiceFooterNote.trim()}</>
@@ -1884,6 +1924,7 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
                 {(settings.companyPhone || settings.companyEmail) && (
                   <div style={{ fontSize: 12, color: "#555", marginTop: 1 }}>{[settings.companyPhone, settings.companyEmail].filter(Boolean).join(" · ")}</div>
                 )}
+                {nifLigne(settings) && <div style={{ fontSize: 12, color: "#555", marginTop: 1 }} data-testid="print-nif">{nifLigne(settings)}</div>}
               </div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -1955,6 +1996,7 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
                 Versé : {fmt(printInvoice.payments.reduce((s, p) => s + p.amount, 0))} — Solde dû : {fmt(Math.max(0, (printInvoice.total || 0) - printInvoice.payments.reduce((s, p) => s + p.amount, 0)))}
               </div>
             )}
+            {settings.tcaFranchise && <div style={{ marginTop: 6 }} data-testid="print-franchise">{MENTION_FRANCHISE_TCA}</div>}
             {settings.invoiceFooterNote && settings.invoiceFooterNote.trim() && (
               <div style={{ marginTop: 6 }}>{settings.invoiceFooterNote.trim()}</div>
             )}

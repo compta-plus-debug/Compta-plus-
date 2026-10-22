@@ -233,18 +233,33 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
 // Barème progressif de l'Impôt sur le Revenu (Haïti) — cinq tranches, chacune
 // s'appliquant uniquement à la portion du revenu qui s'y trouve (calcul cumulatif,
 // pas un taux unique appliqué à tout le revenu).
-const IR_TRANCHES = [
-  { min: 0, max: 60000, taux: 0 },
-  { min: 60000, max: 240000, taux: 0.10 },
-  { min: 240000, max: 480000, taux: 0.15 },
-  { min: 480000, max: 1000000, taux: 0.25 },
-  { min: 1000000, max: Infinity, taux: 0.30 },
-];
+// Deux barèmes coexistent : l'ancien (décret de 2005) et celui du nouveau Code fiscal, en vigueur depuis le
+// 1er octobre 2026 (barème annuel, par tranche). Sources : presse haïtienne et note du ministère des Finances ;
+// à confirmer dans le texte officiel (Moniteur, numéro spécial 48-A). Le choix par défaut dépend de l'année.
+const IR_BAREMES = {
+  ancien: { label: "Ancien barème (décret de 2005)", tranches: [
+    { min: 0, max: 60000, taux: 0 },
+    { min: 60000, max: 240000, taux: 0.10 },
+    { min: 240000, max: 480000, taux: 0.15 },
+    { min: 480000, max: 1000000, taux: 0.25 },
+    { min: 1000000, max: Infinity, taux: 0.30 },
+  ] },
+  nouveau: { label: "Nouveau Code fiscal (depuis le 1er octobre 2026)", tranches: [
+    { min: 0, max: 360000, taux: 0 },
+    { min: 360000, max: 540000, taux: 0.12 },
+    { min: 540000, max: 1080000, taux: 0.18 },
+    { min: 1080000, max: 2160000, taux: 0.25 },
+    { min: 2160000, max: Infinity, taux: 0.30 },
+  ] },
+};
+function baremeParDefaut(annee) { return Number(annee) >= 2026 ? "nouveau" : "ancien"; }
+const IR_TRANCHES = IR_BAREMES.ancien.tranches;
 
-function calculerIR(revenuImposable) {
+function calculerIR(revenuImposable, bareme) {
+  const tranches = (IR_BAREMES[bareme] || IR_BAREMES.nouveau).tranches;
   let impot = 0;
   const detail = [];
-  IR_TRANCHES.forEach((t) => {
+  tranches.forEach((t) => {
     if (revenuImposable > t.min) {
       const portion = Math.min(revenuImposable, t.max) - t.min;
       const montant = portion * t.taux;
@@ -256,17 +271,17 @@ function calculerIR(revenuImposable) {
 }
 
 // Reproduit le calcul de l'Impôt sur le Revenu (Haïti) — barème progressif à cinq
-// tranches, communiqué par l'entreprise. Le résultat annuel de l'exercice est
-// suggéré comme point de départ pour le revenu global, mais reste entièrement
-// modifiable : le revenu fiscalement imposable (après déductions légales,
-// exonérations éventuelles...) ne correspond pas toujours exactement au résultat
-// comptable, que l'app ne peut pas déterminer seule.
+// tranches. Le résultat annuel de l'exercice est suggéré comme point de départ pour
+// le revenu global, mais reste entièrement modifiable : le revenu fiscalement
+// imposable (après déductions légales, exonérations éventuelles...) ne correspond
+// pas toujours exactement au résultat comptable, que l'app ne peut pas déterminer seule.
 function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear, planTier }) {
   const [regime, setRegime] = useState("reel"); // "reel" | "forfaitaire"
   const [year, setYear] = useState(defaultYear);
   const [revenuGlobal, setRevenuGlobal] = useState("");
   const [deductions, setDeductions] = useState("");
   const [retenuesVersees, setRetenuesVersees] = useState("");
+  const [baremeChoisi, setBaremeChoisi] = useState("");
   const [caForfaitaire, setCaForfaitaire] = useState("");
 
   const yearEntries = entries.filter((e) => e.date && e.date.startsWith(String(year)));
@@ -281,7 +296,8 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
   const revenu = revenuGlobal !== "" ? Number(revenuGlobal) : resultatSuggere;
   const deductionsNum = Number(deductions) || 0;
   const revenuImposable = Math.max(0, revenu - deductionsNum);
-  const { impot, detail } = calculerIR(revenuImposable);
+  const bareme = baremeChoisi || baremeParDefaut(year);
+  const { impot, detail } = calculerIR(revenuImposable, bareme);
   const retenuesNum = Number(retenuesVersees) || 0;
   const impotNet = Math.max(0, impot - retenuesNum);
 
@@ -339,6 +355,16 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
           <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))}
             className="block border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
         </div>
+        {regime !== "forfaitaire" && (
+          <div className="mb-4">
+            <label className="text-xs" style={{ color: "#8A8370" }}>Barème appliqué</label>
+            <select value={bareme} onChange={(e) => setBaremeChoisi(e.target.value)} data-testid="ir-bareme"
+              className="block w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
+              {Object.keys(IR_BAREMES).map((k) => <option key={k} value={k}>{IR_BAREMES[k].label}</option>)}
+            </select>
+            <p className="text-xs mt-1" style={{ color: "#A39C87" }}>Le nouveau Code fiscal est en vigueur depuis le 1er octobre 2026. Pour l'année en cours, faites confirmer par votre expert-comptable le barème applicable à votre exercice. Ce barème concerne les personnes physiques ; l'impôt des sociétés (30 % selon les sources consultées) est à faire valider.</p>
+          </div>
+        )}
 
         {regime === "forfaitaire" ? (
           <>

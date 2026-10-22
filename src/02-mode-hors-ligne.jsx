@@ -3,7 +3,7 @@
 // @depends —
 // @exports HL_EVT, _hlNetBadUntil, hlCacheAll, hlCachePut, hlClearCache, hlKeys, hlMeta, hlNetDown
 //   hlOffline, hlOfflineAllowed, hlOfflineSession, hlOfflineWhyNot, hlOverlay, hlPendAll
-//   hlPendDel, hlPendMark, hlSaveMeta
+//   hlPendDel, hlPendMark, hlPinMark, hlPinValid, hlSaveMeta
 // ═══ FIN DE L'EN-TÊTE ═══
 // ── Chantier H : hors-ligne étendu ──────────────────────────────────────────
 // 1) Cache local (IndexedDB) de la dernière version connue de chaque catégorie de données.
@@ -81,6 +81,7 @@ async function hlPendMark(cid, cat, value, snapshot, baseV) {
 async function hlClearCache() {
   for (const k of await hlKeys("cache:")) await hlDelK(k);
   try { localStorage.removeItem(HL_META_KEY); } catch (e) { /* ignoré */ }
+  hlPinClear();
 }
 function hlSaveMeta(membership) {
   try {
@@ -90,6 +91,22 @@ function hlSaveMeta(membership) {
 }
 function hlMeta() { try { return JSON.parse(localStorage.getItem(HL_META_KEY) || "null"); } catch (e) { return null; } }
 function hlHasAuthToken() { try { return Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k)); } catch (e) { return false; } }
+// Code PIN d'entreprise et hors ligne : le PIN ne peut être vérifié que par le serveur. Quand il a été saisi
+// correctement EN LIGNE sur cet appareil, on garde une trace (entreprise + compte + heure) qui autorise
+// l'ouverture hors ligne pendant 7 jours ; au-delà, il faut le ressaisir avec internet.
+// La trace disparaît à la déconnexion. Elle ne contient jamais le PIN lui-même.
+const HL_PIN_DAYS = 7;
+const HL_PIN_PREFIX = "compta-plus-pin-offline-";
+function hlPinMark(cid, email) { try { if (cid && email) localStorage.setItem(HL_PIN_PREFIX + cid, JSON.stringify({ email, t: Date.now() })); } catch (e) { /* ignoré */ } }
+function hlPinValid(cid, email) {
+  try {
+    const r = JSON.parse(localStorage.getItem(HL_PIN_PREFIX + cid) || "null");
+    if (!r || !email || r.email !== email) return false;
+    const age = Date.now() - Number(r.t);
+    return age >= -60000 && age < HL_PIN_DAYS * 86400000;
+  } catch (e) { return false; }
+}
+function hlPinClear() { try { Object.keys(localStorage).filter((k) => k.indexOf(HL_PIN_PREFIX) === 0).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* ignoré */ } }
 // Démarrage hors ligne autorisé ? (jamais sans session déjà ouverte sur cet appareil)
 const hlOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
 // Après un premier échec de réseau « instable », on évite de réattendre chaque appel pendant une minute.
@@ -100,7 +117,7 @@ function hlOfflineWhyNot() {
   const m = hlMeta();
   if (!m || !m.bootOk || !m.membership) return "Cet appareil n'a pas encore ouvert Compta+ en ligne depuis la dernière mise à jour. Connectez-vous une première fois avec internet, puis l'ouverture hors ligne sera possible.";
   if (!hlHasAuthToken()) return "Votre session n'est plus enregistrée sur cet appareil. Reconnectez-vous une fois avec internet.";
-  if (m.membership.hasSecurityPin) return "Cette entreprise est protégée par un code PIN, qui ne peut pas être vérifié sans internet. Reconnectez-vous avec internet.";
+  if (m.membership.hasSecurityPin && !hlPinValid(m.membership.companyId, m.email)) return "Cette entreprise est protégée par un code PIN. Il n'a pas été saisi sur cet appareil depuis moins de " + HL_PIN_DAYS + " jours : connectez-vous avec internet et saisissez-le une fois ; l'ouverture sans internet sera ensuite possible pendant " + HL_PIN_DAYS + " jours.";
   return "";
 }
 // force = true : ignore l'état « en ligne » du navigateur (réseau instable : connecté mais sans accès réel).
@@ -108,7 +125,7 @@ function hlOfflineAllowed(force) {
   if (!force && !hlOffline()) return null;
   const m = hlMeta();
   if (!m || !m.bootOk || !m.email || !m.membership || !hlHasAuthToken()) return null;
-  if (m.membership.hasSecurityPin) return null; // le code PIN d'entreprise ne peut pas être vérifié sans le serveur
+  if (m.membership.hasSecurityPin && !hlPinValid(m.membership.companyId, m.email)) return null; // PIN non saisi en ligne sur cet appareil depuis moins de 7 jours
   return m;
 }
 function hlOfflineSession(force) { const m = hlOfflineAllowed(force); return m ? { user: { id: m.membership.userId || "offline", email: m.email }, offline: true } : null; }

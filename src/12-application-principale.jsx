@@ -11,11 +11,11 @@
 //   _membership, allowedModulesFor, asstScan, bkBuildFile, bkDownload, chooseCompany
 //   clearMembershipCache, computeBalances, computeKpis, dlog, fetchHtgPerUsd, forgetCompanyChoice
 //   friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline
-//   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlSaveMeta, invokeEdgeFunction, logClientError
-//   monthLabel, oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady
-//   pjTraceText, resolveMembership, roleLabel, ruleRefusalMessage, sanitizeUserMessage
-//   sealEntries, supabase, todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo
-//   useState
+//   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark, hlPinValid, hlSaveMeta
+//   invokeEdgeFunction, logClientError, monthLabel, oflIsNetworkError, oflLoad, oflSyncAll
+//   oflTimeout, perfMarkMount, perfMarkReady, pjTraceText, resolveMembership, roleLabel
+//   ruleRefusalMessage, sanitizeUserMessage, sealEntries, supabase, todayStr, uid, unwrapVersioned
+//   useBackNav, useEffect, useMemo, useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 function App() {
@@ -946,7 +946,9 @@ function App() {
         setCompanyHasPin(!!membership.hasSecurityPin);
         setCompanyPinCompanyId(membership.companyId);
         try {
-          setPinVerified(sessionStorage.getItem("compta-plus-pin-verified-" + membership.companyId) === "true");
+          // Ouverture hors ligne : le PIN a déjà été saisi en ligne sur cet appareil (moins de 7 jours) → pas de nouvelle saisie.
+          const pinOffline = !!membership.hasSecurityPin && (offlineBootRef.current || hlOffline()) && hlPinValid(membership.companyId, membership.email);
+          setPinVerified(pinOffline || sessionStorage.getItem("compta-plus-pin-verified-" + membership.companyId) === "true");
         } catch (e) { setPinVerified(false); }
         let pa = null;
         try {
@@ -1972,6 +1974,7 @@ function App() {
           setPinError("Impossible de vérifier le code pour l'instant. Réessayez.");
         } else if (data === true) {
           try { sessionStorage.setItem("compta-plus-pin-verified-" + companyPinCompanyId, "true"); } catch (e) {}
+          hlPinMark(companyPinCompanyId, _membership && _membership.email);
           setPinVerified(true);
         } else {
           setPinError("Code incorrect. Redemandez-le à votre administrateur si besoin.");

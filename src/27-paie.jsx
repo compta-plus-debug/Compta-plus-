@@ -279,7 +279,7 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
   const emptyPayForm = {
     employeeId: "", periodStart: "", periodEnd: "", date: today,
     overtimeHours: "", bonusAmount: "", bonusNote: "",
-    deductionCSSONA: "", autoRates: true, advanceId: "", advanceRepayment: "", paymentMode: "caisse",
+    deductionCSSONA: "", autoRates: true, primeWh: true, primeRate: "15", advanceId: "", advanceRepayment: "", paymentMode: "caisse",
   };
   const [payForm, setPayForm] = useState(emptyPayForm);
   const selectedEmployee = employees.find((e) => String(e.id) === String(payForm.employeeId));
@@ -289,7 +289,12 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
   const rubriquesActives = (settings.payrollRubriques || []).filter((r) => r.active && Number(r.rate) > 0);
   const autoOn = rubriquesActives.length > 0 && payForm.autoRates !== false;
   const payCalc = payrollCompute(grossTotal, autoOn ? rubriquesActives : []);
-  const effectiveDeduction = autoOn ? payCalc.employeeTotal : (Number(payForm.deductionCSSONA) || 0);
+  // Retenue d'impôt sur les primes (15 % depuis le 1er octobre 2026 ; 10 % avant) : avance sur l'impôt de l'employé,
+  // versée à la DGI avant le 15 du mois suivant. Taux modifiable, à faire valider par l'expert-comptable.
+  const primeBrute = Number(payForm.bonusAmount) || 0;
+  const primeRateNum = Math.max(0, Math.min(100, Number(payForm.primeRate) || 0));
+  const primeTax = payForm.primeWh !== false && primeBrute > 0 ? prR2(primeBrute * primeRateNum / 100) : 0;
+  const effectiveDeduction = prR2((autoOn ? payCalc.employeeTotal : (Number(payForm.deductionCSSONA) || 0)) + primeTax);
   const employerCharges = autoOn ? payCalc.employerTotal : 0;
   const netTotal = prR2(grossTotal - effectiveDeduction - (Number(payForm.advanceRepayment) || 0));
   const employeeOpenAdvances = salaryAdvances.filter((a) => String(a.employeeId) === String(payForm.employeeId) && a.status === "en cours" && a.repaidAmount < a.amount - 0.001);
@@ -335,7 +340,7 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
       periodStart: payForm.periodStart, periodEnd: payForm.periodEnd, date: payForm.date, createdAt: new Date().toISOString(),
       baseSalary: baseSalaryAmount, overtimeHours: Number(payForm.overtimeHours) || 0, overtimeRate: selectedEmployee.overtimeRate || 0, overtimeAmount,
       bonusAmount: Number(payForm.bonusAmount) || 0, bonusNote: payForm.bonusNote,
-      deductionCSSONA: deduction, advanceId: selectedAdvance ? selectedAdvance.id : null, advanceRepayment,
+      deductionCSSONA: deduction, bonusWithholding: primeTax, bonusWithholdingRate: primeTax > 0 ? primeRateNum : 0, advanceId: selectedAdvance ? selectedAdvance.id : null, advanceRepayment,
       paymentMode: payForm.paymentMode, grossTotal, netTotal, status: "payé",
       ...(autoOn ? { employerTotal: employerCharges, rubriques: [...payCalc.employee, ...payCalc.employer], ratesToValidate: !FISCAL_RULES_VALIDATED } : {}),
     };
@@ -697,7 +702,18 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
                   Calcul automatique selon les taux paramétrés
                 </label>
               )}
-              <input type="number" min="0" value={autoOn ? effectiveDeduction : payForm.deductionCSSONA} disabled={autoOn} onChange={(e) => setPayForm({ ...payForm, deductionCSSONA: e.target.value })} data-testid="pay-deduction"
+              {primeBrute > 0 && (
+                <div className="mt-1 p-2 rounded text-xs" style={{ background: "#FBF1DC", color: "#7A5F10" }}>
+                  <label className="flex items-center gap-2" style={{ color: "#152238" }}>
+                    <input type="checkbox" checked={payForm.primeWh !== false} onChange={(e) => setPayForm({ ...payForm, primeWh: e.target.checked })} data-testid="pay-prime-wh" />
+                    Retenir l'impôt sur la prime
+                    <input type="number" min="0" max="100" value={payForm.primeRate} onChange={(e) => setPayForm({ ...payForm, primeRate: e.target.value })} disabled={payForm.primeWh === false}
+                      className="border rounded px-1 py-0.5 w-14 tabular" style={{ borderColor: "#DDD6C4" }} data-testid="pay-prime-rate" /> %
+                  </label>
+                  <div className="mt-1">15 % depuis le 1er octobre 2026 (10 % avant). Montant retenu : {fmt(primeTax)}, à verser à la DGI avant le 15 du mois suivant. Taux à valider avec votre expert-comptable.</div>
+                </div>
+              )}
+              <input type="number" min="0" value={autoOn ? effectiveDeduction : (Number(payForm.deductionCSSONA) || 0) + primeTax} disabled={autoOn || primeTax > 0} onChange={(e) => setPayForm({ ...payForm, deductionCSSONA: e.target.value })} data-testid="pay-deduction"
                 className="block w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
             </div>
             {employeeOpenAdvances.length > 0 && (
@@ -736,6 +752,7 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
               {Number(payForm.bonusAmount) > 0 && <div>Prime : {fmt(Number(payForm.bonusAmount))}</div>}
               <div className="font-medium" style={{ color: "#152238" }}>Total brut : {fmt(grossTotal)}</div>
               {autoOn && payCalc.employee.map((r) => <div key={r.id} style={{ color: "#A6432F" }} data-testid="pay-line-employee">{r.label} ({r.rate} %) : − {fmt(r.amount)}</div>)}
+              {primeTax > 0 && <div style={{ color: "#A6432F" }} data-testid="pay-line-prime-wh">Impôt retenu sur la prime ({primeRateNum} %) : − {fmt(primeTax)}</div>}
               {!autoOn && Number(payForm.deductionCSSONA) > 0 && <div style={{ color: "#A6432F" }}>Retenues : − {fmt(Number(payForm.deductionCSSONA))}</div>}
               {Number(payForm.advanceRepayment) > 0 && <div style={{ color: "#A6432F" }}>Remboursement d'avance : − {fmt(Number(payForm.advanceRepayment))}</div>}
               <div className="font-medium mt-1" style={{ color: netTotal < 0 ? "#A6432F" : "#0F6B5C" }} data-testid="pay-net">Net à payer : {fmt(netTotal)}</div>

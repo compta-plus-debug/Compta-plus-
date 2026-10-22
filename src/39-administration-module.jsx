@@ -22,6 +22,7 @@ function AdminModule({
   const [companyPhone, setCompanyPhone] = useState(settings.companyPhone || "");
   const [companyEmail, setCompanyEmail] = useState(settings.companyEmail || "");
   const [companyNIF, setCompanyNIF] = useState(settings.companyNIF || "");
+  const [tcaFranchise, setTcaFranchise] = useState(!!settings.tcaFranchise);
   const [companyVille, setCompanyVille] = useState(settings.companyVille || "");
   const [companySecteurCode, setCompanySecteurCode] = useState(settings.companySecteurCode || "");
   const [companySecteurNom, setCompanySecteurNom] = useState(settings.companySecteurNom || "");
@@ -267,7 +268,7 @@ function AdminModule({
       showToast("Le nom n'a peut-être pas pu être enregistré côté serveur — les autres informations ont quand même été sauvegardées localement.");
       logClientError("saveCompany_exception: " + String(e), String(e && e.stack || ""), window.location.href);
     }
-    setSettings({ ...settings, companyName: finalName, companyAddress, companyPhone, companyEmail, companyNIF, companyVille, companySecteurCode, companySecteurNom, companyType, currency });
+    setSettings({ ...settings, companyName: finalName, companyAddress, companyPhone, companyEmail, companyNIF, tcaFranchise, companyVille, companySecteurCode, companySecteurNom, companyType, currency });
     showToast("Paramètres de l'entreprise enregistrés.");
   };
 
@@ -645,6 +646,7 @@ function AdminModule({
       setCompanyPhone(data.settings.companyPhone || "");
       setCompanyEmail(data.settings.companyEmail || "");
       setCompanyNIF(data.settings.companyNIF || "");
+      setTcaFranchise(!!data.settings.tcaFranchise);
       setCompanyVille(data.settings.companyVille || "");
       setCompanySecteurCode(data.settings.companySecteurCode || "");
       setCompanySecteurNom(data.settings.companySecteurNom || "");
@@ -811,6 +813,14 @@ function AdminModule({
                 <input value={companyEmail} onChange={(e) => setCompanyEmail(e.target.value)}
                   className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
               </div>
+            </div>
+            <div className="mb-4 p-3 rounded" style={{ background: "#FAF8F1", border: "1px solid #EEE9DA" }}>
+              <label className="flex items-start gap-2 text-sm" style={{ color: "#152238" }}>
+                <input type="checkbox" className="mt-1" checked={tcaFranchise} onChange={(e) => setTcaFranchise(e.target.checked)} data-testid="tca-franchise" />
+                <span>Entreprise en franchise de TCA (chiffre d'affaires inférieur à 10 millions de HTG)
+                  <span className="block text-xs" style={{ color: "#8A8370" }}>La TCA n'est alors pas facturée et la facture porte la mention « TCA non applicable - article 193 du CGI ». La TCA payée sur vos achats n'est pas récupérable. Règle issue de la presse, à faire confirmer par votre expert-comptable avant de l'activer.</span>
+                </span>
+              </label>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
