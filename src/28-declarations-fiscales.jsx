@@ -30,6 +30,8 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
   const [declType, setDeclType] = useState("originale");
   const [interetRetard, setInteretRetard] = useState("");
   const [amende, setAmende] = useState("");
+  const [abattementSaisi, setAbattementSaisi] = useState("");
+  const [minimumSaisi, setMinimumSaisi] = useState("");
 
   const monthStr = String(month).padStart(2, "0");
   const periodPrefix = `${year}-${monthStr}`;
@@ -37,9 +39,12 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
     .filter((inv) => inv.date && inv.date.startsWith(periodPrefix) && inv.status !== "don" && inv.status !== "annulée")
     .reduce((s, inv) => s + (Number(inv.totalHT) || 0), 0);
 
-  const ABATTEMENT = 500000;
+  // Code fiscal en vigueur depuis le 1er octobre 2026 : taux de 10 % (article 186) appliqué à l'assiette (article 184),
+  // sans abattement ni minimum de perception. Les deux champs restent modifiables au cas où le formulaire de la DGI
+  // en vigueur en prévoirait un (à confirmer auprès de la DGI).
+  const ABATTEMENT = Math.max(0, Number(abattementSaisi) || 0);
   const TAUX = 0.10;
-  const MINIMUM = 10000;
+  const MINIMUM = Math.max(0, Number(minimumSaisi) || 0);
   const baseImposable = Math.max(0, chiffreAffaires - ABATTEMENT);
   const montantTCA = baseImposable > 0 ? Math.max(Math.round(baseImposable * TAUX), MINIMUM) : 0;
   const interet = Number(interetRetard) || 0;
@@ -115,7 +120,7 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
         ["L1", "Montant des recettes globales ou chiffre d'affaires", "", fmt(chiffreAffaires)],
         ["L2", "Abattement", "", fmt(ABATTEMENT)],
         ["L3", "Montant de la base imposable", "", fmt(baseImposable)],
-        ["L4", "Montant de la TCA (minimum 10 000 HTG)", "10%", fmt(montantTCA)],
+        ["L4", MINIMUM > 0 ? `Montant de la TCA (minimum ${fmt(MINIMUM)} HTG)` : "Montant de la TCA", "10%", fmt(montantTCA)],
         ["", "Intérêt de retard", "", fmt(interet)],
         ["", "Amende", "", fmt(amendeNum)],
         ["", "MONTANT A PAYER", "", fmt(montantAPayer)],
@@ -140,7 +145,7 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
       <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
         <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Déclaration TCA — Formulaire DGI No. 018</div>
         <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-          Reproduit le formulaire simplifié de la DGI (Haïti). Le chiffre d'affaires du mois est lu directement de vos factures — vérifiez-le avant de transmettre la déclaration.
+          Reproduit le formulaire simplifié de la DGI (Haïti). Le chiffre d'affaires du mois est lu directement de vos factures. Le Code fiscal (articles 186 et 190) fixe la TCA à 10 % et la déclaration mensuelle entre le 1er et le 15 du mois suivant ; la TCA déductible sur vos achats (article 187) n'est pas déduite ici. Les entreprises de moins de 10 millions de HTG de chiffre d'affaires sont en franchise (article 193), sans TCA.
         </p>
         <FiscalValidationNotice />
         {missingInfo.length > 0 && (
@@ -178,15 +183,19 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
               <td className="py-1.5 tabular text-right">{fmt(chiffreAffaires)}</td>
             </tr>
             <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
-              <td className="py-1.5" style={{ color: "#7A7460" }}>L2 — Abattement</td>
-              <td className="py-1.5 tabular text-right">{fmt(ABATTEMENT)}</td>
+              <td className="py-1.5" style={{ color: "#7A7460" }}>L2 — Abattement (aucun dans le Code ; à saisir seulement si la DGI l'exige)</td>
+              <td className="py-1.5 text-right">
+                <input type="number" min="0" value={abattementSaisi} onChange={(e) => setAbattementSaisi(e.target.value)} placeholder="0" data-testid="tca-abattement"
+                  className="w-28 border rounded px-2 py-1 text-xs tabular text-right" style={{ borderColor: "#DDD6C4" }} />
+              </td>
             </tr>
             <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
               <td className="py-1.5" style={{ color: "#7A7460" }}>L3 — Montant de la base imposable</td>
               <td className="py-1.5 tabular text-right">{fmt(baseImposable)}</td>
             </tr>
             <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
-              <td className="py-1.5" style={{ color: "#7A7460" }}>L4 — Montant de la TCA (10%, minimum 10 000 HTG)</td>
+              <td className="py-1.5" style={{ color: "#7A7460" }}>L4 — Montant de la TCA (10 %, article 186)
+                <span className="block text-xs" style={{ color: "#A39C87" }}>Minimum de perception (aucun dans le Code) : <input type="number" min="0" value={minimumSaisi} onChange={(e) => setMinimumSaisi(e.target.value)} placeholder="0" data-testid="tca-minimum" className="w-24 border rounded px-1 py-0.5 text-xs tabular text-right" style={{ borderColor: "#DDD6C4" }} /></span></td>
               <td className="py-1.5 tabular text-right font-medium">{fmt(montantTCA)}</td>
             </tr>
             <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
@@ -282,6 +291,8 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
   const [deductions, setDeductions] = useState("");
   const [retenuesVersees, setRetenuesVersees] = useState("");
   const [baremeChoisi, setBaremeChoisi] = useState("");
+  const [entite, setEntite] = useState("physique"); // physique | societe | cooperative (article 137)
+  const [forfType, setForfType] = useState("services"); // services (5 %) | autres (2 %) (article 65)
   const [caForfaitaire, setCaForfaitaire] = useState("");
 
   const yearEntries = entries.filter((e) => e.date && e.date.startsWith(String(year)));
@@ -297,23 +308,30 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
   const deductionsNum = Number(deductions) || 0;
   const revenuImposable = Math.max(0, revenu - deductionsNum);
   const bareme = baremeChoisi || baremeParDefaut(year);
-  const { impot, detail } = calculerIR(revenuImposable, bareme);
+  // Personnes morales (article 137) : impôt sur les sociétés au taux unique de 30 % (10 % pour les coopératives
+  // d'épargne et de crédit) ; personnes physiques : barème progressif de l'article 132.
+  const tauxSociete = entite === "cooperative" ? 0.10 : 0.30;
+  const { impot, detail } = entite === "physique"
+    ? calculerIR(revenuImposable, bareme)
+    : { impot: Math.round(revenuImposable * tauxSociete), detail: revenuImposable > 0 ? [{ min: 0, max: Infinity, taux: tauxSociete, portion: revenuImposable, montant: revenuImposable * tauxSociete }] : [] };
   const retenuesNum = Number(retenuesVersees) || 0;
   const impotNet = Math.max(0, impot - retenuesNum);
 
-  // Régime forfaitaire — réservé aux entreprises individuelles dont le chiffre
-  // d'affaires annuel (ou le total actif) est inférieur à 2 500 000 HTG. Même
-  // structure que la TCA (abattement + taux + minimum), mais annuelle et à 1%.
+  // Régime forfaitaire (articles 62 à 66 du Code fiscal en vigueur depuis le 1er octobre 2026) : entreprises dont le
+  // chiffre d'affaires de l'exercice précédent est inférieur à 10 000 000 HTG ; base = chiffre d'affaires après un
+  // abattement de 1 000 000 HTG ; taux 5 % (prestations de services) ou 2 % (autres) ; impôt minimum 25 000 HTG ;
+  // déclaration entre le 1er et le 31 octobre pour l'exercice précédent, paiement au plus tard le 31 octobre.
   const caAnnuelSuggere = invoices
     .filter((inv) => inv.date && inv.date.startsWith(String(year)) && inv.status !== "don" && inv.status !== "annulée")
     .reduce((s, inv) => s + (Number(inv.totalHT) || 0), 0);
   const caUtilise = caForfaitaire !== "" ? Number(caForfaitaire) : caAnnuelSuggere;
-  const ABATTEMENT_FORFAITAIRE = 500000;
-  const TAUX_FORFAITAIRE = 0.01;
-  const MINIMUM_FORFAITAIRE = 10000;
+  const ABATTEMENT_FORFAITAIRE = 1000000;
+  const TAUX_FORFAITAIRE = forfType === "services" ? 0.05 : 0.02;
+  const MINIMUM_FORFAITAIRE = 25000;
+  const SEUIL_FORFAITAIRE = 10000000;
   const baseForfaitaire = Math.max(0, caUtilise - ABATTEMENT_FORFAITAIRE);
   const impotForfaitaire = baseForfaitaire > 0 ? Math.max(Math.round(baseForfaitaire * TAUX_FORFAITAIRE), MINIMUM_FORFAITAIRE) : 0;
-  const eligibleForfaitaire = caUtilise < 2500000;
+  const eligibleForfaitaire = caUtilise < SEUIL_FORFAITAIRE;
 
   // Contrôles de cohérence avant dépôt (forfait Assisté) — signale un écart
   // important entre une valeur saisie manuellement et la suggestion automatique,
@@ -337,17 +355,17 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
       <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
         <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Impôt sur le Revenu</div>
         <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-          Deux régimes existent : le <strong>Forfaitaire</strong>, réservé aux entreprises individuelles dont le chiffre d'affaires annuel est inférieur à 2 500 000 HTG ; le <strong>Réel</strong> (barème progressif), pour les sociétés et les entreprises individuelles au-delà de ce seuil.
+          Deux régimes existent (Code fiscal en vigueur depuis le 1er octobre 2026) : le <strong>Forfaitaire</strong> (articles 62 à 66), pour les entreprises dont le chiffre d'affaires de l'exercice précédent est inférieur à 10 000 000 HTG ; le <strong>Réel</strong> (article 68), à partir de 10 000 000 HTG, avec le barème progressif pour les personnes physiques (article 132) et l'impôt sur les sociétés à 30 % pour les personnes morales (article 137).
         </p>
         <FiscalValidationNotice />
         <div className="flex gap-2 mb-4">
           <button onClick={() => setRegime("forfaitaire")}
             className="px-3 py-1.5 rounded text-xs" style={{ background: regime === "forfaitaire" ? "#152238" : "#F3EFE3", color: regime === "forfaitaire" ? "#fff" : "#7A7460" }}>
-            Forfaitaire (entreprise individuelle, CA &lt; 2,5M)
+            Forfaitaire (CA &lt; 10 M)
           </button>
           <button onClick={() => setRegime("reel")}
             className="px-3 py-1.5 rounded text-xs" style={{ background: regime === "reel" ? "#152238" : "#F3EFE3", color: regime === "reel" ? "#fff" : "#7A7460" }}>
-            Réel (barème progressif)
+            Réel (bénéfice réel)
           </button>
         </div>
         <div className="mb-4">
@@ -357,12 +375,23 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
         </div>
         {regime !== "forfaitaire" && (
           <div className="mb-4">
+            <label className="text-xs" style={{ color: "#8A8370" }}>Type de contribuable</label>
+            <select value={entite} onChange={(e) => setEntite(e.target.value)} data-testid="ir-entite"
+              className="block w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
+              <option value="physique">Personne physique / entreprise individuelle (barème progressif, article 132)</option>
+              <option value="societe">Société (impôt sur les sociétés 30 %, article 137)</option>
+              <option value="cooperative">Coopérative d'épargne et de crédit (10 %, article 137)</option>
+            </select>
+          </div>
+        )}
+        {regime !== "forfaitaire" && entite === "physique" && (
+          <div className="mb-4">
             <label className="text-xs" style={{ color: "#8A8370" }}>Barème appliqué</label>
             <select value={bareme} onChange={(e) => setBaremeChoisi(e.target.value)} data-testid="ir-bareme"
               className="block w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
               {Object.keys(IR_BAREMES).map((k) => <option key={k} value={k}>{IR_BAREMES[k].label}</option>)}
             </select>
-            <p className="text-xs mt-1" style={{ color: "#A39C87" }}>Le nouveau Code fiscal est en vigueur depuis le 1er octobre 2026. Pour l'année en cours, faites confirmer par votre expert-comptable le barème applicable à votre exercice. Ce barème concerne les personnes physiques ; l'impôt des sociétés (30 % selon les sources consultées) est à faire valider.</p>
+            <p className="text-xs mt-1" style={{ color: "#A39C87" }}>Le nouveau Code fiscal est en vigueur depuis le 1er octobre 2026. Barème de l'article 132, en vigueur depuis le 1er octobre 2026. L'exercice fiscal court du 1er octobre au 30 septembre : pour un revenu qui chevauche le 1er octobre 2026, faites confirmer par votre expert-comptable le barème applicable.</p>
           </div>
         )}
 
@@ -370,12 +399,20 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
           <>
             {!eligibleForfaitaire ? (
               <div className="text-xs px-3 py-2 rounded mb-4" style={{ background: "#F7E9E3", color: "#A6432F" }}>
-                Le chiffre d'affaires utilisé ({fmt(caUtilise)}) dépasse le seuil de 2 500 000 HTG — cette entreprise n'est pas éligible au régime forfaitaire. Utilisez le régime "Réel" ci-dessus.
+                Le chiffre d'affaires utilisé ({fmt(caUtilise)}) atteint le seuil de 10 000 000 HTG — cette entreprise n'est pas éligible au régime forfaitaire (article 62). Utilisez le régime "Réel" ci-dessus.
               </div>
             ) : (
               <>
             <div className="mb-4">
-              <label className="text-xs" style={{ color: "#8A8370" }}>Chiffre d'affaires annuel (recettes globales)</label>
+              <label className="text-xs" style={{ color: "#8A8370" }}>Nature de l'activité (article 65)</label>
+              <select value={forfType} onChange={(e) => setForfType(e.target.value)} data-testid="forf-type"
+                className="block w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
+                <option value="services">Prestations de services — 5 %</option>
+                <option value="autres">Autres activités (vente de biens…) — 2 %</option>
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="text-xs" style={{ color: "#8A8370" }}>Chiffre d'affaires de l'exercice précédent (recettes globales)</label>
               <input type="number" value={caForfaitaire} onChange={(e) => setCaForfaitaire(e.target.value)} placeholder={String(Math.round(caAnnuelSuggere))}
                 className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
               <p className="text-xs mt-1" style={{ color: "#A39C87" }}>Suggestion (factures {year}, hors dons/annulées) : {fmt(caAnnuelSuggere)}</p>
@@ -395,7 +432,7 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
                   <td className="py-1.5 tabular text-right">{fmt(baseForfaitaire)}</td>
                 </tr>
                 <tr>
-                  <td className="py-2 font-semibold" style={{ color: "#152238" }}>IMPÔT FORFAITAIRE À PAYER (1%, minimum 10 000 HTG)</td>
+                  <td className="py-2 font-semibold" style={{ color: "#152238" }}>IMPÔT FORFAITAIRE À PAYER ({forfType === "services" ? "5" : "2"} %, minimum 25 000 HTG)</td>
                   <td className="py-2 tabular text-right font-semibold px-3 rounded" style={{ background: "#F7E9E3", color: "#A6432F" }}>{fmt(impotForfaitaire)}</td>
                 </tr>
               </tbody>
@@ -413,7 +450,7 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
                 </div>
               </div>
             )}
-            <p className="text-xs" style={{ color: "#A39C87" }}>À déposer et payer au plus tard le 31 octobre de chaque exercice fiscal.</p>
+            <p className="text-xs" style={{ color: "#A39C87" }}>Déclaration entre le 1er et le 31 octobre pour l'exercice précédent, et paiement au plus tard le 31 octobre (articles 64 et 66).</p>
               </>
             )}
           </>

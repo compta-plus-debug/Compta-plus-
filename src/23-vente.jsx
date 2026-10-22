@@ -8,7 +8,8 @@
 //   isFutureDate, isLocked, makeChequeRecord, nifLigne, normalizeClientName, oflCompanyId
 //   oflEnqueue, oflFinal, oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved
 //   oflTimeout, printInvoiceBluetooth, resizeImage, simpleEntry, suggestSimilarTiers, supabase
-//   todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useMemo, useState
+//   tauxFactureTexte, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useMemo
+//   useState
 // @exports VenteModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Brouillon de vente : le panier en cours (produits, client, mode de paiement, remises, frais) est gardé quand on
@@ -1098,6 +1099,16 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
           <div className="bg-white rounded-lg p-5 h-fit" style={{ border: "1px solid #E4DFD1" }}>
             <div className="flex items-center gap-2 mb-4" style={{ color: "#152238" }}>
               <Receipt size={16} /><span className="font-medium text-sm">Panier</span>
+              {cartLines.length > 0 && !editingInvoiceId && (
+                <button type="button" data-testid="cart-clear" title="Vider le panier" aria-label="Vider le panier"
+                  onClick={() => {
+                    if (cartLines.length > 1 && !window.confirm(`Vider le panier (${cartLines.length} articles) ?`)) return;
+                    setCart([]); setGlobalDiscountPct(0); setGlobalDiscountAmt(0); setFees([]); setPartialPaymentAmount("");
+                  }}
+                  className="ml-auto flex items-center gap-1 text-xs px-2 py-1 rounded" style={{ color: "#A6432F", background: "#F7E9E3" }}>
+                  <Trash2 size={13} /> Vider
+                </button>
+              )}
             </div>
             {cartLines.length === 0 ? (
               <div className="text-xs py-6 text-center" style={{ color: "#A39C87" }}>Sélectionnez un article à gauche.</div>
@@ -1982,7 +1993,7 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
               {(printInvoice.fees || []).length > 0 && printInvoice.fees.map((f, i) => (
                 <div key={i} className="flex justify-between tabular" style={{ padding: "3px 0" }}><span>{f.label || "Frais"}</span><span>+{fmt(f.amount)}</span></div>
               ))}
-              <div className="flex justify-between tabular" style={{ padding: "3px 0" }}><span>{printInvoice.taxLabel || "Taxe"}</span><span>{fmt(printInvoice.totalTax)}</span></div>
+              <div className="flex justify-between tabular" style={{ padding: "3px 0" }}><span data-testid="print-taux">{printInvoice.taxLabel || "Taxe"}{tauxFactureTexte(printInvoice) ? " (" + tauxFactureTexte(printInvoice) + ")" : ""}</span><span>{fmt(printInvoice.totalTax)}</span></div>
               <div className="flex justify-between tabular" style={{ padding: "8px 0", borderTop: "2px solid #152238", marginTop: 4, fontWeight: 700, fontSize: 15 }}>
                 <span>Total {printInvoice.totalTax > 0 ? "TTC" : ""}</span><span>{fmt(printInvoice.total)}</span>
               </div>
@@ -1997,6 +2008,9 @@ function VenteModule({ setCheques, accounts, entries, setEntries, products: prod
               </div>
             )}
             {settings.tcaFranchise && <div style={{ marginTop: 6 }} data-testid="print-franchise">{MENTION_FRANCHISE_TCA}</div>}
+            <div data-testid="print-visa" style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ width: 240, fontSize: 11, color: "#555" }}>Visa de l'entreprise et signature :<div style={{ height: 70, border: "1px solid #999", marginTop: 4 }} /></div>
+            </div>
             {settings.invoiceFooterNote && settings.invoiceFooterNote.trim() && (
               <div style={{ marginTop: 6 }}>{settings.invoiceFooterNote.trim()}</div>
             )}

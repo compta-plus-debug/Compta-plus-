@@ -4,11 +4,19 @@
 // @exports HEADER_RGB, MENTION_FRANCHISE_TCA, RecordedStamp, connectThermalPrinter
 //   disconnectThermalPrinter, downloadEtatsFinanciersPDF, downloadInvoicePDF, downloadTablePDF
 //   fmt, getRememberedPrinterName, isThermalPrinterConnected, nifLigne, pdfSafe
-//   printInvoiceBluetooth
+//   printInvoiceBluetooth, tauxFactureTexte
 // ═══ FIN DE L'EN-TÊTE ═══
 // Mentions fiscales de la facture (nouveau Code fiscal : identité du vendeur et NIF obligatoires ; entreprise en
 // franchise de TCA : mention « TCA non applicable - article 193 du CGI »). Sources à confirmer dans le texte officiel.
 const MENTION_FRANCHISE_TCA = "TCA non applicable - article 193 du CGI";
+// Article 191 : la facture mentionne le taux de TCA appliqué. Déduit des lignes (montant de taxe / sous-total).
+function tauxFactureTexte(inv) {
+  const taux = new Set();
+  (inv && inv.lines || []).forEach((l) => { const st = Number(l.subtotal) || 0; if (st > 0) taux.add(Math.round(((Number(l.taxAmount) || 0) / st) * 1000) / 10); });
+  const t = [...taux];
+  if (t.length === 0) return "";
+  return t.length === 1 ? String(t[0]).replace(".", ",") + " %" : "taux variables";
+}
 function nifLigne(settings) { return settings && String(settings.companyNIF || "").trim() ? "NIF : " + String(settings.companyNIF).trim() : ""; }
 
 const fmt = (n) => {
@@ -437,7 +445,7 @@ function downloadInvoicePDF(inv, settings) {
   doc.text(pdfSafe(`Sous-total HT : ${fmt(inv.totalHT)}`), 130, ty); ty += 6;
   if (inv.globalDiscountAmount > 0) { doc.text(pdfSafe(`Remise globale : -${fmt(inv.globalDiscountAmount)}`), 130, ty); ty += 6; }
   (inv.fees || []).forEach((f) => { doc.text(pdfSafe(`${f.label || "Frais"} : +${fmt(f.amount)}`), 130, ty); ty += 6; });
-  doc.text(pdfSafe(`${inv.taxLabel || "Taxe"} : ${fmt(inv.totalTax)}`), 130, ty); ty += 8;
+  doc.text(pdfSafe(`${inv.taxLabel || "Taxe"}${tauxFactureTexte(inv) ? " (" + tauxFactureTexte(inv) + ")" : ""} : ${fmt(inv.totalTax)}`), 130, ty); ty += 8;
   doc.setFontSize(12);
   doc.text(pdfSafe(`Total : ${fmt(inv.total)}`), 130, ty); ty += 10;
   doc.setFontSize(9);
@@ -455,6 +463,11 @@ function downloadInvoicePDF(inv, settings) {
     noteLines.forEach((line) => { doc.text(line, 14, ty); ty += 4.5; });
   }
   if (settings.tcaFranchise) { ty += 8; doc.setFontSize(9); doc.setTextColor(90, 90, 90); doc.text(pdfSafe(MENTION_FRANCHISE_TCA), 14, ty); }
+  // Article 191 : visa de l'entreprise et signature d'une personne habilitée.
+  if (ty > 262) { doc.addPage(); ty = 20; }
+  ty += 14; doc.setFontSize(9); doc.setTextColor(90, 90, 90);
+  doc.text(pdfSafe("Visa de l'entreprise et signature :"), 130, ty);
+  doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.3); doc.rect(130, ty + 2, 66, 22);
   doc.save(`Facture-${inv.number}.pdf`);
 }
 

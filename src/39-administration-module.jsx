@@ -818,7 +818,7 @@ function AdminModule({
               <label className="flex items-start gap-2 text-sm" style={{ color: "#152238" }}>
                 <input type="checkbox" className="mt-1" checked={tcaFranchise} onChange={(e) => setTcaFranchise(e.target.checked)} data-testid="tca-franchise" />
                 <span>Entreprise en franchise de TCA (chiffre d'affaires inférieur à 10 millions de HTG)
-                  <span className="block text-xs" style={{ color: "#8A8370" }}>La TCA n'est alors pas facturée et la facture porte la mention « TCA non applicable - article 193 du CGI ». La TCA payée sur vos achats n'est pas récupérable. Règle issue de la presse, à faire confirmer par votre expert-comptable avant de l'activer.</span>
+                  <span className="block text-xs" style={{ color: "#8A8370" }}>La TCA n'est alors pas facturée et la facture porte la mention « TCA non applicable - article 193 du CGI ». La TCA payée sur vos achats n'est pas récupérable (article 193 du Code fiscal). Attention : facturer la TCA à tort vous en rend redevable. Faites confirmer par votre expert-comptable que vous êtes bien en dessous du seuil avant d'activer.</span>
                 </span>
               </label>
             </div>
