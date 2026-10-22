@@ -14,7 +14,7 @@ const SUPABASE_URL = "https://cnmmxpwlgovzbcfqaxqm.supabase.co";
 // livraison, en même temps que le cache-buster ?v=... d'index.html, pour pouvoir
 // vérifier en un coup d'œil dans l'app elle-même quelle version tourne réellement,
 // sans avoir besoin des outils développeur (peu pratiques sur mobile).
-const APP_VERSION = "20260830-249";
+const APP_VERSION = "20260830-250";
 const SUPABASE_ANON_KEY = "sb_publishable_Ba1KJd2YY-eLaCy1FRECIA_C1DoyAjL";
 // K:ENV:START — garde-fou test/production : une copie publiée au mauvais endroit refuse de démarrer
 // (références coupées en deux : une recherche de texte dans un fichier ne doit trouver que la base réellement utilisée)

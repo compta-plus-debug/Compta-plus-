@@ -85,8 +85,15 @@ async function resolveMembershipInner() {
     if (allowed) { _membership = allowed.membership; return _membership; }
     throw new Error("OFFLINE");
   }
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Utilisateur non connecté");
+  // getUser() est un appel réseau : avec une connexion très faible il ne lève pas toujours d'erreur, il renvoie
+  // « aucun utilisateur » avec une erreur réseau. Ce n'est PAS une déconnexion : on le signale comme un souci réseau
+  // (reprise de l'identité mémorisée, ou nouvelle tentative automatique), et non comme « Connexion refusée ».
+  let user = null, getUserErr = null;
+  try { const r = await supabase.auth.getUser(); user = (r && r.data && r.data.user) || null; getUserErr = (r && r.error) || null; } catch (e) { getUserErr = e; }
+  if (!user) {
+    if (getUserErr && oflIsNetworkError(getUserErr)) throw new Error("pas de réponse du réseau (connexion instable)");
+    throw new Error("Utilisateur non connecté");
+  }
   await dlog("start", { email: user.email, uid: user.id });
 
   // Juste après l'établissement d'une nouvelle session (ex. clic sur le lien de

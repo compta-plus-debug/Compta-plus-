@@ -257,6 +257,7 @@ function App() {
   };
   const [needsWelcome, setNeedsWelcome] = useState(false);
   const [membershipError, setMembershipError] = useState(null);
+  const [netWait, setNetWait] = useState(false);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [isManagementCollaborator, setIsManagementCollaborator] = useState(false);
   const [companyPickOptions, setCompanyPickOptions] = useState(null);
@@ -976,6 +977,16 @@ function App() {
             window.location.reload();
           };
           window.addEventListener("online", retryOnReconnect);
+          return;
+        }
+        if (oflIsNetworkError(e)) {
+          // Connexion très faible (ou coupée) et aucune identité mémorisée utilisable : ce n'est pas un refus. On garde
+          // l'écran d'attente et on réessaie tout seul (au retour du réseau et toutes les 15 secondes).
+          await dlog("resolveMembership_network", { message: e?.message || String(e) });
+          setNetWait(true);
+          const retry = () => { window.removeEventListener("online", retry); window.location.reload(); };
+          window.addEventListener("online", retry);
+          setTimeout(retry, 15000);
           return;
         }
         // pas de session Supabase
@@ -1730,7 +1741,7 @@ function App() {
   if (!loaded && !membershipError && !companyPickOptions) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "sans-serif", color: "#152238" }}>
-        Chargement…
+        {netWait ? "Connexion internet instable — nouvelle tentative automatique…" : "Chargement…"}
       </div>
     );
   }
