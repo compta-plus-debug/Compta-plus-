@@ -53,7 +53,7 @@ S.setCat = (c, d) => { const x = kvGet("compta-" + c); kvSet("compta-" + c, { v:
 const client = {
   auth: {
     getSession: async () => HNG() ? NEVER() : S.sessionNull ? ({ data: { session: null }, error: null }) : ({ data: { session: { access_token: "t", user: S.user } }, error: null }),
-    getUser: async () => HNG() ? NEVER() : ({ data: { user: S.user }, error: null }),
+    getUser: async () => HNG() ? NEVER() : S.getUserNetErr ? ({ data: { user: null }, error: { name: 'AuthRetryableFetchError', status: 0, message: 'Failed to fetch' } }) : ({ data: { user: S.user }, error: null }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     signOut: async () => ({}),
     mfa: { getAuthenticatorAssuranceLevel: async () => HNG() ? NEVER() : ({ data: { currentLevel: "aal1", nextLevel: "aal1" }, error: null }), listFactors: async () => ({ data: { totp: (S.mfaVerified || (()=>{try{return localStorage.getItem("t-mfa")}catch(e){}})()) ? [{ id: "f1", status: "verified" }] : [] }, error: null }) },
