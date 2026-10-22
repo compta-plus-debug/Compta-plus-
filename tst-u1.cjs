@@ -9,7 +9,7 @@ const num=s=>String(s).replace(/[\s  .,]/g,'');
 // A) barème
 {const {p,errs}=await boot(b,{settings:{companyName:'X',currency:'HTG'},primary:true,pageInit:()=>{try{sessionStorage.clear()}catch(e){}}});
  await mod(p,'Rapports et analyse');await p.getByText('Déclarations fiscales',{exact:true}).first().click();await p.waitForTimeout(400);await p.getByText('Impôt sur le Revenu',{exact:true}).first().click();await p.waitForTimeout(700);
- await p.getByText('Réel (barème progressif)').first().click();await p.waitForTimeout(300);
+ await p.getByText('Réel (bénéfice réel)').first().click();await p.waitForTimeout(300);
  const yr=p.locator('input[type=number]').first();await yr.fill('2026');await p.waitForTimeout(200);
  const rev=p.getByText('Revenu global',{exact:true}).locator('xpath=following-sibling::input[1]');await rev.fill('600000');await p.waitForTimeout(300);
  ok('année 2026 : le nouveau barème est choisi par défaut',(await p.locator('[data-testid="ir-bareme"]').inputValue())==='nouveau');

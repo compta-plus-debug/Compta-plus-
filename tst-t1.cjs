@@ -50,4 +50,19 @@ const cartPart=async p=>{const t=await txt(p);return t.slice(t.indexOf('Panier')
  ok('le brouillon est gardé dans la session de l\'appareil, propre à l\'entreprise et au compte',!!cle2&&/^compta-plus-pos-draft:[^:]+:/.test(cle2),cle2);
  ok('aucune erreur JS (2)',errs.length===0,errs.slice(0,3));
  await p.close();}
+// v247 — bouton « Vider le panier » : retire d'un coup tous les articles, avec confirmation s'il y en a plusieurs
+{const {p,errs}=await boot(b,{settings:{companyName:'X',currency:'HTG'},primary:true,pageInit:()=>{try{sessionStorage.clear()}catch(e){}}});
+ await mod(p,VENTE);
+ ok('panier vide : pas de bouton « Vider »',(await p.locator('[data-testid="cart-clear"]').count())===0);
+ await p.getByText('Riz',{exact:true}).first().click();await p.waitForTimeout(250);
+ await p.getByText('Conseil',{exact:true}).first().click();await p.waitForTimeout(300);
+ ok('avec des articles : le bouton « Vider » apparaît',(await p.locator('[data-testid="cart-clear"]').count())===1);
+ await p.locator('[data-testid="cart-clear"]').click();await p.waitForTimeout(400);
+ ok('un clic vide tout le panier',/Sélectionnez un article/.test(await cartPart(p)));
+ await mod(p,CRM);await mod(p,VENTE);
+ ok('le panier vidé reste vide au retour dans le module',/Sélectionnez un article/.test(await cartPart(p)));
+ await p.getByText('Riz',{exact:true}).first().click();await p.waitForTimeout(300);
+ ok('un article ajouté après le vidage fonctionne',/Riz/.test(await cartPart(p)));
+ ok('aucune erreur JS (vider)',errs.length===0,errs.slice(0,3));
+ await p.close();}
 await b.close();console.log('fails='+fails);process.exit(fails?1:0)})();
