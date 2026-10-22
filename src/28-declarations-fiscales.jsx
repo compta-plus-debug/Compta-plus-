@@ -24,7 +24,7 @@ function FiscalValidationNotice() {
   );
 }
 
-function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, entries, accounts, planTier }) {
+function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, entries, accounts, planTier, purchases }) {
   const [year, setYear] = useState(defaultYear);
   const [month, setMonth] = useState(defaultMonth);
   const [declType, setDeclType] = useState("originale");
@@ -47,9 +47,34 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
   const MINIMUM = Math.max(0, Number(minimumSaisi) || 0);
   const baseImposable = Math.max(0, chiffreAffaires - ABATTEMENT);
   const montantTCA = baseImposable > 0 ? Math.max(Math.round(baseImposable * TAUX), MINIMUM) : 0;
+  // TCA déductible sur les achats (articles 187 à 190) : solde du compte 4456 sur le mois (achats moins retours et
+  // annulations). Si elle dépasse la TCA due, l'excédent est reporté sur les mois suivants, sans remboursement (art. 188).
+  const tcaMois = (y, m) => {
+    const pre = `${y}-${String(m).padStart(2, "0")}`;
+    const ca = invoices.filter((inv) => inv.date && inv.date.startsWith(pre) && inv.status !== "don" && inv.status !== "annulée").reduce((t, inv) => t + (Number(inv.totalHT) || 0), 0);
+    const due = Math.max(0, ca) > 0 ? Math.max(Math.round(Math.max(0, ca - (pre === periodPrefix ? ABATTEMENT : 0)) * TAUX), pre === periodPrefix ? MINIMUM : 0) : 0;
+    const ded = Math.round((entries || []).filter((e) => e.date && e.date.startsWith(pre)).reduce((t, e) => t + (e.lines || []).reduce((t2, l) => t2 + (l.account === "4456" ? Number(l.debit || 0) - Number(l.credit || 0) : 0), 0), 0) * 100) / 100;
+    return { due, ded };
+  };
+  const datesAvecTaxe = (entries || []).filter((e) => (e.lines || []).some((l) => l.account === "4456") && e.date && e.date.slice(0, 7) < periodPrefix).map((e) => e.date.slice(0, 7)).sort();
+  let creditReporte = 0;
+  if (datesAvecTaxe.length) {
+    let [cy, cm] = datesAvecTaxe[0].split("-").map(Number);
+    let guard = 0;
+    while (`${cy}-${String(cm).padStart(2, "0")}` < periodPrefix && guard++ < 120) {
+      const r = tcaMois(cy, cm);
+      creditReporte = Math.max(0, Math.round((r.ded + creditReporte - r.due) * 100) / 100);
+      cm += 1; if (cm > 12) { cm = 1; cy += 1; }
+    }
+  }
+  const tcaDeductibleMois = tcaMois(year, month).ded;
+  const tcaNette = Math.max(0, Math.round((montantTCA - tcaDeductibleMois - creditReporte) * 100) / 100);
+  const creditAReporter = Math.max(0, Math.round((tcaDeductibleMois + creditReporte - montantTCA) * 100) / 100);
+  const achatsTaxe = (purchases || []).filter((p) => p.date && p.date.startsWith(periodPrefix) && p.tcaDeductible > 0 && p.status !== "annulé");
   const interet = Number(interetRetard) || 0;
   const amendeNum = Number(amende) || 0;
-  const montantAPayer = montantTCA + interet + amendeNum;
+  const montantAPayer = tcaNette + interet + amendeNum;
+  
 
   const missingInfo = [];
   if (!settings.companyNIF) missingInfo.push("NIF");
@@ -121,6 +146,10 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
         ["L2", "Abattement", "", fmt(ABATTEMENT)],
         ["L3", "Montant de la base imposable", "", fmt(baseImposable)],
         ["L4", MINIMUM > 0 ? `Montant de la TCA (minimum ${fmt(MINIMUM)} HTG)` : "Montant de la TCA", "10%", fmt(montantTCA)],
+        ["L5", "TCA déductible sur achats du mois (art. 187)", "", fmt(tcaDeductibleMois)],
+        ["L6", "Crédit de TCA reporté des mois précédents (art. 188)", "", fmt(creditReporte)],
+        ["L7", "TCA nette due (L4 - L5 - L6)", "", fmt(tcaNette)],
+        ["", "Crédit à reporter sur le mois suivant", "", fmt(creditAReporter)],
         ["", "Intérêt de retard", "", fmt(interet)],
         ["", "Amende", "", fmt(amendeNum)],
         ["", "MONTANT A PAYER", "", fmt(montantAPayer)],
@@ -130,6 +159,17 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
     });
     y = doc.lastAutoTable.finalY + 10;
 
+    if (achatsTaxe.length) {
+      doc.setFontSize(10);
+      doc.text(pdfSafe("Liste des factures d'achat ouvrant droit à déduction (art. 190)"), 14, y); y += 2;
+      doc.autoTable({
+        startY: y + 2,
+        head: [["Date", "Fournisseur", "N° facture", "Hors taxe", "TCA"]],
+        body: achatsTaxe.map((p) => [p.date, p.supplier || "", p.supplierInvoiceNo || "", fmt(p.amountHT), fmt(p.tcaDeductible)]).map((r) => r.map(pdfSafe)),
+        styles: { fontSize: 8 }, headStyles: { fillColor: HEADER_RGB },
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
     doc.setFontSize(9);
     doc.text(pdfSafe("(Montant en Gourdes, arrondi à la Gourde près)"), 14, y); y += 10;
     doc.text("V. Signature des déclarants", 14, y); y += 8;
@@ -145,7 +185,7 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
       <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
         <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Déclaration TCA — Formulaire DGI No. 018</div>
         <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-          Reproduit le formulaire simplifié de la DGI (Haïti). Le chiffre d'affaires du mois est lu directement de vos factures. Le Code fiscal (articles 186 et 190) fixe la TCA à 10 % et la déclaration mensuelle entre le 1er et le 15 du mois suivant ; la TCA déductible sur vos achats (article 187) n'est pas déduite ici. Les entreprises de moins de 10 millions de HTG de chiffre d'affaires sont en franchise (article 193), sans TCA.
+          Reproduit le formulaire simplifié de la DGI (Haïti). Le chiffre d'affaires du mois est lu directement de vos factures. Le Code fiscal (articles 186 et 190) fixe la TCA à 10 % et la déclaration mensuelle entre le 1er et le 15 du mois suivant ; la TCA déductible sur vos achats (articles 187 et 188), saisie dans Achats, est déduite ci-dessous ; l'excédent éventuel est reporté sur les mois suivants sans remboursement. Les entreprises de moins de 10 millions de HTG de chiffre d'affaires sont en franchise (article 193), sans TCA.
         </p>
         <FiscalValidationNotice />
         {missingInfo.length > 0 && (
@@ -199,6 +239,19 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
               <td className="py-1.5 tabular text-right font-medium">{fmt(montantTCA)}</td>
             </tr>
             <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
+              <td className="py-1.5" style={{ color: "#7A7460" }}>L5 — TCA déductible sur les achats du mois</td>
+              <td className="py-1.5 tabular text-right" data-testid="tca-deductible">{fmt(tcaDeductibleMois)}</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
+              <td className="py-1.5" style={{ color: "#7A7460" }}>L6 — Crédit de TCA reporté des mois précédents</td>
+              <td className="py-1.5 tabular text-right" data-testid="tca-credit">{fmt(creditReporte)}</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
+              <td className="py-1.5" style={{ color: "#7A7460" }}>L7 — TCA nette due (L4 − L5 − L6)
+                {creditAReporter > 0 && <span className="block text-xs" style={{ color: "#0F6B5C" }}>Crédit à reporter sur le mois suivant : {fmt(creditAReporter)} (non remboursable)</span>}</td>
+              <td className="py-1.5 tabular text-right font-medium" data-testid="tca-nette">{fmt(tcaNette)}</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
               <td className="py-1.5">Intérêt de retard</td>
               <td className="py-1.5 text-right">
                 <input type="number" min="0" value={interetRetard} onChange={(e) => setInteretRetard(e.target.value)} placeholder="0"
@@ -218,6 +271,20 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
             </tr>
           </tbody>
         </table></div>
+
+        {achatsTaxe.length > 0 && (
+          <div className="mb-4 overflow-x-auto" data-testid="tca-liste-achats">
+            <div className="text-xs font-medium mb-1" style={{ color: "#152238" }}>Factures d'achat avec TCA déductible ce mois (à conserver, art. 190)</div>
+            <table className="w-full text-xs"><tbody>
+              {achatsTaxe.map((p) => (
+                <tr key={p.id} style={{ borderBottom: "1px solid #F3EFE3" }}>
+                  <td className="py-1">{p.date}</td><td>{p.supplier}</td><td>{p.supplierInvoiceNo || "—"}</td>
+                  <td className="tabular text-right">{fmt(p.amountHT)}</td><td className="tabular text-right">{fmt(p.tcaDeductible)}</td>
+                </tr>
+              ))}
+            </tbody></table>
+          </div>
+        )}
 
         {planTier === "assisted" && (
           <div className="mb-4 p-3 rounded" style={{ background: hasWarnings ? "#FBF1DC" : "#E6F1EE" }}>

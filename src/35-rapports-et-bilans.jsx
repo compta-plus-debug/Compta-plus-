@@ -807,7 +807,7 @@ function RapportsModule({ accounts, balances, invoices, purchases, entries, sett
 
       {tab === "declarationTCA" && (() => {
         const now = new Date();
-        return <DeclarationTCAPanel invoices={invoices} settings={settings} defaultYear={now.getFullYear()} defaultMonth={now.getMonth() + 1} entries={entries} accounts={accounts} planTier={planTier} />;
+        return <DeclarationTCAPanel invoices={invoices} settings={settings} defaultYear={now.getFullYear()} defaultMonth={now.getMonth() + 1} entries={entries} accounts={accounts} planTier={planTier} purchases={purchases} />;
       })()}
 
       {tab === "declarationIR" && (

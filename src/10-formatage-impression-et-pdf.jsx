@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Formatage impression et pdf
 // @depends CURRENCIES, CURRENT_CURRENCY, todayStr
-// @exports HEADER_RGB, MENTION_FRANCHISE_TCA, RecordedStamp, connectThermalPrinter
+// @exports HEADER_RGB, InvoiceSheet, MENTION_FRANCHISE_TCA, RecordedStamp, connectThermalPrinter
 //   disconnectThermalPrinter, downloadEtatsFinanciersPDF, downloadInvoicePDF, downloadTablePDF
 //   fmt, getRememberedPrinterName, isThermalPrinterConnected, nifLigne, pdfSafe
 //   printInvoiceBluetooth, tauxFactureTexte
@@ -18,6 +18,123 @@ function tauxFactureTexte(inv) {
   return t.length === 1 ? String(t[0]).replace(".", ",") + " %" : "taux variables";
 }
 function nifLigne(settings) { return settings && String(settings.companyNIF || "").trim() ? "NIF : " + String(settings.companyNIF).trim() : ""; }
+
+// Aperçu à l'écran d'une facture, identique à la feuille qui sort de l'imprimante (A4 ou ticket 80/58 mm selon le
+// format choisi dans Administration). Utilisé par Comptes clients ; l'impression de la caisse garde sa propre mise en page.
+function InvoiceSheet({ invoice, settings, testPrefix }) {
+  const inv = invoice || {};
+  const tp = testPrefix || "apercu";
+  const paid = (inv.payments || []).reduce((t, p) => t + (Number(p.amount) || 0), 0);
+  const reste = Math.max(0, (inv.total || 0) - paid);
+  const modeTxt = inv.paymentMode === "caisse" ? "Caisse" : inv.paymentMode === "banque" ? "Banque" : inv.paymentMode === "don" ? "Don" : "Crédit";
+  const nif = nifLigne(settings);
+  const ticket = settings.receiptFormat === "ticket80" || settings.receiptFormat === "ticket58";
+  if (ticket) {
+    const row = { display: "flex", justifyContent: "space-between" };
+    const sep = { borderTop: "1px dashed #000", margin: "4px 0" };
+    return (
+      <div style={{ color: "#000", background: "#fff", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, width: settings.receiptFormat === "ticket80" ? "74mm" : "52mm", maxWidth: "100%", margin: "0 auto", padding: "8px 6px" }} data-testid={tp + "-ticket"}>
+        <div style={{ textAlign: "center", marginBottom: 6 }}>
+          {settings.companyLogo && <img src={settings.companyLogo} alt="" style={{ width: 28, height: 28, objectFit: "contain", margin: "0 auto 4px" }} />}
+          <div style={{ fontWeight: 700, fontSize: 12 }}>{settings.companyName || "Mon Entreprise"}</div>
+          {settings.companyAddress && <div style={{ fontSize: 8 }}>{settings.companyAddress}</div>}
+          {(settings.companyPhone || settings.companyEmail) && <div style={{ fontSize: 8 }}>{[settings.companyPhone, settings.companyEmail].filter(Boolean).join(" · ")}</div>}
+          {nif && <div style={{ fontSize: 8 }}>{nif}</div>}
+        </div>
+        <div style={sep} />
+        <div>Facture N° {inv.number}</div><div>{inv.date}</div><div>Client : {inv.client || "Client comptant"}</div>
+        {inv.soldByName && <div>Vendeur : {inv.soldByName}</div>}
+        <div style={sep} />
+        {(inv.lines || []).map((l, i) => (
+          <div key={i} style={{ marginBottom: 3 }}><div>{l.name}</div><div className="tabular" style={row}><span>{l.qty} x {fmt(l.price)}</span><span>{fmt(l.subtotal)}</span></div></div>
+        ))}
+        <div style={sep} />
+        <div className="tabular" style={row}><span>Sous-total HT</span><span>{fmt(inv.totalHT)}</span></div>
+        {inv.globalDiscountAmount > 0 && <div className="tabular" style={row}><span>Remise</span><span>-{fmt(inv.globalDiscountAmount)}</span></div>}
+        {(inv.fees || []).map((f, i) => <div key={i} className="tabular" style={row}><span>{f.label || "Frais"}</span><span>+{fmt(f.amount)}</span></div>)}
+        <div className="tabular" style={row}><span>{inv.taxLabel || "Taxe"}</span><span>{fmt(inv.totalTax)}</span></div>
+        <div className="tabular" style={{ ...row, fontWeight: 700, fontSize: 12, marginTop: 4 }}><span>TOTAL</span><span>{fmt(inv.total)}</span></div>
+        <div style={sep} />
+        <div style={{ textAlign: "center", fontSize: 8 }}>
+          Paiement : {modeTxt}<br />
+          {(inv.payments || []).length > 0 && <>Versé : {fmt(paid)} — Solde dû : {fmt(reste)}<br /></>}
+          {settings.tcaFranchise && <>{MENTION_FRANCHISE_TCA}<br /></>}
+          Merci de votre confiance !
+          {settings.invoiceFooterNote && settings.invoiceFooterNote.trim() && <><br />{settings.invoiceFooterNote.trim()}</>}
+        </div>
+      </div>
+    );
+  }
+  const th = { textAlign: "right", padding: "6px 4px" };
+  const td = { textAlign: "right", padding: "6px 4px" };
+  const flex = { display: "flex", justifyContent: "space-between", padding: "3px 0" };
+  return (
+    <div style={{ color: "#152238", background: "#fff", fontFamily: "'Inter', sans-serif", width: "100%", maxWidth: 794, minHeight: 400, margin: "0 auto", padding: "32px 36px", boxSizing: "border-box" }} data-testid={tp + "-a4"}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 24, borderBottom: "2px solid #152238", paddingBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {settings.companyLogo && <img src={settings.companyLogo} alt="" style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }} />}
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>{settings.companyName || "Mon Entreprise"}</div>
+            {settings.companyAddress && <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{settings.companyAddress}</div>}
+            {(settings.companyPhone || settings.companyEmail) && <div style={{ fontSize: 12, color: "#555", marginTop: 1 }}>{[settings.companyPhone, settings.companyEmail].filter(Boolean).join(" · ")}</div>}
+            {nif && <div style={{ fontSize: 12, color: "#555", marginTop: 1 }}>{nif}</div>}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>FACTURE</div>
+          <div className="tabular" style={{ fontSize: 13, lineHeight: 1.6 }}>N° {inv.number}</div>
+          <div className="tabular" style={{ fontSize: 13, lineHeight: 1.6 }}>{inv.date}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 24, fontSize: 13 }}>
+        <div>
+          <div style={{ color: "#888", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Facturé à</div>
+          <div style={{ fontWeight: 600, marginTop: 2 }}>{inv.client || "Client comptant"}</div>
+          {inv.soldByName && <div style={{ fontSize: 12, color: "#7A7460", marginTop: 2 }}>Vendeur : {inv.soldByName}</div>}
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ color: "#888", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Statut</div>
+          <div style={{ fontWeight: 600, marginTop: 2 }}>{inv.status === "payée" ? "Payée" : inv.status === "partielle" ? `Partiellement payée (reste ${fmt(reste)})` : inv.status === "annulée" ? "Annulée" : "Impayée"}</div>
+        </div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead><tr style={{ borderBottom: "1px solid #152238" }}>
+            <th style={{ ...th, textAlign: "left" }}>Article</th><th style={th}>Qté</th><th style={th}>Prix unit.</th><th style={th}>Remise</th><th style={th}>Sous-total HT</th><th style={th}>{inv.taxLabel || "Taxe"}</th>
+          </tr></thead>
+          <tbody>
+            {(inv.lines || []).map((l, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #E4DFD1" }}>
+                <td style={{ padding: "6px 4px" }}>{l.name}</td>
+                <td className="tabular" style={td}>{l.qty}</td><td className="tabular" style={td}>{fmt(l.price)}</td>
+                <td className="tabular" style={td}>{l.discountAmt > 0 ? `-${fmt(l.discountAmt)}` : l.discountPct > 0 ? `-${l.discountPct}%` : "—"}</td>
+                <td className="tabular" style={td}>{fmt(l.subtotal)}</td><td className="tabular" style={td}>{fmt(l.taxAmount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+        <div style={{ width: 260, maxWidth: "100%", fontSize: 13 }}>
+          <div className="tabular" style={flex}><span>Sous-total HT</span><span>{fmt(inv.totalHT)}</span></div>
+          {inv.globalDiscountAmount > 0 && <div className="tabular" style={flex}><span>Remise globale</span><span>-{fmt(inv.globalDiscountAmount)}</span></div>}
+          {(inv.fees || []).map((f, i) => <div key={i} className="tabular" style={flex}><span>{f.label || "Frais"}</span><span>+{fmt(f.amount)}</span></div>)}
+          <div className="tabular" style={flex}><span>{inv.taxLabel || "Taxe"}{tauxFactureTexte(inv) ? " (" + tauxFactureTexte(inv) + ")" : ""}</span><span>{fmt(inv.totalTax)}</span></div>
+          <div className="tabular" style={{ ...flex, padding: "8px 0", borderTop: "2px solid #152238", marginTop: 4, fontWeight: 700, fontSize: 15 }}><span>Total {inv.totalTax > 0 ? "TTC" : ""}</span><span>{fmt(inv.total)}</span></div>
+        </div>
+      </div>
+      <div style={{ marginTop: 32, fontSize: 12, color: "#888", borderTop: "1px solid #E4DFD1", paddingTop: 12 }}>
+        Mode de paiement : {modeTxt} — Merci de votre confiance.
+        {(inv.payments || []).length > 0 && <div style={{ marginTop: 4 }}>Versé : {fmt(paid)} — Solde dû : {fmt(reste)}</div>}
+        {settings.tcaFranchise && <div style={{ marginTop: 6 }}>{MENTION_FRANCHISE_TCA}</div>}
+        <div style={{ marginTop: 18, display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ width: 240, fontSize: 11, color: "#555" }}>Visa de l'entreprise et signature :<div style={{ height: 70, border: "1px solid #999", marginTop: 4 }} /></div>
+        </div>
+        {settings.invoiceFooterNote && settings.invoiceFooterNote.trim() && <div style={{ marginTop: 6 }}>{settings.invoiceFooterNote.trim()}</div>}
+      </div>
+    </div>
+  );
+}
 
 const fmt = (n) => {
   const code = CURRENT_CURRENCY;

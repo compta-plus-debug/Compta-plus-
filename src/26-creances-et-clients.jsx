@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Creances et clients
-// @depends ChequeDialog, History, Plus, RecordedStamp, X, _membership, balanceDue, fmt, makeChequeRecord
-//   normalizeClientName, simpleEntry, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect
-//   useState
+// @depends ChequeDialog, History, InvoiceSheet, Plus, RecordedStamp, X, _membership, balanceDue, fmt
+//   makeChequeRecord, normalizeClientName, simpleEntry, todayStr, uid, useAssistedAnomalyGate
+//   useBackNav, useEffect, useState
 // @exports CRMModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Provision pour créances douteuses — mêmes principes que la dépréciation de
@@ -161,7 +161,7 @@ function ProvisionsCreancesPanel({ rows, clients, setClients, entries, setEntrie
   );
 }
 
-function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, entries, setEntries, accounts, setAccounts, planTier, recordPendingRecommendation, currentUserEmail, role, showToast, logAudit, verifyTransactionSaved, pendingApprovals, setPendingApprovals }) {
+function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, entries, setEntries, accounts, setAccounts, planTier, recordPendingRecommendation, currentUserEmail, role, showToast, logAudit, verifyTransactionSaved, pendingApprovals, setPendingApprovals, settings }) {
   useEffect(() => {
     const missing = [
       { code: "491", name: "Provisions pour créances douteuses", type: "Actif" },
@@ -184,6 +184,17 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
   const [tab, setTab] = useState("clients");
   useBackNav(tab, setTab, "clients");
   const [payAmounts, setPayAmounts] = useState({});
+  // Aperçu de la facture telle qu'elle sort de l'imprimante (format choisi dans Administration), avec impression directe.
+  const [apercuInv, setApercuInv] = useState(null);
+  const [printInv, setPrintInv] = useState(null);
+  const cfg = settings || {};
+  useEffect(() => {
+    if (!printInv) return;
+    const t = setTimeout(() => { try { window.print(); } catch (e) {} }, 150);
+    const onAfter = () => setPrintInv(null);
+    window.addEventListener("afterprint", onAfter);
+    return () => { clearTimeout(t); window.removeEventListener("afterprint", onAfter); };
+  }, [printInv]);
 
   // Fusionne les clients déclarés et les noms de clients apparus dans les factures
   // Regroupe par nom normalisé (espaces superflus et casse ignorés) — sans ça, deux
@@ -380,7 +391,8 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <>
+    <div className={`p-4 md:p-8 max-w-6xl${printInv ? " no-print" : ""}`}>
       <header className="mb-6">
         <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 6</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Comptes clients (CRM)</div>
@@ -590,6 +602,7 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
                                   </td>
                                   <td className="py-2">
                                     <div className="flex flex-wrap gap-1 items-center">
+                                      <button onClick={() => setApercuInv(inv)} className="text-xs px-2 py-1 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }} data-testid="facture-voir">Voir la facture</button>
                                       <input type="number" min="0" placeholder={`≤ ${fmt(restant)} ou plus (réparti automatiquement)`}
                                         value={payAmounts[inv.id] || ""}
                                         onChange={(e) => setPayAmounts((p) => ({ ...p, [inv.id]: e.target.value }))}
@@ -674,6 +687,7 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="tabular font-medium" style={{ color: "#0F6B5C" }}>{fmt(inv.total)}</span>
+                      <button onClick={() => setApercuInv(inv)} className="text-xs px-2 py-0.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }} data-testid="facture-voir-payee">Voir la facture</button>
                       <button onClick={() => setHistoryClientName(inv.client)} title="Historique" style={{ color: "#8A8370" }}><History size={14} /></button>
                     </div>
                   </div>
@@ -743,10 +757,33 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
         );
       })()}
 
+      {apercuInv && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto p-3 md:p-8" style={{ background: "rgba(21,34,56,0.55)" }} onClick={() => setApercuInv(null)} data-testid="facture-apercu">
+          <div className="w-full" style={{ maxWidth: 860 }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div className="text-sm" style={{ color: "#EFE9DD" }}>Aperçu de la facture {apercuInv.number} — tel qu'il sera imprimé ({cfg.receiptFormat === "ticket80" ? "ticket 80 mm" : cfg.receiptFormat === "ticket58" ? "ticket 58 mm" : "feuille A4"})</div>
+              <div className="flex gap-2">
+                <button onClick={() => { setPrintInv(apercuInv); setApercuInv(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "#C9A24B", color: "#152238" }} data-testid="facture-imprimer">Imprimer</button>
+                <button onClick={() => setApercuInv(null)} className="px-3 py-1.5 rounded text-sm" style={{ background: "#EFE9DD", color: "#152238" }} data-testid="facture-fermer">Fermer</button>
+              </div>
+            </div>
+            <div className="rounded shadow-lg overflow-hidden" style={{ background: "#fff" }}>
+              <InvoiceSheet invoice={apercuInv} settings={cfg} />
+            </div>
+            <div className="text-xs mt-2" style={{ color: "#EFE9DD" }}>Le logo, le NIF, le taux de taxe, la mention de franchise et la zone de signature sont ceux de votre paramétrage.</div>
+          </div>
+        </div>
+      )}
       {historyClientName && (
         <ClientHistoryModal clientName={historyClientName} invoices={invoices.filter((i) => normalizeClientName(i.client) === normalizeClientName(historyClientName))} onClose={() => setHistoryClientName(null)} />
       )}
     </div>
+    {printInv && (
+      <div className={`print-only${cfg.receiptFormat === "ticket80" ? " ticket-print-80" : cfg.receiptFormat === "ticket58" ? " ticket-print-58" : ""}`}>
+        <InvoiceSheet invoice={printInv} settings={cfg} testPrefix="impression" />
+      </div>
+    )}
+    </>
   );
 }
 

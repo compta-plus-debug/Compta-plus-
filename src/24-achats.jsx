@@ -1,11 +1,11 @@
 // ═══ MODULE ═══
 // @module Achats
 // @depends AssistedPrincipleReminder, CheckCircle2, ChequeDialog, History, Pencil
-//   PendingRecommendationsBanner, Plus, RecordedStamp, RotateCcw, Trash2, X, _membership
-//   cleanSuggestionLabel, detectAmountAnomaly, detectDuplicateAnomaly, detectRareAccountAnomaly
-//   fmt, isFutureDate, isLocked, makeChequeRecord, normalizeClientName, simpleEntry
-//   suggestAccountFromHistory, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect
-//   useState
+//   PendingRecommendationsBanner, Plus, RecordedStamp, RotateCcw, TAX_SYSTEMS, Trash2, X
+//   _membership, cleanSuggestionLabel, detectAmountAnomaly, detectDuplicateAnomaly
+//   detectRareAccountAnomaly, fmt, isFutureDate, isLocked, makeChequeRecord, normalizeClientName
+//   simpleEntry, suggestAccountFromHistory, todayStr, uid, useAssistedAnomalyGate, useBackNav
+//   useEffect, useState
 // @exports AchatModule, ProductHistoryModal
 // ═══ FIN DE L'EN-TÊTE ═══
 // Modal d'historique produit — réutilisé depuis Vente (POS/Catalogue) et Achat et
@@ -80,6 +80,13 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
   // Le comportement comptable actuel (débit du compte choisi) reste inchangé pour
   // l'instant ; seule l'information produit/quantité/coût est désormais capturée et
   // sert à recalculer le coût moyen pondéré de chaque produit reçu.
+  // TCA déductible sur les achats (articles 187 et 190 du Code fiscal) : pour une entreprise dont le régime de taxe est
+  // activé (et qui n'est pas en franchise), la TCA payée à un fournisseur se saisit à part. Le « montant » reste hors
+  // taxe (charge ou stock) ; la fiche d'achat porte le total à payer (HT + TCA) et l'écriture débite le compte 4456.
+  const taxDeductActive = settings.taxSystem !== "aucune" && !settings.tcaFranchise;
+  const taxShort = (TAX_SYSTEMS[settings.taxSystem] && TAX_SYSTEMS[settings.taxSystem].label) || "TCA";
+  const [tcaDeduct, setTcaDeduct] = useState("");
+  const [supplierInvNo, setSupplierInvNo] = useState("");
   const [purchaseKind, setPurchaseKind] = useState("simple"); // "simple" | "marchandise"
   const [purchaseLines, setPurchaseLines] = useState([]); // [{ productId, qty, unitCost }]
   const [purchaseProductPick, setPurchaseProductPick] = useState("");
@@ -193,6 +200,13 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       showToast("Renseignez un libellé et un montant valide.");
       return;
     }
+    const tcaNum = taxDeductActive ? Math.round(Math.max(0, Number(tcaDeduct) || 0) * 100) / 100 : 0;
+    if (tcaNum > Number(form.amount) + 0.005) {
+      showToast(`La ${taxShort} déductible ne peut pas dépasser le montant hors taxe de l'achat.`);
+      return;
+    }
+    const amountHT = Math.round(Number(form.amount) * 100) / 100;
+    const amountTotal = Math.round((amountHT + tcaNum) * 100) / 100;
     if (isFutureDate(form.date)) {
       showToast("Impossible d'enregistrer un achat à une date future.");
       return;
@@ -215,11 +229,21 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
     const supplier = suppliers.find((s) => s.id === Number(effSupplierId));
     const payAccount = form.paymentMode === "caisse" ? "530" : form.paymentMode === "banque" ? "512" : "401";
     const label = `Achat — ${form.label} (${supplier?.name || "Fournisseur"})`;
+    // Écriture d'achat : sans taxe déductible, l'écriture simple d'origine ; avec taxe : charge HT + 4456 au débit, règlement du total TTC au crédit.
+    const buildPurchaseEntry = () => (tcaNum > 0
+      ? { date: form.date, createdAt: new Date().toISOString(), label, lines: [
+          { account: effAccount, debit: amountHT, credit: 0 },
+          { account: "4456", debit: tcaNum, credit: 0 },
+          { account: payAccount, debit: 0, credit: amountTotal },
+        ] }
+      : simpleEntry(form.date, label, effAccount, payAccount, Number(form.amount)));
+    const taxFields = tcaNum > 0 ? { amountHT, tcaDeductible: tcaNum, supplierInvoiceNo: (supplierInvNo || "").trim() || undefined }
+      : { amountHT: undefined, tcaDeductible: undefined, supplierInvoiceNo: (supplierInvNo || "").trim() || undefined };
 
     const commitPurchase = () => {
     if (editingPurchaseId) {
-      const purchaseEntry = { ...simpleEntry(form.date, label, effAccount, payAccount, Number(form.amount)), id: editingPurchaseId };
-      const updatedPurchase = { supplier: supplier?.name || "Fournisseur", date: form.date, label: form.label, amount: Number(form.amount), paymentMode: form.paymentMode, status: form.paymentMode === "credit" ? "à payer" : "payé" };
+      const purchaseEntry = { ...buildPurchaseEntry(), id: editingPurchaseId };
+      const updatedPurchase = { ...taxFields, supplier: supplier?.name || "Fournisseur", date: form.date, label: form.label, amount: amountTotal, paymentMode: form.paymentMode, status: form.paymentMode === "credit" ? "à payer" : "payé" };
       setEntries((prev) => prev.map((e) => (e.id === editingPurchaseId ? purchaseEntry : e)));
       setPurchases((prev) => prev.map((p) => (p.id === editingPurchaseId ? { ...p, ...updatedPurchase } : p)));
       setEditingPurchaseId(null);
@@ -231,14 +255,16 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       ], { showToast, logAudit });
     } else {
       const purchaseId = uid();
-      const purchaseEntry = { ...simpleEntry(form.date, label, effAccount, payAccount, Number(form.amount)), id: purchaseId };
+      const purchaseEntry = { ...buildPurchaseEntry(), id: purchaseId };
       const newPurchase = {
         id: purchaseId,
         date: form.date,
         createdAt: new Date().toISOString(),
         supplier: supplier?.name || "Fournisseur",
         label: form.label,
-        amount: Number(form.amount),
+        amount: amountTotal,
+        ...(tcaNum > 0 ? { amountHT, tcaDeductible: tcaNum } : {}),
+        ...(taxFields.supplierInvoiceNo ? { supplierInvoiceNo: taxFields.supplierInvoiceNo } : {}),
         paymentMode: form.paymentMode,
         status: form.paymentMode === "credit" ? "à payer" : "payé",
         lines: purchaseKind === "marchandise" ? purchaseLines.map((l) => ({ productId: l.productId, qty: Number(l.qty), unitCost: Number(l.unitCost) })) : undefined,
@@ -255,6 +281,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       ], { showToast, logAudit });
     }
     setForm({ ...form, label: "", amount: "" });
+    setTcaDeduct(""); setSupplierInvNo("");
     setPurchaseLines([]); setPurchaseFreight(""); setPurchaseKind("simple");
     };
     if (planTier !== "assisted" || editingPurchaseId) { commitPurchase(); return; }
@@ -312,14 +339,17 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       supplierId: supplier?.id ?? suppliers[0]?.id,
       label: p.label,
       account: entries.find((e) => e.id === p.id)?.lines?.find((l) => l.debit > 0)?.account || chargeAccounts[0]?.code,
-      amount: p.amount,
+      amount: p.amountHT != null ? p.amountHT : p.amount,
       paymentMode: p.paymentMode,
     });
+    setTcaDeduct(p.tcaDeductible ? String(p.tcaDeductible) : "");
+    setSupplierInvNo(p.supplierInvoiceNo || "");
   };
 
   const cancelEditPurchase = () => {
     setEditingPurchaseId(null);
     setForm({ ...form, label: "", amount: "" });
+    setTcaDeduct(""); setSupplierInvNo("");
   };
 
   const cancelPurchase = (p) => {
@@ -545,7 +575,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs" style={{ color: "#8A8370" }}>Montant</label>
+                  <label className="text-xs" style={{ color: "#8A8370" }}>{taxDeductActive ? `Montant hors ${taxShort}` : "Montant"}</label>
                   <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })}
                     placeholder="0" className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
                 </div>
@@ -557,6 +587,25 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
               </div>
             )}
           </div>
+
+          {taxDeductActive && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5 p-3 rounded" style={{ background: "#FAF8F1", border: "1px solid #EEE9DA" }}>
+              <div>
+                <label className="text-xs" style={{ color: "#8A8370" }}>{taxShort} déductible payée au fournisseur (facultatif)</label>
+                <input type="number" min="0" value={tcaDeduct} onChange={(e) => setTcaDeduct(e.target.value)} placeholder="0" data-testid="achat-tca"
+                  className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
+              </div>
+              <div>
+                <label className="text-xs" style={{ color: "#8A8370" }}>N° de la facture du fournisseur</label>
+                <input value={supplierInvNo} onChange={(e) => setSupplierInvNo(e.target.value)} placeholder="Ex. F-2026-114" data-testid="achat-facture-fournisseur"
+                  className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+              </div>
+              <div className="text-xs" style={{ color: "#7A7460" }} data-testid="achat-total-ttc">
+                Total à payer au fournisseur : <span className="font-medium" style={{ color: "#152238" }}>{fmt(Math.round(((Number(form.amount) || 0) + (Math.max(0, Number(tcaDeduct) || 0))) * 100) / 100)}</span>
+                <span className="block" style={{ color: "#A39C87" }}>La taxe n'est déductible que si elle figure sur une facture en règle du fournisseur (article 187). Elle est déduite de la {taxShort} collectée dans la déclaration mensuelle.</span>
+              </div>
+            </div>
+          )}
 
           {purchaseKind === "marchandise" && !editingPurchaseId && (
             <div className="mb-5 p-4 rounded" style={{ background: "#FAF8F1", border: "1px solid #EEE9DA" }}>
@@ -758,6 +807,8 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
                         <div>Compte imputé : <span style={{ color: "#152238" }}>{chargeLine ? `${chargeLine.account}` : "—"}</span></div>
                         <div>Mode de règlement : <span style={{ color: "#152238" }}>{p.paymentMode === "caisse" ? "Caisse (comptant)" : p.paymentMode === "banque" ? "Banque (comptant)" : "Crédit fournisseur"}</span></div>
                         <div>Montant : <span className="font-medium" style={{ color: "#152238" }}>{fmt(p.amount)}</span></div>
+                        {p.tcaDeductible > 0 && <div data-testid="achat-detail-tca">dont {taxShort} déductible : <span style={{ color: "#152238" }}>{fmt(p.tcaDeductible)}</span> (hors taxe {fmt(p.amountHT)})</div>}
+                        {p.supplierInvoiceNo && <div>Facture du fournisseur : <span style={{ color: "#152238" }}>{p.supplierInvoiceNo}</span></div>}
                         <div>Statut : <span style={{ color: "#152238" }}>{p.status}</span></div>
                       </div>
                       <RecordedStamp createdAt={p.createdAt} />

@@ -200,7 +200,12 @@ function bzReceivePO(po, { suppliers, products, date, paymentMode, settings, acc
 function bzSupplierReturnEntry({ purchase, entries, amount, date, number, id }) {
   const orig = (entries || []).find((e) => e.id === purchase.id);
   const chargeAcc = orig ? (orig.lines.find((l) => l.debit > 0)?.account || "607") : "607";
-  return { id, date, createdAt: new Date().toISOString(), label: `Retour fournisseur ${number} — ${purchase.label} (${purchase.supplier})`, supplierReturnId: id, lines: [{ account: "409", debit: amount, credit: 0 }, { account: chargeAcc, debit: 0, credit: amount }] };
+  // Achat avec taxe déductible : le retour (montant TTC) rend aussi la taxe au prorata.
+  const tcaPart = purchase.tcaDeductible > 0 && purchase.amount > 0 ? Math.round(amount * purchase.tcaDeductible / purchase.amount * 100) / 100 : 0;
+  const lines = [{ account: "409", debit: amount, credit: 0 }];
+  if (tcaPart > 0) lines.push({ account: "4456", debit: 0, credit: tcaPart });
+  lines.push({ account: chargeAcc, debit: 0, credit: Math.round((amount - tcaPart) * 100) / 100 });
+  return { id, date, createdAt: new Date().toISOString(), label: `Retour fournisseur ${number} — ${purchase.label} (${purchase.supplier})`, supplierReturnId: id, lines };
 }
 
 // ----- Phase 5 : acomptes -----

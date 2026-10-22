@@ -63,6 +63,7 @@ const DEFAULT_ACCOUNTS = [
   { code: "411", name: "Clients", type: "Actif" },
   { code: "401", name: "Fournisseurs", type: "Passif" },
   { code: "445", name: "Taxe collectée sur ventes (IVA/TCA)", type: "Passif" },
+  { code: "4456", name: "Taxe déductible sur achats (TCA)", type: "Actif" },
   { code: "512", name: "Banque", type: "Actif" },
   { code: "530", name: "Caisse", type: "Actif" },
   { code: "5112", name: "Chèques à encaisser", type: "Actif" },
@@ -124,7 +125,7 @@ const ASSET_CATEGORIES = [
 
 const TAX_SYSTEMS = {
   iva: { label: "IVA", defaultRate: 16, description: "Impuesto al Valor Agregado (Mexique) — déductible sur les achats" },
-  tca: { label: "TCA", defaultRate: 10, description: "Taxe sur le Chiffre d'Affaires (Haïti) — taxe sur ventes/services, supportée par le consommateur final, non déductible" },
+  tca: { label: "TCA", defaultRate: 10, description: "Taxe sur le Chiffre d'Affaires (Haïti) — taxe sur ventes/services, supportée par le consommateur final ; la taxe payée aux fournisseurs est déductible (art. 187)" },
   aucune: { label: "Aucune taxe", defaultRate: 0, description: "Aucune taxe appliquée aux ventes" },
 };
 
