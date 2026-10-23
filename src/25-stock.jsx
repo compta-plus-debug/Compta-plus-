@@ -2,8 +2,8 @@
 // @module Stock
 // @depends ArrowDownCircle, ArrowUpCircle, AssistedPrincipleReminder, PendingRecommendationsBanner, Plus
 //   RecordedStamp, Trash2, _membership, detectAmountAnomaly, fmt, isLocked, resolveMembership
-//   stockReconcile, supabase, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect
-//   useMemo, useState
+//   stockReconcile, supabase, todayStr, uid, useAssistedAnomalyGate, useBackNav, useBrouillon
+//   useEffect, useMemo, useState
 // @exports StockModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Dépréciation de stock — dévalue un produit sans en retirer la quantité physique
@@ -174,7 +174,7 @@ function StockModule({ products, setProducts, movements, setMovements, accounts,
   const [tab, setTab] = useState("inventaire");
   useBackNav(tab, setTab, "inventaire");
   const stockProducts = products.filter((p) => p.type === "marchandise");
-  const [form, setForm] = useState({
+  const [form, setForm] = useBrouillon("stock-mouvement", {
     productId: stockProducts[0]?.id,
     type: "entree",
     qty: "",

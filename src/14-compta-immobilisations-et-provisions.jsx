@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Compta immobilisations et provisions
 // @depends ASSET_CATEGORIES, _membership, detectAmountAnomaly, fmt, todayStr, uid, useAssistedAnomalyGate
-//   useEffect, useState
+//   useBrouillon, useEffect, useState
 // @exports AccrualsPanel, DeferralsPanel, ImmobilisationsPanel, RiskProvisionsPanel
 // ═══ FIN DE L'EN-TÊTE ═══
 // Registre des immobilisations — amortissement linéaire uniquement, dotations
@@ -19,7 +19,7 @@ function suggestDegressiveCoefficient(years) {
 
 function ImmobilisationsPanel({ accounts, assets, setAssets, entries, setEntries, role, showToast, logAudit, planTier, recordPendingRecommendation, currentUserEmail }) {
   const canEdit = role !== "Vendeur";
-  const [form, setForm] = useState({ name: "", categoryIdx: "0", acquisitionDate: todayStr(), originalValue: "", usefulLifeYears: "5", paymentMode: "caisse", method: "lineaire", degressiveRate: "" });
+  const [form, setForm] = useBrouillon("immo-form-1", { name: "", categoryIdx: "0", acquisitionDate: todayStr(), originalValue: "", usefulLifeYears: "5", paymentMode: "caisse", method: "lineaire", degressiveRate: "" });
   const [genDate, setGenDate] = useState(todayStr());
   const anomalyGate = useAssistedAnomalyGate();
 
@@ -269,7 +269,7 @@ function AccrualsPanel({ accounts, accruals, setAccruals, entries, setEntries, r
   const canEdit = role !== "Vendeur";
   const chargeAccounts = accounts.filter((a) => a.type === "Charge");
   const revenueAccounts = accounts.filter((a) => a.type === "Produit");
-  const [form, setForm] = useState({ type: "charge", date: todayStr(), account: "", amount: "", label: "" });
+  const [form, setForm] = useBrouillon("immo-form-2", { type: "charge", date: todayStr(), account: "", amount: "", label: "" });
   const anomalyGate = useAssistedAnomalyGate();
 
   const relevantAccounts = form.type === "charge" ? chargeAccounts : revenueAccounts;
@@ -422,7 +422,7 @@ function DeferralsPanel({ accounts, deferrals, setDeferrals, entries, setEntries
   const canEdit = role !== "Vendeur";
   const chargeAccounts = accounts.filter((a) => a.type === "Charge");
   const revenueAccounts = accounts.filter((a) => a.type === "Produit");
-  const [form, setForm] = useState({ type: "charge", label: "", startDate: todayStr(), months: "12", totalAmount: "", account: "", paymentMode: "caisse" });
+  const [form, setForm] = useBrouillon("immo-form-3", { type: "charge", label: "", startDate: todayStr(), months: "12", totalAmount: "", account: "", paymentMode: "caisse" });
   const [genDate, setGenDate] = useState(todayStr());
   const anomalyGate = useAssistedAnomalyGate();
 
@@ -631,7 +631,7 @@ function DeferralsPanel({ accounts, deferrals, setDeferrals, entries, setEntries
 // résout), jamais le montant total à chaque réévaluation.
 function RiskProvisionsPanel({ accounts, riskProvisions, setRiskProvisions, entries, setEntries, role, showToast, logAudit, planTier, recordPendingRecommendation, currentUserEmail }) {
   const canEdit = role !== "Vendeur";
-  const [form, setForm] = useState({ label: "", date: todayStr(), amount: "" });
+  const [form, setForm] = useBrouillon("immo-form-4", { label: "", date: todayStr(), amount: "" });
   const [drafts, setDrafts] = useState({}); // { [provisionId]: "nouvelle estimation en cours de saisie" }
   const anomalyGate = useAssistedAnomalyGate();
 

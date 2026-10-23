@@ -1,10 +1,11 @@
 // ═══ MODULE ═══
 // @module Formatage impression et pdf
 // @depends CURRENCIES, CURRENT_CURRENCY, todayStr
-// @exports HEADER_RGB, InvoiceSheet, MENTION_FRANCHISE_TCA, RecordedStamp, adresseClientFacture
-//   connectThermalPrinter, disconnectThermalPrinter, downloadEtatsFinanciersPDF
-//   downloadInvoicePDF, downloadTablePDF, fmt, getRememberedPrinterName, invoicePrefix
-//   isThermalPrinterConnected, nifLigne, pdfSafe, printInvoiceBluetooth, tauxFactureTexte
+// @exports HEADER_RGB, InvoiceSheet, MENTION_FRANCHISE_TCA, RecordedStamp, TicketBody
+//   adresseClientFacture, connectThermalPrinter, disconnectThermalPrinter
+//   downloadEtatsFinanciersPDF, downloadInvoicePDF, downloadTablePDF, factureDateHeure, fmt
+//   getRememberedPrinterName, invoicePrefix, isThermalPrinterConnected, nifLigne, pdfSafe
+//   printInvoiceBluetooth, tauxFactureTexte
 // ═══ FIN DE L'EN-TÊTE ═══
 // Mentions fiscales de la facture (nouveau Code fiscal : identité du vendeur et NIF obligatoires ; entreprise en
 // franchise de TCA : mention « TCA non applicable - article 193 du CGI »). Sources à confirmer dans le texte officiel.
@@ -29,6 +30,95 @@ function invoicePrefix(settings) {
 }
 function nifLigne(settings) { return settings && String(settings.companyNIF || "").trim() ? "NIF : " + String(settings.companyNIF).trim() : ""; }
 
+// ── Ticket / facture : date + heure d'émission, nombre d'articles, libellé du paiement ──
+const _p2 = (n) => String(n).padStart(2, "0");
+// « 23/10/2026 13:15 » : date de la vente + heure exacte d'émission (heure locale de l'appareil, tirée de createdAt).
+// Si la vente a été saisie un autre jour que sa date, on le précise : « 20/10/2026 (saisie le 23/10/2026 13:15) ».
+function factureDateHeure(inv) {
+  const d = String((inv && inv.date) || "");
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  const dFr = m ? m[3] + "/" + m[2] + "/" + m[1] : d;
+  const c = inv && inv.createdAt ? new Date(inv.createdAt) : null;
+  if (!c || isNaN(c.getTime())) return dFr;
+  const cIso = c.getFullYear() + "-" + _p2(c.getMonth() + 1) + "-" + _p2(c.getDate());
+  const cFr = _p2(c.getDate()) + "/" + _p2(c.getMonth() + 1) + "/" + c.getFullYear();
+  const h = _p2(c.getHours()) + ":" + _p2(c.getMinutes());
+  return !m || cIso === m[0] ? dFr + " " + h : dFr + " (saisie le " + cFr + " " + h + ")";
+}
+function factureNbArticles(inv) { return ((inv && inv.lines) || []).reduce((t, l) => t + (Number(l.qty) || 0), 0); }
+function factureModeLibelle(inv) {
+  return inv.paymentMode === "caisse" ? "Espèces" : inv.paymentMode === "banque" ? "Banque" : inv.paymentMode === "don" ? "Don" : "Crédit";
+}
+// Lignes « Détails de paiement » : [libellé, montant] — le comptant est réglé en totalité ; le crédit montre les versements et le solde.
+function facturePaiementLignes(inv) {
+  const paid = (inv.payments || []).reduce((t, p) => t + (Number(p.amount) || 0), 0);
+  const total = Number(inv.total) || 0;
+  if (inv.paymentMode === "caisse" || inv.paymentMode === "banque") return [[factureModeLibelle(inv), total]];
+  if (inv.paymentMode === "don") return [["Don", 0]];
+  const out = [];
+  if (paid > 0) out.push(["Versé", paid]);
+  out.push(["Solde dû", Math.max(0, total - paid)]);
+  return out;
+}
+
+// Corps du ticket (aperçu à l'écran et impression système). Mise en page : logo, titre, identité, numéro + date/heure,
+// client, colonnes Article / Qté / Montant, nombre d'articles, grand « Montant total », détails de paiement.
+function TicketBody({ inv, settings, tp }) {
+  const row = { display: "flex", justifyContent: "space-between", gap: 6 };
+  const sep = { borderTop: "1px dashed #000", margin: "8px 0" };
+  const nif = nifLigne(settings);
+  const adr = adresseClientFacture(inv, settings);
+  const taux = tauxFactureTexte(inv);
+  return (
+    <>
+      <div style={{ textAlign: "center", marginBottom: 8 }}>
+        {settings.companyLogo && <img src={settings.companyLogo} alt="" data-testid={tp + "-logo"} style={{ width: 48, height: 48, objectFit: "contain", margin: "0 auto 6px", display: "block" }} />}
+        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2 }}>Facture</div>
+        <div style={{ fontWeight: 700, fontSize: 12, lineHeight: 1.4 }}>{settings.companyName || "Mon Entreprise"}</div>
+        {settings.companyAddress && <div style={{ fontSize: 9, lineHeight: 1.5 }}>{settings.companyAddress}</div>}
+        {settings.companyPhone && <div style={{ fontSize: 9, lineHeight: 1.5 }}>{settings.companyPhone}</div>}
+        {settings.companyEmail && <div style={{ fontSize: 9, lineHeight: 1.5, wordBreak: "break-all" }}>{settings.companyEmail}</div>}
+        {nif && <div style={{ fontSize: 9, lineHeight: 1.5 }} data-testid="print-nif">{nif}</div>}
+      </div>
+      <div style={sep} />
+      <div style={{ ...row, lineHeight: 1.6 }}><span>Facture <b>{inv.number}</b></span><span data-testid={tp + "-dateheure"}>{factureDateHeure(inv)}</span></div>
+      <div style={sep} />
+      <div style={{ lineHeight: 1.6 }}>
+        <div>Client : {inv.client || "Client comptant"}</div>
+        {inv.clientPhone && <div data-testid={tp + "-tel-client"}>Tél. : {inv.clientPhone}</div>}
+        {adr && <div>Adresse : {adr}</div>}
+        {inv.soldByName && <div>Vendeur : {inv.soldByName}</div>}
+      </div>
+      <div style={sep} />
+      <div style={{ ...row, fontWeight: 700, marginBottom: 6 }}><span style={{ flex: 1 }}>Article</span><span style={{ width: 28, textAlign: "center" }}>Qté</span><span style={{ width: 62, textAlign: "right" }}>Montant</span></div>
+      {(inv.lines || []).map((l, i) => (
+        <div key={i} style={{ marginBottom: 8, lineHeight: 1.5 }}>
+          <div style={{ wordBreak: "break-word" }}>{l.name}</div>
+          <div className="tabular" style={{ ...row, color: "#222" }}><span style={{ flex: 1 }}>{fmt(l.price)}</span><span style={{ width: 28, textAlign: "center" }}>{l.qty}</span><span style={{ width: 62, textAlign: "right" }}>{fmt(l.subtotal)}</span></div>
+        </div>
+      ))}
+      <div style={sep} />
+      <div className="tabular" style={{ ...row, lineHeight: 1.7 }}><span>Articles au total</span><span>{factureNbArticles(inv)}</span></div>
+      <div className="tabular" style={{ ...row, lineHeight: 1.7 }}><span>Sous-total HT</span><span>{fmt(inv.totalHT)}</span></div>
+      {inv.globalDiscountAmount > 0 && <div className="tabular" style={{ ...row, lineHeight: 1.7 }}><span>Remise</span><span>-{fmt(inv.globalDiscountAmount)}</span></div>}
+      {(inv.fees || []).map((f, i) => <div key={i} className="tabular" style={{ ...row, lineHeight: 1.7 }}><span>{f.label || "Frais"}</span><span>+{fmt(f.amount)}</span></div>)}
+      <div className="tabular" style={{ ...row, lineHeight: 1.7 }}><span data-testid="print-taux">{inv.taxLabel || "Taxe"}{taux ? " (" + taux + ")" : ""}</span><span>{fmt(inv.totalTax)}</span></div>
+      <div style={sep} />
+      <div style={{ fontWeight: 700, fontSize: 11, marginTop: 4 }}>Montant total</div>
+      <div className="tabular" data-testid={tp + "-total"} style={{ textAlign: "right", fontWeight: 800, fontSize: 20, lineHeight: 1.4, marginBottom: 4 }}>{fmt(inv.total)}</div>
+      <div style={sep} />
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>Détails de paiement :</div>
+      {facturePaiementLignes(inv).map(([lib, mt], i) => <div key={i} className="tabular" style={{ ...row, lineHeight: 1.7 }}><span>{lib}</span><span>{fmt(mt)}</span></div>)}
+      <div style={sep} />
+      <div style={{ textAlign: "center", fontSize: 9, lineHeight: 1.6 }}>
+        {settings.tcaFranchise && <><span data-testid="print-franchise">{MENTION_FRANCHISE_TCA}</span><br /></>}
+        Merci de votre confiance !
+        {settings.invoiceFooterNote && settings.invoiceFooterNote.trim() && <><br />{settings.invoiceFooterNote.trim()}</>}
+      </div>
+    </>
+  );
+}
+
 // Aperçu à l'écran d'une facture, identique à la feuille qui sort de l'imprimante (A4 ou ticket 80/58 mm selon le
 // format choisi dans Administration). Utilisé par Comptes clients ; l'impression de la caisse garde sa propre mise en page.
 function InvoiceSheet({ invoice, settings, testPrefix }) {
@@ -40,50 +130,20 @@ function InvoiceSheet({ invoice, settings, testPrefix }) {
   const nif = nifLigne(settings);
   const ticket = settings.receiptFormat === "ticket80" || settings.receiptFormat === "ticket58";
   if (ticket) {
-    const row = { display: "flex", justifyContent: "space-between" };
-    const sep = { borderTop: "1px dashed #000", margin: "4px 0" };
     return (
-      <div style={{ color: "#000", background: "#fff", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, width: settings.receiptFormat === "ticket80" ? "74mm" : "52mm", maxWidth: "100%", margin: "0 auto", padding: "8px 6px" }} data-testid={tp + "-ticket"}>
-        <div style={{ textAlign: "center", marginBottom: 6 }}>
-          {settings.companyLogo && <img src={settings.companyLogo} alt="" style={{ width: 28, height: 28, objectFit: "contain", margin: "0 auto 4px" }} />}
-          <div style={{ fontWeight: 700, fontSize: 12 }}>{settings.companyName || "Mon Entreprise"}</div>
-          {settings.companyAddress && <div style={{ fontSize: 8 }}>{settings.companyAddress}</div>}
-          {(settings.companyPhone || settings.companyEmail) && <div style={{ fontSize: 8 }}>{[settings.companyPhone, settings.companyEmail].filter(Boolean).join(" · ")}</div>}
-          {nif && <div style={{ fontSize: 8 }}>{nif}</div>}
-        </div>
-        <div style={sep} />
-        <div>Facture N° {inv.number}</div><div>{inv.date}</div><div>Client : {inv.client || "Client comptant"}</div>
-        {adresseClientFacture(inv, settings) && <div>Adresse : {adresseClientFacture(inv, settings)}</div>}
-        {inv.soldByName && <div>Vendeur : {inv.soldByName}</div>}
-        <div style={sep} />
-        {(inv.lines || []).map((l, i) => (
-          <div key={i} style={{ marginBottom: 3 }}><div>{l.name}</div><div className="tabular" style={row}><span>{l.qty} x {fmt(l.price)}</span><span>{fmt(l.subtotal)}</span></div></div>
-        ))}
-        <div style={sep} />
-        <div className="tabular" style={row}><span>Sous-total HT</span><span>{fmt(inv.totalHT)}</span></div>
-        {inv.globalDiscountAmount > 0 && <div className="tabular" style={row}><span>Remise</span><span>-{fmt(inv.globalDiscountAmount)}</span></div>}
-        {(inv.fees || []).map((f, i) => <div key={i} className="tabular" style={row}><span>{f.label || "Frais"}</span><span>+{fmt(f.amount)}</span></div>)}
-        <div className="tabular" style={row}><span>{inv.taxLabel || "Taxe"}</span><span>{fmt(inv.totalTax)}</span></div>
-        <div className="tabular" style={{ ...row, fontWeight: 700, fontSize: 12, marginTop: 4 }}><span>TOTAL</span><span>{fmt(inv.total)}</span></div>
-        <div style={sep} />
-        <div style={{ textAlign: "center", fontSize: 8 }}>
-          Paiement : {modeTxt}<br />
-          {(inv.payments || []).length > 0 && <>Versé : {fmt(paid)} — Solde dû : {fmt(reste)}<br /></>}
-          {settings.tcaFranchise && <>{MENTION_FRANCHISE_TCA}<br /></>}
-          Merci de votre confiance !
-          {settings.invoiceFooterNote && settings.invoiceFooterNote.trim() && <><br />{settings.invoiceFooterNote.trim()}</>}
-        </div>
+      <div style={{ color: "#000", background: "#fff", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, width: settings.receiptFormat === "ticket80" ? "74mm" : "52mm", maxWidth: "100%", margin: "0 auto", padding: "12px 8px" }} data-testid={tp + "-ticket"}>
+        <TicketBody inv={inv} settings={settings} tp={tp} />
       </div>
     );
   }
-  const th = { textAlign: "right", padding: "6px 4px" };
-  const td = { textAlign: "right", padding: "6px 4px" };
-  const flex = { display: "flex", justifyContent: "space-between", padding: "3px 0" };
+  const th = { textAlign: "right", padding: "10px 6px" };
+  const td = { textAlign: "right", padding: "10px 6px" };
+  const flex = { display: "flex", justifyContent: "space-between", padding: "5px 0" };
   return (
     <div style={{ color: "#152238", background: "#fff", fontFamily: "'Inter', sans-serif", width: "100%", maxWidth: 794, minHeight: 400, margin: "0 auto", padding: "32px 36px", boxSizing: "border-box" }} data-testid={tp + "-a4"}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 24, borderBottom: "2px solid #152238", paddingBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {settings.companyLogo && <img src={settings.companyLogo} alt="" style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }} />}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 28, borderBottom: "2px solid #152238", paddingBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {settings.companyLogo && <img src={settings.companyLogo} alt="" data-testid={tp + "-logo"} style={{ width: 60, height: 60, objectFit: "contain", flexShrink: 0 }} />}
           <div>
             <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>{settings.companyName || "Mon Entreprise"}</div>
             {settings.companyAddress && <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{settings.companyAddress}</div>}
@@ -94,14 +154,15 @@ function InvoiceSheet({ invoice, settings, testPrefix }) {
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>FACTURE</div>
           <div className="tabular" style={{ fontSize: 13, lineHeight: 1.6 }}>N° {inv.number}</div>
-          <div className="tabular" style={{ fontSize: 13, lineHeight: 1.6 }}>{inv.date}</div>
+          <div className="tabular" style={{ fontSize: 13, lineHeight: 1.6 }} data-testid={tp + "-dateheure"}>{factureDateHeure(inv)}</div>
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 24, fontSize: 13 }}>
         <div>
           <div style={{ color: "#888", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Facturé à</div>
           <div style={{ fontWeight: 600, marginTop: 2 }}>{inv.client || "Client comptant"}</div>
-          {adresseClientFacture(inv, settings) && <div style={{ fontSize: 12, color: "#555", marginTop: 2 }} data-testid="facture-adresse-client">{adresseClientFacture(inv, settings)}</div>}
+          {inv.clientPhone && <div style={{ fontSize: 12, color: "#555", marginTop: 3 }} data-testid={tp + "-tel-client"}>Tél. : {inv.clientPhone}</div>}
+          {adresseClientFacture(inv, settings) && <div style={{ fontSize: 12, color: "#555", marginTop: 3 }} data-testid="facture-adresse-client">{adresseClientFacture(inv, settings)}</div>}
           {inv.soldByName && <div style={{ fontSize: 12, color: "#7A7460", marginTop: 2 }}>Vendeur : {inv.soldByName}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
@@ -117,7 +178,7 @@ function InvoiceSheet({ invoice, settings, testPrefix }) {
           <tbody>
             {(inv.lines || []).map((l, i) => (
               <tr key={i} style={{ borderBottom: "1px solid #E4DFD1" }}>
-                <td style={{ padding: "6px 4px" }}>{l.name}</td>
+                <td style={{ padding: "10px 6px" }}>{l.name}</td>
                 <td className="tabular" style={td}>{l.qty}</td><td className="tabular" style={td}>{fmt(l.price)}</td>
                 <td className="tabular" style={td}>{l.discountAmt > 0 ? `-${fmt(l.discountAmt)}` : l.discountPct > 0 ? `-${l.discountPct}%` : "—"}</td>
                 <td className="tabular" style={td}>{fmt(l.subtotal)}</td><td className="tabular" style={td}>{fmt(l.taxAmount)}</td>
@@ -355,53 +416,75 @@ const LF = [0x0a];
 // (384 points / 12 points par caractère en police standard) — indépendant du
 // réglage "Format d'impression" (A4/ticket80/58) qui, lui, ne concerne que le PDF
 // et l'impression système.
-function buildInvoiceEscPos(inv, settings, charsPerLine = 32) {
+function buildInvoiceEscPos(inv, settings, charsPerLine = 32, logoBytes = null) {
   const bytes = [];
   const push = (arr) => bytes.push(...arr);
   const line = (str = "") => { push(escposTextToBytes(str)); push(LF); };
   const dashLine = () => line("-".repeat(charsPerLine));
+  const blank = () => push(LF);
+  const GS_SIZE = (n) => [0x1d, 0x21, n]; // 0x00 normal, 0x11 double largeur + hauteur
+  const ESC_SPACING = (n) => [0x1b, 0x33, n]; // interligne un peu plus aéré (lignes moins collées)
 
   push(ESC_INIT);
+  push(ESC_SPACING(36));
   push(ESC_ALIGN(1));
+  if (logoBytes && logoBytes.length) { push(logoBytes); blank(); }
   push(ESC_BOLD(true));
+  line("Facture");
   line(settings.companyName || "Mon Entreprise");
   push(ESC_BOLD(false));
-  if (settings.companyAddress) wrapPlain(settings.companyAddress, charsPerLine).forEach(line);
-  const contact = [settings.companyPhone, settings.companyEmail].filter(Boolean).join(" - ");
-  if (contact) wrapPlain(contact, charsPerLine).forEach(line);
+  // Coordonnées en petite police (police B : 42 caractères par ligne) pour qu'une adresse e-mail longue ne soit pas coupée.
+  const wB = Math.round(charsPerLine * 1.3);
+  push([0x1b, 0x4d, 0x01]);
+  if (settings.companyAddress) wrapPlain(settings.companyAddress, wB).forEach(line);
+  if (settings.companyPhone) wrapPlain(settings.companyPhone, wB).forEach(line);
+  if (settings.companyEmail) wrapPlain(settings.companyEmail, wB).forEach(line);
   if (nifLigne(settings)) line(nifLigne(settings));
+  push([0x1b, 0x4d, 0x00]);
   push(ESC_ALIGN(0));
   dashLine();
 
-  line(`Facture N° ${inv.number}`);
-  line(String(inv.date));
-  line(`Client : ${inv.client || "Client comptant"}`);
-  if (adresseClientFacture(inv, settings)) line(`Adresse : ${adresseClientFacture(inv, settings)}`);
+  { const g = `Facture ${inv.number}`, d = factureDateHeure(inv);
+    if (g.length + d.length + 1 <= charsPerLine) line(twoCols(g, d, charsPerLine)); else { wrapPlain(g, charsPerLine).forEach(line); wrapPlain(d, charsPerLine).forEach(line); } }
+  dashLine();
+  wrapPlain(`Client : ${inv.client || "Client comptant"}`, charsPerLine).forEach(line);
+  if (inv.clientPhone) line(`Tel : ${inv.clientPhone}`);
+  if (adresseClientFacture(inv, settings)) wrapPlain(`Adresse : ${adresseClientFacture(inv, settings)}`, charsPerLine).forEach(line);
   if (inv.soldByName) line(`Vendeur : ${inv.soldByName}`);
   dashLine();
 
+  push(ESC_BOLD(true));
+  line(twoCols("Article  (prix x qte)", "Montant", charsPerLine));
+  push(ESC_BOLD(false));
   (inv.lines || []).forEach((l) => {
     wrapPlain(l.name, charsPerLine).forEach(line);
-    line(twoCols(`${l.qty} x ${fmt(l.price)}`, fmt(l.subtotal), charsPerLine));
+    line(twoCols(`${fmt(l.price)} x ${l.qty}`, fmt(l.subtotal), charsPerLine));
+    blank();
   });
   dashLine();
 
+  line(twoCols("Articles au total", String(factureNbArticles(inv)), charsPerLine));
   line(twoCols("Sous-total HT", fmt(inv.totalHT), charsPerLine));
   if (inv.globalDiscountAmount > 0) line(twoCols("Remise", `-${fmt(inv.globalDiscountAmount)}`, charsPerLine));
   (inv.fees || []).forEach((f) => line(twoCols(f.label || "Frais", `+${fmt(f.amount)}`, charsPerLine)));
   line(twoCols(inv.taxLabel || "Taxe", fmt(inv.totalTax), charsPerLine));
+  dashLine();
   push(ESC_BOLD(true));
-  line(twoCols("TOTAL", fmt(inv.total), charsPerLine));
+  line("Montant total");
   push(ESC_BOLD(false));
+  // Grand total, à droite, en double taille (comme sur le ticket modèle)
+  push(ESC_ALIGN(2)); push(ESC_BOLD(true)); push(GS_SIZE(0x11));
+  line(fmt(inv.total));
+  push(GS_SIZE(0x00)); push(ESC_BOLD(false)); push(ESC_ALIGN(0));
+  dashLine();
+
+  push(ESC_BOLD(true));
+  line("Details de paiement :");
+  push(ESC_BOLD(false));
+  facturePaiementLignes(inv).forEach(([lib, mt]) => line(twoCols(lib, fmt(mt), charsPerLine)));
   dashLine();
 
   push(ESC_ALIGN(1));
-  line(`Paiement : ${inv.paymentMode === "caisse" ? "Caisse" : inv.paymentMode === "banque" ? "Banque" : "Crédit"}`);
-  if ((inv.payments || []).length > 0) {
-    const paidTotal = inv.payments.reduce((s, p) => s + p.amount, 0);
-    const balance = Math.max(0, (inv.total || 0) - paidTotal);
-    line(`Versé : ${fmt(paidTotal)} - Solde dû : ${fmt(balance)}`);
-  }
   if (settings.tcaFranchise) wrapPlain(MENTION_FRANCHISE_TCA, charsPerLine).forEach(line);
   line("Merci de votre confiance !");
   if (settings.invoiceFooterNote && settings.invoiceFooterNote.trim()) {
@@ -409,6 +492,40 @@ function buildInvoiceEscPos(inv, settings, charsPerLine = 32) {
   }
   push(ESC_FEED(4)); // marge pour la déchirure manuelle du papier (pas de massicot sur le PT-210)
   return new Uint8Array(bytes);
+}
+
+// Convertit le logo de l'entreprise (image encodée) en image noir et blanc pour l'imprimante thermique
+// (commande « raster » GS v 0). Largeur limitée à 160 points ; les zones transparentes restent blanches.
+// Renvoie null si le logo est absent ou illisible : le ticket s'imprime alors sans logo, sans erreur.
+function escposLogoBytes(dataUrl, maxDots = 160) {
+  return new Promise((resolve) => {
+    if (!dataUrl || typeof document === "undefined") return resolve(null);
+    let done = false;
+    const fin = (v) => { if (!done) { done = true; resolve(v); } };
+    setTimeout(() => fin(null), 4000);
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const ratio = Math.min(1, maxDots / Math.max(img.width, img.height));
+          const w = Math.max(8, Math.round(img.width * ratio / 8) * 8) || 8;
+          const h = Math.max(1, Math.round(img.height * (w / img.width)));
+          const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+          const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, w, h); cx.drawImage(img, 0, 0, w, h);
+          const px = cx.getImageData(0, 0, w, h).data;
+          const wb = w / 8; const out = [0x1d, 0x76, 0x30, 0x00, wb & 255, wb >> 8, h & 255, h >> 8];
+          for (let y = 0; y < h; y++) for (let bx = 0; bx < wb; bx++) {
+            let b = 0;
+            for (let k = 0; k < 8; k++) { const i = (y * w + bx * 8 + k) * 4; const lum = 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]; if (lum < 140) b |= 0x80 >> k; }
+            out.push(b);
+          }
+          fin(out);
+        } catch (e) { fin(null); }
+      };
+      img.onerror = () => fin(null);
+      img.src = dataUrl;
+    } catch (e) { fin(null); }
+  });
 }
 
 // Point d'entrée appelé depuis les boutons "Imprimer (Bluetooth)" — se connecte
@@ -419,7 +536,8 @@ async function printInvoiceBluetooth(inv, settings, showToast) {
       showToast && showToast("Choisissez l'imprimante dans la liste Bluetooth…");
       await connectThermalPrinter();
     }
-    const bytes = buildInvoiceEscPos(inv, settings);
+    const logoBytes = await escposLogoBytes(settings.companyLogo);
+    const bytes = buildInvoiceEscPos(inv, settings, 32, logoBytes);
     await writeToThermalPrinter(bytes);
     showToast && showToast("Ticket envoyé à l'imprimante.");
   } catch (e) {
@@ -451,71 +569,68 @@ function downloadInvoiceTicketPDF(inv, settings, widthMm) {
   if (!window.jspdf) { alert("Le générateur de PDF n'a pas fini de charger — réessayez dans quelques secondes."); return; }
   const { jsPDF } = window.jspdf;
   const lineCount = (inv.lines || []).length;
-  const estHeight = 60 + lineCount * 10 + (inv.fees || []).length * 5;
-  const doc = new jsPDF({ unit: "mm", format: [widthMm, Math.max(80, estHeight)] });
+  const estHeight = 130 + lineCount * 12 + (inv.fees || []).length * 6;
+  const doc = new jsPDF({ unit: "mm", format: [widthMm, Math.max(120, estHeight)] });
   const cx = widthMm / 2;
-  const margin = 3;
+  const margin = 4;
+  const R = widthMm - margin;
   const innerW = widthMm - margin * 2;
-  let y = 5;
-  const dashLine = () => { doc.setLineDashPattern([0.5, 0.5], 0); doc.line(margin, y, widthMm - margin, y); doc.setLineDashPattern([], 0); y += 4; };
+  let y = 6;
+  const dashLine = () => { y += 1; doc.setLineDashPattern([0.5, 0.5], 0); doc.line(margin, y, R, y); doc.setLineDashPattern([], 0); y += 5; };
+  const centered = (txt, size, bold) => {
+    doc.setFontSize(size); doc.setFont(undefined, bold ? "bold" : "normal");
+    doc.splitTextToSize(pdfSafe(txt), innerW).forEach((t) => { doc.text(t, cx, y, { align: "center" }); y += size * 0.5 + 0.8; });
+  };
+  const duo = (l, r, size, bold) => { doc.setFontSize(size); doc.setFont(undefined, bold ? "bold" : "normal"); doc.text(pdfSafe(l), margin, y); doc.text(pdfSafe(r), R, y, { align: "right" }); y += size * 0.5 + 1.6; };
 
   if (settings.companyLogo) {
-    try { doc.addImage(settings.companyLogo, "JPEG", cx - 6, y, 12, 12); y += 14; } catch (e) {}
+    try { doc.addImage(settings.companyLogo, "JPEG", cx - 8, y, 16, 16); y += 19; } catch (e) {}
   }
-  doc.setFontSize(10);
-  doc.text(pdfSafe(settings.companyName || "Mon Entreprise"), cx, y, { align: "center" }); y += 4;
-  doc.setFontSize(7);
-  if (settings.companyAddress) { doc.text(pdfSafe(settings.companyAddress), cx, y, { align: "center" }); y += 3.5; }
-  const contact = [settings.companyPhone, settings.companyEmail].filter(Boolean).join(" · ");
-  if (contact) { doc.text(pdfSafe(contact), cx, y, { align: "center" }); y += 3.5; }
-  if (nifLigne(settings)) { doc.text(pdfSafe(nifLigne(settings)), cx, y, { align: "center" }); y += 3.5; }
+  centered("Facture", 11, true);
+  centered(settings.companyName || "Mon Entreprise", 10, true);
+  if (settings.companyAddress) centered(settings.companyAddress, 7, false);
+  if (settings.companyPhone) centered(settings.companyPhone, 7, false);
+  if (settings.companyEmail) centered(settings.companyEmail, 7, false);
+  if (nifLigne(settings)) centered(nifLigne(settings), 7, false);
+  dashLine();
+
+  duo(`Facture ${inv.number}`, factureDateHeure(inv), 7.5, false);
+  dashLine();
+  doc.setFont(undefined, "normal"); doc.setFontSize(8);
+  doc.splitTextToSize(pdfSafe(`Client : ${inv.client || "Client comptant"}`), innerW).forEach((t) => { doc.text(t, margin, y); y += 4.2; });
+  if (inv.clientPhone) { doc.text(pdfSafe(`Tél. : ${inv.clientPhone}`), margin, y); y += 4.2; }
+  if (adresseClientFacture(inv, settings)) { doc.splitTextToSize(pdfSafe(`Adresse : ${adresseClientFacture(inv, settings)}`), innerW).forEach((t) => { doc.text(t, margin, y); y += 4.2; }); }
+  if (inv.soldByName) { doc.text(pdfSafe(`Vendeur : ${inv.soldByName}`), margin, y); y += 4.2; }
+  dashLine();
+
+  duo("Article", "Montant", 7.5, true);
   y += 1;
-  dashLine();
-
-  doc.setFontSize(8);
-  doc.text(pdfSafe(`Facture N° ${inv.number}`), margin, y); y += 4;
-  doc.text(pdfSafe(String(inv.date)), margin, y); y += 4;
-  doc.text(pdfSafe(`Client : ${inv.client || "Client comptant"}`), margin, y); y += 4;
-  if (adresseClientFacture(inv, settings)) { doc.text(pdfSafe(`Adresse : ${adresseClientFacture(inv, settings)}`), margin, y); y += 4; }
-  if (inv.soldByName) { doc.text(pdfSafe(`Vendeur : ${inv.soldByName}`), margin, y); y += 4; }
-  dashLine();
-
-  doc.setFontSize(7);
   (inv.lines || []).forEach((l) => {
-    doc.text(pdfSafe(l.name), margin, y); y += 3.2;
-    doc.text(pdfSafe(`${l.qty} x ${fmt(l.price)}`), margin, y);
-    doc.text(pdfSafe(fmt(l.subtotal)), widthMm - margin, y, { align: "right" });
-    y += 4;
+    doc.setFont(undefined, "normal"); doc.setFontSize(7.5);
+    doc.splitTextToSize(pdfSafe(l.name), innerW).forEach((t) => { doc.text(t, margin, y); y += 3.8; });
+    doc.text(pdfSafe(`${fmt(l.price)} x ${l.qty}`), margin, y);
+    doc.text(pdfSafe(fmt(l.subtotal)), R, y, { align: "right" });
+    y += 6;
   });
   dashLine();
 
-  doc.setFontSize(7.5);
-  doc.text("Sous-total HT", margin, y); doc.text(pdfSafe(fmt(inv.totalHT)), widthMm - margin, y, { align: "right" }); y += 4;
-  if (inv.globalDiscountAmount > 0) {
-    doc.text("Remise", margin, y); doc.text(pdfSafe(`-${fmt(inv.globalDiscountAmount)}`), widthMm - margin, y, { align: "right" }); y += 4;
-  }
-  (inv.fees || []).forEach((f) => {
-    doc.text(pdfSafe(f.label || "Frais"), margin, y); doc.text(pdfSafe(`+${fmt(f.amount)}`), widthMm - margin, y, { align: "right" }); y += 4;
-  });
-  doc.text(pdfSafe(inv.taxLabel || "Taxe"), margin, y); doc.text(pdfSafe(fmt(inv.totalTax)), widthMm - margin, y, { align: "right" }); y += 5;
-  doc.setFontSize(9);
-  doc.text("TOTAL", margin, y); doc.text(pdfSafe(fmt(inv.total)), widthMm - margin, y, { align: "right" }); y += 5;
+  duo("Articles au total", String(factureNbArticles(inv)), 7.5, false);
+  duo("Sous-total HT", fmt(inv.totalHT), 7.5, false);
+  if (inv.globalDiscountAmount > 0) duo("Remise", `-${fmt(inv.globalDiscountAmount)}`, 7.5, false);
+  (inv.fees || []).forEach((f) => duo(f.label || "Frais", `+${fmt(f.amount)}`, 7.5, false));
+  duo(inv.taxLabel || "Taxe", fmt(inv.totalTax), 7.5, false);
+  dashLine();
+  doc.setFont(undefined, "bold"); doc.setFontSize(8); doc.text("Montant total", margin, y); y += 7;
+  doc.setFontSize(14); doc.text(pdfSafe(fmt(inv.total)), R, y, { align: "right" }); y += 4;
   dashLine();
 
-  doc.setFontSize(7);
-  doc.text(pdfSafe(`Paiement : ${inv.paymentMode === "caisse" ? "Caisse" : inv.paymentMode === "banque" ? "Banque" : "Crédit"}`), cx, y, { align: "center" }); y += 4;
-  if ((inv.payments || []).length > 0) {
-    const paidTotal = inv.payments.reduce((s, p) => s + p.amount, 0);
-    const balance = Math.max(0, (inv.total || 0) - paidTotal);
-    doc.text(pdfSafe(`Versé : ${fmt(paidTotal)} — Solde dû : ${fmt(balance)}`), cx, y, { align: "center" }); y += 4;
-  }
-  if (settings.tcaFranchise) { doc.text(pdfSafe(MENTION_FRANCHISE_TCA), cx, y, { align: "center" }); y += 4; }
-  doc.text("Merci de votre confiance !", cx, y, { align: "center" });
-  if (settings.invoiceFooterNote && settings.invoiceFooterNote.trim()) {
-    y += 5;
-    const noteLines = doc.splitTextToSize(pdfSafe(settings.invoiceFooterNote.trim()), widthMm - margin * 2);
-    noteLines.forEach((line) => { doc.text(line, cx, y, { align: "center" }); y += 3.2; });
-  }
+  doc.setFont(undefined, "bold"); doc.setFontSize(8); doc.text("Détails de paiement :", margin, y); y += 5;
+  facturePaiementLignes(inv).forEach(([lib, mt]) => duo(lib, fmt(mt), 7.5, false));
+  dashLine();
+
+  if (settings.tcaFranchise) centered(MENTION_FRANCHISE_TCA, 7, false);
+  centered("Merci de votre confiance !", 7.5, false);
+  if (settings.invoiceFooterNote && settings.invoiceFooterNote.trim()) { y += 1; centered(settings.invoiceFooterNote.trim(), 7, false); }
 
   doc.save(`Facture-${inv.number}-ticket.pdf`);
 }
@@ -550,7 +665,7 @@ function downloadInvoicePDF(inv, settings) {
   doc.text("FACTURE", pageRight, 18, { align: "right" });
   doc.setFontSize(10);
   doc.text(pdfSafe(`N° ${inv.number}`), pageRight, 25, { align: "right" });
-  doc.text(pdfSafe(String(inv.date)), pageRight, 30, { align: "right" });
+  doc.text(pdfSafe(factureDateHeure(inv)), pageRight, 30, { align: "right" });
   // Séparateur horizontal sous tout l'en-tête, pour la même clarté visuelle que la
   // version imprimée depuis l'écran (bordure sous l'en-tête).
   const headerBottom = Math.max(y + 4, settings.companyLogo ? 32 : 24);
@@ -560,19 +675,23 @@ function downloadInvoicePDF(inv, settings) {
   doc.setTextColor(21, 34, 56);
   doc.setFontSize(10);
   doc.text(pdfSafe(`Client : ${inv.client || "Client comptant"}`), 14, headerBottom + 8);
-  if (adresseClientFacture(inv, settings)) { doc.setFontSize(9); doc.text(pdfSafe(`Adresse : ${adresseClientFacture(inv, settings)}`), 14, headerBottom + 13); doc.setFontSize(10); }
+  let clientY = headerBottom + 8;
+  doc.setFontSize(9);
+  if (inv.clientPhone) { clientY += 5; doc.text(pdfSafe(`Tél. : ${inv.clientPhone}`), 14, clientY); }
+  if (adresseClientFacture(inv, settings)) { clientY += 5; doc.text(pdfSafe(`Adresse : ${adresseClientFacture(inv, settings)}`), 14, clientY); }
+  doc.setFontSize(10);
   doc.autoTable({
-    startY: headerBottom + (adresseClientFacture(inv, settings) ? 19 : 14),
+    startY: clientY + 7,
     head: [["Article", "Qté", "Prix unit.", "Remise", "Sous-total HT", inv.taxLabel || "Taxe"]],
     body: (inv.lines || []).map((l) => [
       l.name, String(l.qty), fmt(l.price),
       l.discountAmt > 0 ? `-${fmt(l.discountAmt)}` : l.discountPct > 0 ? `-${l.discountPct}%` : "—",
       fmt(l.subtotal), fmt(l.taxAmount),
     ].map(pdfSafe)),
-    styles: { fontSize: 9 },
+    styles: { fontSize: 9, cellPadding: 3.2 },
     headStyles: { fillColor: HEADER_RGB },
   });
-  let ty = doc.lastAutoTable.finalY + 8;
+  let ty = doc.lastAutoTable.finalY + 10;
   doc.setFontSize(10);
   doc.text(pdfSafe(`Sous-total HT : ${fmt(inv.totalHT)}`), 130, ty); ty += 6;
   if (inv.globalDiscountAmount > 0) { doc.text(pdfSafe(`Remise globale : -${fmt(inv.globalDiscountAmount)}`), 130, ty); ty += 6; }

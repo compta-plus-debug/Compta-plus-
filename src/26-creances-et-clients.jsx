@@ -2,7 +2,7 @@
 // @module Creances et clients
 // @depends ChequeDialog, History, InvoiceSheet, Plus, RecordedStamp, X, _membership, balanceDue, fmt
 //   makeChequeRecord, normalizeClientName, simpleEntry, todayStr, uid, useAssistedAnomalyGate
-//   useBackNav, useEffect, useState
+//   useBackNav, useBrouillon, useEffect, useState
 // @exports CRMModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Provision pour créances douteuses — mêmes principes que la dépréciation de
@@ -177,7 +177,7 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
   // encaissement déjà enregistré — ces actions restent réservées à
   // Administrateur/Éditeur, conformément à la demande explicite de l'utilisateur.
   const canManageClients = role !== "Vendeur";
-  const [newClient, setNewClient] = useState({ name: "", email: "", phone: "", address: "" });
+  const [newClient, setNewClient] = useBrouillon("client-fiche", { name: "", email: "", phone: "", address: "" });
   const [selected, setSelected] = useState(null);
   const [historyClientName, setHistoryClientName] = useState(null);
   const [expandedDueClients, setExpandedDueClients] = useState({}); // { [nomNormalisé]: true } — replié par défaut
@@ -215,7 +215,7 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
     const total = clientInvoices.reduce((s, i) => s + i.total, 0);
     const due = clientInvoices.filter((i) => i.status !== "payée" && i.status !== "don" && i.status !== "annulée" && i.status !== "perte").reduce((s, i) => s + balanceDue(i), 0);
     const lastDate = clientInvoices.reduce((max, i) => (i.date > max ? i.date : max), "");
-    return { name, email: known?.email || "", phone: known?.phone || "", nb: clientInvoices.length, total, due, lastDate, invoices: clientInvoices };
+    return { name, email: known?.email || "", phone: known?.phone || ([...clientInvoices].reverse().find((i) => i.clientPhone) || {}).clientPhone || "", nb: clientInvoices.length, total, due, lastDate, invoices: clientInvoices };
   });
 
   // Liste affichée : les clients ayant des factures, PLUS les clients déclarés (fiche créée)

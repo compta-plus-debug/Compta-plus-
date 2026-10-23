@@ -3,10 +3,10 @@
 // @depends AssistedPrincipleReminder, BarcodeScannerModal, BluetoothIcon, BluetoothPrinterCard
 //   CheckCircle2, ChequeDialog, Download, History, ImageIcon, Lock, MENTION_FRANCHISE_TCA, Minus
 //   OFL_EVT, OflPanel, Pencil, PendingRecommendationsBanner, Plus, Printer, ProductHistoryModal
-//   Receipt, RecordedStamp, RotateCcw, ScanLine, TAX_SYSTEMS, Trash2, X, _membership
+//   Receipt, RecordedStamp, RotateCcw, ScanLine, TAX_SYSTEMS, TicketBody, Trash2, X, _membership
 //   adresseClientFacture, balanceDue, detectAmountAnomaly, detectDuplicateAnomaly
-//   detectTaxAnomaly, downloadInvoicePDF, fmt, invoicePrefix, isFutureDate, isLocked
-//   makeChequeRecord, nifLigne, normalizeClientName, oflCompanyId, oflEnqueue, oflFinal
+//   detectTaxAnomaly, downloadInvoicePDF, factureDateHeure, fmt, invoicePrefix, isFutureDate
+//   isLocked, makeChequeRecord, nifLigne, normalizeClientName, oflCompanyId, oflEnqueue, oflFinal
 //   oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved, oflTimeout
 //   printInvoiceBluetooth, resizeImage, simpleEntry, suggestSimilarTiers, supabase
 //   tauxFactureTexte, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useMemo
@@ -37,7 +37,7 @@ function posDraftSave(key, data) {
   } catch (e) { /* stockage plein ou indisponible : le brouillon en mémoire suffit */ }
 }
 
-function VenteModule({ clients, setCheques, accounts, entries, setEntries, products: productsProp, setProducts, productImages, setProductImages, invoices, setInvoices, movements, setMovements, settings, setSettings, salesStations, stationId, setStationId, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation }) {
+function VenteModule({ clients, setClients, setCheques, accounts, entries, setEntries, products: productsProp, setProducts, productImages, setProductImages, invoices, setInvoices, movements, setMovements, settings, setSettings, salesStations, stationId, setStationId, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation }) {
   const anomalyGate = useAssistedAnomalyGate();
   // --- Vente hors ligne : file locale, stock réservé, état de connexion ---
   const [oflQ, setOflQ] = useState(() => oflLoad());
@@ -78,6 +78,31 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
     const rec = (clients || []).find((c) => c && c.address && normalizeClientName(c.name) === normalizeClientName(client));
     setClientAddr(rec ? rec.address : "");
   }, [client, clients]);
+  // Téléphone du client (facultatif) : repris de la fiche client, sinon de sa dernière facture, dès que le nom correspond.
+  const [clientPhone, setClientPhone] = useState(() => (dr && dr.clientPhone) || "");
+  const [clientPhoneTouched, setClientPhoneTouched] = useState(false);
+  useEffect(() => {
+    if (clientPhoneTouched) return;
+    const key = normalizeClientName(client);
+    if (!key) { setClientPhone(""); return; }
+    const rec = (clients || []).find((c) => c && c.phone && normalizeClientName(c.name) === key);
+    if (rec) { setClientPhone(rec.phone); return; }
+    const last = [...(invoices || [])].reverse().find((i) => i && i.clientPhone && normalizeClientName(i.client) === key);
+    setClientPhone(last ? last.clientPhone : "");
+  }, [client, clients]);
+  // Noms proposés pendant la frappe : fiches clients + noms déjà facturés, sans doublon, avec leur téléphone.
+  const clientSuggestions = React.useMemo(() => {
+    const seen = new Set(); const out = [];
+    const add = (name, phone) => {
+      const n = String(name || "").trim().replace(/\s+/g, " ");
+      if (!n || n === "Client comptant") return;
+      const k = normalizeClientName(n);
+      if (seen.has(k)) return; seen.add(k); out.push({ name: n, phone: phone || "" });
+    };
+    (clients || []).forEach((c) => c && add(c.name, c.phone));
+    [...(invoices || [])].reverse().forEach((i) => i && add(i.client, i.clientPhone));
+    return out.slice(0, 300);
+  }, [clients, invoices]);
   const [paymentMode, setPaymentMode] = useState(() => (dr && dr.paymentMode) || "caisse"); // caisse | banque | credit
   const [partialPaymentAmount, setPartialPaymentAmount] = useState(() => (dr && dr.partialPaymentAmount) || "");
   const [partialPaymentAccount, setPartialPaymentAccount] = useState(() => (dr && dr.partialPaymentAccount) || "caisse"); // caisse | banque
@@ -247,7 +272,7 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
   // Garde le brouillon à jour (sauf pendant la modification d'une facture déjà enregistrée).
   useEffect(() => {
     if (editingInvoiceId) return;
-    posDraftSave(draftKey, { cart, client, paymentMode, partialPaymentAmount, partialPaymentAccount, saleDate, globalDiscountPct, globalDiscountAmt, fees });
+    posDraftSave(draftKey, { cart, client, clientPhone, paymentMode, partialPaymentAmount, partialPaymentAccount, saleDate, globalDiscountPct, globalDiscountAmt, fees });
   }, [draftKey, editingInvoiceId, cart, client, paymentMode, partialPaymentAmount, partialPaymentAccount, saleDate, globalDiscountPct, globalDiscountAmt, fees]);
   const revenueAccounts = accounts.filter((a) => a.type === "Produit");
   const addFee = () => setFees((f) => [...f, { id: uid(), label: "", amount: "", account: revenueAccounts[0]?.code }]);
@@ -518,6 +543,7 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
       createdAt: invoiceBeingEdited ? invoiceBeingEdited.createdAt : new Date().toISOString(),
       client: client || "Client comptant",
       ...(clientAddr.trim() && settings.clientAddressOnInvoice !== false ? { clientAddress: clientAddr.trim() } : {}),
+      ...(clientPhone.trim() ? { clientPhone: clientPhone.trim() } : {}),
       lines: cartLines.map((l) => ({ productId: l.productId, name: l.product.name, qty: l.qty, price: l.product.price, discountPct: l.discountPct || 0, discountAmt: l.discountAmt || 0, subtotal: l.subtotal, tva: l.product.tva, taxAmount: l.taxAmount })),
       globalDiscountPct: Number(globalDiscountPct) || 0,
       globalDiscountAmtInput: Number(globalDiscountAmt) || 0,
@@ -539,6 +565,15 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
       soldByName: editingInvoiceId ? (invoiceBeingEdited?.soldByName || null) : (role === "Vendeur" ? (currentStation?.activeSellerName || null) : null),
       soldByEmail: editingInvoiceId ? (invoiceBeingEdited?.soldByEmail || null) : (role === "Vendeur" ? (currentStation?.activeSellerEmail || null) : null),
     };
+    // Le téléphone saisi au panier est gardé sur la fiche du client (créée si elle n'existe pas encore).
+    if (typeof setClients === "function" && client.trim() && clientPhone.trim()) {
+      const ck = normalizeClientName(client);
+      setClients((prev) => {
+        const ex = (prev || []).find((c) => c && normalizeClientName(c.name) === ck);
+        if (ex) return ex.phone === clientPhone.trim() ? prev : prev.map((c) => (c === ex ? { ...c, phone: clientPhone.trim() } : c));
+        return [...(prev || []), { id: uid(), name: client.trim().replace(/\s+/g, " "), email: "", phone: clientPhone.trim(), address: clientAddr.trim(), createdAt: new Date().toISOString() }];
+      });
+    }
     const old = invoiceBeingEdited;
     if (paymentMode === "credit") {
       const carriedPayments = old?.payments || (partialAmt > 0 ? [{ id: uid(), date, createdAt: new Date().toISOString(), amount: partialAmt, account: partialAcc }] : []);
@@ -556,7 +591,7 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
         stockLines: stockLinesForGate.map((l) => ({ productId: l.productId, qty: l.qty, name: l.product.name })),
       });
       if (!queued) { showToast("Espace de stockage de l'appareil saturé : la vente n'a pas pu être gardée hors ligne. Reconnectez-vous pour continuer."); return; }
-      setCart([]); setClient(""); setClientAddr(""); setClientAddrTouched(false); setEditingInvoiceId(null); setGlobalDiscountPct(0); setGlobalDiscountAmt(0); setFees([]); setPartialPaymentAmount(""); setSaleDate(todayStr());
+      setCart([]); setClient(""); setClientAddr(""); setClientAddrTouched(false); setClientPhone(""); setClientPhoneTouched(false); setEditingInvoiceId(null); setGlobalDiscountPct(0); setGlobalDiscountAmt(0); setFees([]); setPartialPaymentAmount(""); setSaleDate(todayStr());
       showToast(`Vente ${invNumber} enregistrée HORS LIGNE sur cet appareil — elle sera synchronisée automatiquement au retour de la connexion.`);
       logAudit("Vente", "Vente hors ligne", `${invNumber} — ${fmt(total)}`);
       return;
@@ -662,7 +697,7 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
 
 
     setCart([]);
-    setClient(""); setClientAddr(""); setClientAddrTouched(false);
+    setClient(""); setClientAddr(""); setClientAddrTouched(false); setClientPhone(""); setClientPhoneTouched(false);
     setEditingInvoiceId(null);
     setGlobalDiscountPct(0);
     setGlobalDiscountAmt(0);
@@ -860,7 +895,7 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
     }
     setCart(inv.lines.map((l) => ({ productId: l.productId, qty: l.qty, discountPct: l.discountPct || 0, discountAmt: l.discountAmt || 0 })));
     setClient(inv.client === "Client comptant" ? "" : inv.client);
-    setClientAddr(inv.clientAddress || ""); setClientAddrTouched(true);
+    setClientAddr(inv.clientAddress || ""); setClientAddrTouched(true); setClientPhone(inv.clientPhone || ""); setClientPhoneTouched(true);
     setPaymentMode(inv.paymentMode);
     setGlobalDiscountPct(inv.globalDiscountPct || 0);
     setGlobalDiscountAmt(inv.globalDiscountAmtInput || 0);
@@ -872,7 +907,7 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
 
   const cancelEditInvoice = () => {
     setCart([]);
-    setClient(""); setClientAddr(""); setClientAddrTouched(false);
+    setClient(""); setClientAddr(""); setClientAddrTouched(false); setClientPhone(""); setClientPhoneTouched(false);
     setPaymentMode("caisse");
     setGlobalDiscountPct(0);
     setGlobalDiscountAmt(0);
@@ -1243,8 +1278,15 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
               <input type="date" value={saleDate} max={todayStr()} onChange={(e) => setSaleDate(e.target.value)}
                 className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
             </div>
-            <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Nom du client (optionnel)"
+            <input value={client} onChange={(e) => { setClient(e.target.value); setClientPhoneTouched(false); }} placeholder="Nom du client (optionnel)" list="vente-clients-liste" autoComplete="off" data-testid="vente-client-nom"
               className="w-full border rounded px-2 py-1.5 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />
+            <datalist id="vente-clients-liste" data-testid="vente-clients-liste">
+              {clientSuggestions.map((c) => <option key={c.name} value={c.name}>{c.phone}</option>)}
+            </datalist>
+            {client.trim() && (
+              <input type="tel" inputMode="tel" value={clientPhone} onChange={(e) => { setClientPhone(e.target.value); setClientPhoneTouched(true); }} placeholder="Téléphone du client (facultatif)" data-testid="vente-telephone-client"
+                className="w-full border rounded px-2 py-1.5 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />
+            )}
             {client.trim() && settings.clientAddressOnInvoice !== false && (
               <input value={clientAddr} onChange={(e) => { setClientAddr(e.target.value); setClientAddrTouched(true); }} placeholder="Adresse du client (facultatif, imprimée sur la facture)" data-testid="vente-adresse-client"
                 className="w-full border rounded px-2 py-1.5 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />
@@ -1888,62 +1930,15 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
       {printInvoice && (settings.receiptFormat === "ticket80" || settings.receiptFormat === "ticket58") && (
         <div className={`print-only ${settings.receiptFormat === "ticket80" ? "ticket-print-80" : "ticket-print-58"}`}
           style={{ color: "#000", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, width: settings.receiptFormat === "ticket80" ? "74mm" : "52mm" }}>
-          <div style={{ textAlign: "center", marginBottom: 6 }}>
-            {settings.companyLogo && (
-              <img src={settings.companyLogo} alt="" style={{ width: 28, height: 28, objectFit: "contain", margin: "0 auto 4px" }} />
-            )}
-            <div style={{ fontWeight: 700, fontSize: 12 }}>{settings.companyName || "Mon Entreprise"}</div>
-            {settings.companyAddress && <div style={{ fontSize: 8 }}>{settings.companyAddress}</div>}
-            {(settings.companyPhone || settings.companyEmail) && (
-              <div style={{ fontSize: 8 }}>{[settings.companyPhone, settings.companyEmail].filter(Boolean).join(" · ")}</div>
-            )}
-            {nifLigne(settings) && <div style={{ fontSize: 8 }} data-testid="print-nif">{nifLigne(settings)}</div>}
-          </div>
-          <div style={{ borderTop: "1px dashed #000", margin: "4px 0" }} />
-          <div>Facture N° {printInvoice.number}</div>
-          <div>{printInvoice.date}</div>
-          <div>Client : {printInvoice.client || "Client comptant"}</div>
-          {adresseClientFacture(printInvoice, settings) && <div>Adresse : {adresseClientFacture(printInvoice, settings)}</div>}
-          {printInvoice.soldByName && <div>Vendeur : {printInvoice.soldByName}</div>}
-          <div style={{ borderTop: "1px dashed #000", margin: "4px 0" }} />
-          {(printInvoice.lines || []).map((l, i) => (
-            <div key={i} style={{ marginBottom: 3 }}>
-              <div>{l.name}</div>
-              <div className="tabular" style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>{l.qty} x {fmt(l.price)}</span><span>{fmt(l.subtotal)}</span>
-              </div>
-            </div>
-          ))}
-          <div style={{ borderTop: "1px dashed #000", margin: "4px 0" }} />
-          <div className="tabular" style={{ display: "flex", justifyContent: "space-between" }}><span>Sous-total HT</span><span>{fmt(printInvoice.totalHT)}</span></div>
-          {printInvoice.globalDiscountAmount > 0 && (
-            <div className="tabular" style={{ display: "flex", justifyContent: "space-between" }}><span>Remise</span><span>-{fmt(printInvoice.globalDiscountAmount)}</span></div>
-          )}
-          {(printInvoice.fees || []).map((f, i) => (
-            <div key={i} className="tabular" style={{ display: "flex", justifyContent: "space-between" }}><span>{f.label || "Frais"}</span><span>+{fmt(f.amount)}</span></div>
-          ))}
-          <div className="tabular" style={{ display: "flex", justifyContent: "space-between" }}><span>{printInvoice.taxLabel || "Taxe"}</span><span>{fmt(printInvoice.totalTax)}</span></div>
-          <div className="tabular" style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 12, marginTop: 4 }}><span>TOTAL</span><span>{fmt(printInvoice.total)}</span></div>
-          <div style={{ borderTop: "1px dashed #000", margin: "4px 0" }} />
-          <div style={{ textAlign: "center", fontSize: 8 }}>
-            Paiement : {printInvoice.paymentMode === "caisse" ? "Caisse" : printInvoice.paymentMode === "banque" ? "Banque" : "Crédit"}<br />
-            {(printInvoice.payments || []).length > 0 && (
-              <>Versé : {fmt(printInvoice.payments.reduce((s, p) => s + p.amount, 0))} — Solde dû : {fmt(Math.max(0, (printInvoice.total || 0) - printInvoice.payments.reduce((s, p) => s + p.amount, 0)))}<br /></>
-            )}
-            {settings.tcaFranchise && <><span data-testid="print-franchise">{MENTION_FRANCHISE_TCA}</span><br /></>}
-            Merci de votre confiance !
-            {settings.invoiceFooterNote && settings.invoiceFooterNote.trim() && (
-              <><br />{settings.invoiceFooterNote.trim()}</>
-            )}
-          </div>
+          <TicketBody inv={printInvoice} settings={settings} tp="print" />
         </div>
       )}
       {printInvoice && settings.receiptFormat !== "ticket80" && settings.receiptFormat !== "ticket58" && (
         <div className="print-only" style={{ color: "#152238", fontFamily: "'Inter', sans-serif" }}>
-          <div className="flex justify-between items-center mb-6" style={{ borderBottom: "2px solid #152238", paddingBottom: 16 }}>
-            <div className="flex items-center gap-3">
+          <div className="flex justify-between items-center mb-6" style={{ borderBottom: "2px solid #152238", paddingBottom: 20 }}>
+            <div className="flex items-center gap-4">
               {settings.companyLogo && (
-                <img src={settings.companyLogo} alt="" style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }} />
+                <img src={settings.companyLogo} alt="" style={{ width: 60, height: 60, objectFit: "contain", flexShrink: 0 }} />
               )}
               <div>
                 <div className="display" style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>{settings.companyName || "Mon Entreprise"}</div>
@@ -1957,7 +1952,7 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
             <div style={{ textAlign: "right", flexShrink: 0 }}>
               <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>FACTURE</div>
               <div className="tabular" style={{ fontSize: 13, lineHeight: 1.6 }}>N° {printInvoice.number}</div>
-              <div className="tabular" style={{ fontSize: 13, lineHeight: 1.6 }}>{printInvoice.date}</div>
+              <div className="tabular" style={{ fontSize: 13, lineHeight: 1.6 }} data-testid="print-dateheure">{factureDateHeure(printInvoice)}</div>
             </div>
           </div>
 
@@ -1965,7 +1960,8 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
             <div>
               <div style={{ color: "#888", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Facturé à</div>
               <div style={{ fontWeight: 600, marginTop: 2 }}>{printInvoice.client || "Client comptant"}</div>
-              {adresseClientFacture(printInvoice, settings) && <div style={{ fontSize: 12, color: "#555", marginTop: 2 }} data-testid="print-adresse-client">{adresseClientFacture(printInvoice, settings)}</div>}
+              {printInvoice.clientPhone && <div style={{ fontSize: 12, color: "#555", marginTop: 3 }} data-testid="print-tel-client">Tél. : {printInvoice.clientPhone}</div>}
+              {adresseClientFacture(printInvoice, settings) && <div style={{ fontSize: 12, color: "#555", marginTop: 3 }} data-testid="print-adresse-client">{adresseClientFacture(printInvoice, settings)}</div>}
               {printInvoice.soldByName && <div style={{ fontSize: 12, color: "#7A7460", marginTop: 2 }}>Vendeur : {printInvoice.soldByName}</div>}
             </div>
             <div style={{ textAlign: "right" }}>
@@ -1990,12 +1986,12 @@ function VenteModule({ clients, setCheques, accounts, entries, setEntries, produ
             <tbody>
               {(printInvoice.lines || []).map((l, i) => (
                 <tr key={i} style={{ borderBottom: "1px solid #E4DFD1" }}>
-                  <td style={{ padding: "6px 4px" }}>{l.name}</td>
-                  <td className="tabular" style={{ textAlign: "right", padding: "6px 4px" }}>{l.qty}</td>
-                  <td className="tabular" style={{ textAlign: "right", padding: "6px 4px" }}>{fmt(l.price)}</td>
-                  <td className="tabular" style={{ textAlign: "right", padding: "6px 4px" }}>{l.discountAmt > 0 ? `-${fmt(l.discountAmt)}` : l.discountPct > 0 ? `-${l.discountPct}%` : "—"}</td>
-                  <td className="tabular" style={{ textAlign: "right", padding: "6px 4px" }}>{fmt(l.subtotal)}</td>
-                  <td className="tabular" style={{ textAlign: "right", padding: "6px 4px" }}>{fmt(l.taxAmount)}</td>
+                  <td style={{ padding: "10px 6px" }}>{l.name}</td>
+                  <td className="tabular" style={{ textAlign: "right", padding: "10px 6px" }}>{l.qty}</td>
+                  <td className="tabular" style={{ textAlign: "right", padding: "10px 6px" }}>{fmt(l.price)}</td>
+                  <td className="tabular" style={{ textAlign: "right", padding: "10px 6px" }}>{l.discountAmt > 0 ? `-${fmt(l.discountAmt)}` : l.discountPct > 0 ? `-${l.discountPct}%` : "—"}</td>
+                  <td className="tabular" style={{ textAlign: "right", padding: "10px 6px" }}>{fmt(l.subtotal)}</td>
+                  <td className="tabular" style={{ textAlign: "right", padding: "10px 6px" }}>{fmt(l.taxAmount)}</td>
                 </tr>
               ))}
             </tbody>

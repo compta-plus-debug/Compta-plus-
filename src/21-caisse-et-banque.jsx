@@ -3,7 +3,8 @@
 // @depends ArrowDownCircle, ArrowUpCircle, AssistedPrincipleReminder, Card, CheckCircle2, ChequesPanel
 //   Circle, GENESIS_HASH, PendingRecommendationsBanner, Plus, RecordedStamp, RotateCcw
 //   _membership, detectAmountAnomaly, detectDuplicateAnomaly, detectRareAccountAnomaly, fmt
-//   isFutureDate, isLocked, simpleEntry, todayStr, uid, useAssistedAnomalyGate, useMemo, useState
+//   isFutureDate, isLocked, simpleEntry, todayStr, uid, useAssistedAnomalyGate, useBrouillon
+//   useMemo, useState
 // @exports CaisseBanqueModule
 // ═══ FIN DE L'EN-TÊTE ═══
 const COUNTERPART_TYPES = ["Actif", "Passif", "Capitaux propres", "Charge", "Produit"];
@@ -18,7 +19,7 @@ function CaisseBanqueModule({ cheques, setCheques, invoices, setInvoices, purcha
   const compteCode = tab === "caisse" ? "530" : "512";
   const counterparts = accounts.filter((a) => a.code !== compteCode);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useBrouillon("caisse-banque", {
     date: todayStr(),
     label: "",
     sens: "entree", // entree = encaissement, sortie = décaissement

@@ -1,10 +1,39 @@
 // ═══ MODULE ═══
 // @module Composants et utilitaires
-// @depends __uidCounter, supabase, useState
+// @depends __uidCounter, _membership, supabase, useState
 // @exports FALLBACK_HTG_PER_USD, GENESIS_HASH, GroupedTabNav, NET_MSG, PLAN_TIER_INFO
 //   canonicalEntryContent, friendlyError, genInviteToken, isFutureDate, normalizeClientName
-//   sanitizeUserMessage, sealEntries, sha256Hex, todayStr, uid, verifyChain, verifyChainFull
+//   sanitizeUserMessage, sealEntries, sha256Hex, todayStr, uid, useBrouillon, verifyChain
+//   verifyChainFull
 // ═══ FIN DE L'EN-TÊTE ═══
+// Brouillon de formulaire : ce qu'on est en train de saisir est gardé quand on ouvre un autre module ou un autre onglet,
+// puis retrouvé au retour. Propre à l'entreprise et au compte connecté ; expire après 6 heures ; ne garde que
+// du texte et des nombres (jamais d'image). Un formulaire vidé après enregistrement reste vide au retour.
+const _brouillonsMem = {};
+const BROUILLON_TTL_MS = 6 * 3600 * 1000;
+function useBrouillon(cle, initial) {
+  const k = "compta-plus-brouillon:" + ((_membership && _membership.companyId) || "x") + ":" + ((_membership && _membership.email) || "") + ":" + cle;
+  const [v, setV] = useState(() => {
+    try {
+      let d = _brouillonsMem[k];
+      if (!d && typeof sessionStorage !== "undefined") { const raw = sessionStorage.getItem(k); d = raw ? JSON.parse(raw) : null; }
+      if (!d || Date.now() - (d.t || 0) > BROUILLON_TTL_MS || !d.v || typeof d.v !== "object") return initial;
+      const out = { ...initial };
+      Object.keys(d.v).forEach((c2) => { if (d.v[c2] !== undefined && d.v[c2] !== null && d.v[c2] !== "") out[c2] = d.v[c2]; });
+      return out;
+    } catch (e) { return initial; }
+  });
+  const set = (upd) => setV((prev) => {
+    const nv = typeof upd === "function" ? upd(prev) : upd;
+    try {
+      const d = { t: Date.now(), v: nv };
+      _brouillonsMem[k] = d;
+      if (typeof sessionStorage !== "undefined") { const txt = JSON.stringify(d); if (txt.length < 20000) sessionStorage.setItem(k, txt); }
+    } catch (e) { /* stockage plein ou indisponible : le brouillon en mémoire suffit */ }
+    return nv;
+  });
+  return [v, set];
+}
 // Normalise un nom de client pour le regroupement (espaces superflus et casse
 // ignorés) — sans ça, deux saisies légèrement différentes du même nom ("Guerline"
 // vs "Guerline " ou une casse différente) créent deux fiches distinctes au lieu

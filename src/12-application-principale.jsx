@@ -19,6 +19,14 @@
 //   useMemo, useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
+// Protection légère de l'affichage : on ne peut ni glisser un texte de l'écran, ni le déposer dans un champ.
+// (Les fichiers glissés — import de données, logo — restent acceptés.)
+(function installerProtectionGlisser() {
+  if (typeof document === "undefined" || window.__comptaAntiGlisser) return;
+  window.__comptaAntiGlisser = true;
+  document.addEventListener("dragstart", (e) => { const t = e.target; if (!(t && t.closest && t.closest("[draggable='true']"))) e.preventDefault(); }, true);
+  document.addEventListener("drop", (e) => { const dt = e.dataTransfer; if (dt && dt.files && dt.files.length) return; e.preventDefault(); }, true);
+})();
 function App() {
   const [active, setActive] = useState("dashboard");
   const initialActiveSetRef = React.useRef(false);
@@ -2189,6 +2197,10 @@ function App() {
         .tabular { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
         .display { font-family: 'Spectral', serif; }
         .print-only { display: none; }
+        /* Le texte affiché ne se sélectionne pas, ne se glisse pas et ne se dépose pas dans les champs : seuls les champs de saisie restent éditables. */
+        body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+        input, textarea, select, [contenteditable="true"], .selectable { -webkit-user-select: text; user-select: text; }
+        img, a { -webkit-user-drag: none; }
         @page ticket-page-80 { size: 80mm auto; margin: 3mm; }
         @page ticket-page-58 { size: 58mm auto; margin: 2mm; }
         .ticket-print-80 { page: ticket-page-80; }
@@ -2663,6 +2675,7 @@ function App() {
         {active === "vente" && (
           <VenteModule
             clients={clients}
+            setClients={setClients}
             setCheques={setCheques}
             accounts={accounts}
             entries={entries}

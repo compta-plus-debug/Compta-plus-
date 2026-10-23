@@ -5,7 +5,7 @@
 //   _membership, cleanSuggestionLabel, detectAmountAnomaly, detectDuplicateAnomaly
 //   detectRareAccountAnomaly, fmt, isFutureDate, isLocked, makeChequeRecord, normalizeClientName
 //   simpleEntry, suggestAccountFromHistory, todayStr, uid, useAssistedAnomalyGate, useBackNav
-//   useEffect, useState
+//   useBrouillon, useEffect, useState
 // @exports AchatModule, ProductHistoryModal
 // ═══ FIN DE L'EN-TÊTE ═══
 // Modal d'historique produit — réutilisé depuis Vente (POS/Catalogue) et Achat et
@@ -55,7 +55,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
   useBackNav(tab, setTab, "achats");
   const chargeAccounts = accounts.filter((a) => a.type === "Charge");
   const accountName = (code) => accounts.find((a) => a.code === code)?.name || code;
-  const [form, setForm] = useState({
+  const [form, setForm] = useBrouillon("achat-form", {
     date: todayStr(),
     supplierId: suppliers[0]?.id,
     label: "",
@@ -63,7 +63,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
     amount: "",
     paymentMode: "credit", // caisse | banque | credit
   });
-  const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", nif: "" });
+  const [newSupplier, setNewSupplier] = useBrouillon("achat-fournisseur", { name: "", contact: "", nif: "" });
   // Les listes (fournisseurs, comptes) peuvent arriver après le premier affichage : la liste
   // déroulante montrait alors le premier élément, mais le formulaire n'avait aucune valeur
   // réelle (choisir l'élément déjà affiché ne déclenche aucun changement) -> achat enregistré

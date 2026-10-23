@@ -164,9 +164,9 @@ function SecteursCard({ companyId, info, droits, showToast, onChanged, currentUs
       ) : (
         <>
           <ul className="text-sm mb-2" style={{ color: "#152238" }} data-testid="secteurs-liste">
-            {info.sectors.map((id) => <li key={id}>• {secteurLabel(id)}</li>)}
+            {info.sectors.map((id) => { const dispo = (SECTEURS_CATALOGUE.find((x) => x.id === id) || {}).dispo; return <li key={id}>• {secteurLabel(id)}{!dispo && <span className="text-xs" style={{ color: "#9A7B1E" }} data-testid={"secteur-bientot-" + id}> — bientôt disponible</span>}</li>; })}
           </ul>
-          {info.extra.length > 0 && <p className="text-xs mb-2" style={{ color: "#7A7460" }}>Blocs supplémentaires : {info.extra.map(secteurLabel).join(", ")}.</p>}
+          {info.extra.length > 0 && <p className="text-xs mb-2" style={{ color: "#7A7460" }}>Blocs supplémentaires : {info.extra.map(secteurLabel).join(", ")} (bientôt disponible).</p>}
           {droits && !droits.inclus && <p className="text-xs mb-2" style={{ color: "#9A7B1E" }} data-testid="secteurs-inactifs">Vos blocs sont en consultation seule : le supplément « 3 secteurs » n'est pas actif sur votre forfait Standard.</p>}
           <p className="text-xs mb-3" style={{ color: "#A39C87" }}>Ce choix est verrouillé. Pour le modifier, envoyez une demande au centre de gestion.</p>
           {demande ? (
