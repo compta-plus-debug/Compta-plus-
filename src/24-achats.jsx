@@ -63,7 +63,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
     amount: "",
     paymentMode: "credit", // caisse | banque | credit
   });
-  const [newSupplier, setNewSupplier] = useState({ name: "", contact: "" });
+  const [newSupplier, setNewSupplier] = useState({ name: "", contact: "", nif: "" });
   // Les listes (fournisseurs, comptes) peuvent arriver après le premier affichage : la liste
   // déroulante montrait alors le premier élément, mais le formulaire n'avait aucune valeur
   // réelle (choisir l'élément déjà affiché ne déclenche aucun changement) -> achat enregistré
@@ -427,17 +427,17 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       showToast("Fournisseur ajouté.");
       logAudit("Achat", "Ajout fournisseur", newSupplier.name);
     }
-    setNewSupplier({ name: "", contact: "" });
+    setNewSupplier({ name: "", contact: "", nif: "" });
   };
 
   const startEditSupplier = (s) => {
     setEditingSupplierId(s.id);
-    setNewSupplier({ name: s.name, contact: s.contact || "" });
+    setNewSupplier({ name: s.name, contact: s.contact || "", nif: s.nif || "" });
   };
 
   const cancelEditSupplier = () => {
     setEditingSupplierId(null);
-    setNewSupplier({ name: "", contact: "" });
+    setNewSupplier({ name: "", contact: "", nif: "" });
   };
 
   const deleteSupplier = (s) => {
@@ -835,6 +835,11 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
               <label className="text-xs" style={{ color: "#8A8370" }}>Contact</label>
               <input value={newSupplier.contact} onChange={(e) => setNewSupplier({ ...newSupplier, contact: e.target.value })}
                 placeholder="Email / téléphone" className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+            </div>
+            <div>
+              <label className="text-xs" style={{ color: "#8A8370" }}>NIF (facultatif)</label>
+              <input value={newSupplier.nif || ""} onChange={(e) => setNewSupplier({ ...newSupplier, nif: e.target.value })} data-testid="fournisseur-nif"
+                placeholder="Pour la liste annuelle des versements" className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
             </div>
             <button onClick={addSupplier} className="flex items-center justify-center gap-2 px-4 py-2 rounded text-sm text-white h-[38px]" style={{ background: "#152238" }}>
               {editingSupplierId ? <CheckCircle2 size={14} /> : <Plus size={14} />}

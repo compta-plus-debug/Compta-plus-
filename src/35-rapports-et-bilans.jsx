@@ -2,9 +2,9 @@
 // @module Rapports et bilans
 // @depends ComparatifPanel, DeclarationIRPanel, DeclarationTCAPanel, Download, EC_BALANCE_COLS
 //   EC_JOURNAL_COLS, FileDown, GroupedTabNav, Printer, SimpleDonutChart, SimpleLineChart
-//   computeBalances, downloadEtatsFinanciersPDF, downloadTablePDF, ecBalanceRows, ecCsv
-//   ecDownloadCsv, ecJournalRows, fmt, loansTotals, monthLabel, todayStr, useBackNav, useMemo
-//   useState
+//   VersementsAnnuelsPanel, computeBalances, downloadEtatsFinanciersPDF, downloadTablePDF
+//   ecBalanceRows, ecCsv, ecDownloadCsv, ecJournalRows, fmt, loansTotals, monthLabel, todayStr
+//   useBackNav, useMemo, useState
 // @exports BilanClasseView, RapportsModule, bilanClasse
 // ═══ FIN DE L'EN-TÊTE ═══
 function buildLedger(entries, accountCode, from, to) {
@@ -186,7 +186,7 @@ function fluxSplit(entry) {
   return out;
 }
 
-function RapportsModule({ accounts, balances, invoices, purchases, entries, settings, assets, riskProvisions, deferrals, loans, products, clients, showToast, planTier }) {
+function RapportsModule({ payslips, employees, suppliers, accounts, balances, invoices, purchases, entries, settings, assets, riskProvisions, deferrals, loans, products, clients, showToast, planTier }) {
   const [tab, setTab] = useState("resultat");
   useBackNav(tab, setTab, "resultat");
   const [detailMonth, setDetailMonth] = useState("");
@@ -448,7 +448,7 @@ function RapportsModule({ accounts, balances, invoices, purchases, entries, sett
         className="no-print"
         groups={[
           { label: "États financiers", color: { bg: "#152238", text: "#fff", light: "#E8EAF0", lightText: "#152238" }, tabs: [["resultat", "Compte de résultat"], ["bilan", "Bilan simplifié"], ["balance", "Balance des comptes"], ["grandlivre", "Grand livre"], ["fluxTresorerie", "Flux de trésorerie"], ["comparatif", "Comparatif"]] },
-          { label: "Déclarations fiscales", color: { bg: "#A6432F", text: "#fff", light: "#F7E9E3", lightText: "#A6432F" }, tabs: [["declarationTCA", "Déclaration TCA"], ["declarationIR", "Impôt sur le Revenu"]] },
+          { label: "Déclarations fiscales", color: { bg: "#A6432F", text: "#fff", light: "#F7E9E3", lightText: "#A6432F" }, tabs: [["declarationTCA", "Déclaration TCA"], ["declarationIR", "Impôt sur le Revenu"], ["versementsAnnuels", "Liste annuelle des versements"]] },
           { label: "Analyse & Export", color: { bg: "#9A7B1E", text: "#fff", light: "#FBF1DC", lightText: "#9A7B1E" }, tabs: [["ventes", "Analyse des ventes"], ["export", "Export"]] },
         ]}
       />
@@ -812,6 +812,10 @@ function RapportsModule({ accounts, balances, invoices, purchases, entries, sett
 
       {tab === "declarationIR" && (
         <DeclarationIRPanel entries={entries} accounts={accounts} invoices={invoices} settings={settings} defaultYear={new Date().getFullYear()} planTier={planTier} />
+      )}
+
+      {tab === "versementsAnnuels" && (
+        <VersementsAnnuelsPanel payslips={payslips || []} employees={employees || []} purchases={purchases || []} suppliers={suppliers || []} entries={entries} settings={settings} />
       )}
 
       {tab === "ventes" && (

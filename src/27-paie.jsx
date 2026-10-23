@@ -224,7 +224,7 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
   const activeEmployees = employees.filter((e) => e.active);
 
   // --- Employés ---
-  const emptyEmpForm = { name: "", position: "", baseSalary: "", payFrequency: "mensuelle", overtimeRate: "" };
+  const emptyEmpForm = { name: "", position: "", nif: "", baseSalary: "", payFrequency: "mensuelle", overtimeRate: "" };
   const [empForm, setEmpForm] = useState(emptyEmpForm);
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
 
@@ -236,14 +236,14 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
     if (editingEmployeeId) {
       setEmployees((prev) => prev.map((e) =>
         e.id === editingEmployeeId
-          ? { ...e, name: empForm.name.trim(), position: empForm.position, baseSalary: Number(empForm.baseSalary), payFrequency: empForm.payFrequency, overtimeRate: Number(empForm.overtimeRate) || 0 }
+          ? { ...e, name: empForm.name.trim(), position: empForm.position, nif: empForm.nif.trim(), baseSalary: Number(empForm.baseSalary), payFrequency: empForm.payFrequency, overtimeRate: Number(empForm.overtimeRate) || 0 }
           : e
       ));
       showToast("Employé modifié.");
       logAudit("Salaires (RH)", "Modification employé", empForm.name);
     } else {
       setEmployees((prev) => [...prev, {
-        id: uid(), createdAt: new Date().toISOString(), name: empForm.name.trim(), position: empForm.position, baseSalary: Number(empForm.baseSalary),
+        id: uid(), createdAt: new Date().toISOString(), name: empForm.name.trim(), position: empForm.position, nif: empForm.nif.trim(), baseSalary: Number(empForm.baseSalary),
         payFrequency: empForm.payFrequency, overtimeRate: Number(empForm.overtimeRate) || 0, active: true, hireDate: today,
       }]);
       showToast("Employé ajouté.");
@@ -255,7 +255,7 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
 
   const startEditEmployee = (emp) => {
     setEditingEmployeeId(emp.id);
-    setEmpForm({ name: emp.name, position: emp.position || "", baseSalary: emp.baseSalary, payFrequency: emp.payFrequency, overtimeRate: emp.overtimeRate || "" });
+    setEmpForm({ name: emp.name, position: emp.position || "", nif: emp.nif || "", baseSalary: emp.baseSalary, payFrequency: emp.payFrequency, overtimeRate: emp.overtimeRate || "" });
   };
 
   const cancelEditEmployee = () => { setEditingEmployeeId(null); setEmpForm(emptyEmpForm); };
@@ -558,6 +558,11 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
             <div>
               <label className="text-xs" style={{ color: "#8A8370" }}>Poste</label>
               <input value={empForm.position} onChange={(e) => setEmpForm({ ...empForm, position: e.target.value })}
+                className="block w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+            </div>
+            <div>
+              <label className="text-xs" style={{ color: "#8A8370" }}>NIF ou CIN (liste annuelle des versements)</label>
+              <input value={empForm.nif} onChange={(e) => setEmpForm({ ...empForm, nif: e.target.value })} data-testid="employe-nif"
                 className="block w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
             </div>
             <div>

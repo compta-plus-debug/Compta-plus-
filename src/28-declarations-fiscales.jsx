@@ -1,7 +1,8 @@
 // ═══ MODULE ═══
 // @module Declarations fiscales
-// @depends HEADER_RGB, fmt, pdfSafe, useState
+// @depends HEADER_RGB, downloadTablePDF, fmt, pdfSafe, useState
 // @exports ComparatifPanel, DeclarationIRPanel, DeclarationTCAPanel, FISCAL_RULES_VALIDATED
+//   VersementsAnnuelsPanel
 // ═══ FIN DE L'EN-TÊTE ═══
 const MOIS_NOMS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
@@ -361,6 +362,8 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
   const [entite, setEntite] = useState("physique"); // physique | societe | cooperative (article 137)
   const [forfType, setForfType] = useState("services"); // services (5 %) | autres (2 %) (article 65)
   const [caForfaitaire, setCaForfaitaire] = useState("");
+  const [impotN2, setImpotN2] = useState("");            // impôt établi sur le bénéfice réel de l'avant-dernier exercice (article 81)
+  const [acomptesVerses, setAcomptesVerses] = useState(""); // acomptes provisionnels déjà versés pour l'exercice déclaré
 
   const yearEntries = entries.filter((e) => e.date && e.date.startsWith(String(year)));
   const produitsAccounts = accounts.filter((a) => a.type === "Produit");
@@ -382,7 +385,15 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
     ? calculerIR(revenuImposable, bareme)
     : { impot: Math.round(revenuImposable * tauxSociete), detail: revenuImposable > 0 ? [{ min: 0, max: Infinity, taux: tauxSociete, portion: revenuImposable, montant: revenuImposable * tauxSociete }] : [] };
   const retenuesNum = Number(retenuesVersees) || 0;
-  const impotNet = Math.max(0, impot - retenuesNum);
+  const acomptesNum = Math.max(0, Number(acomptesVerses) || 0);
+  const impotNet = Math.max(0, impot - retenuesNum - acomptesNum);
+  // Acomptes provisionnels (article 81) : 60 % de l'impôt de l'avant-dernier exercice, en deux tranches égales,
+  // versées entre le 1er et le 15 octobre puis entre le 1er et le 15 décembre. L'excédent éventuel sur l'impôt de
+  // l'exercice se déduit des acomptes suivants.
+  const acompteAnnuel = Math.round((Math.max(0, Number(impotN2) || 0)) * 0.60);
+  const tranche1 = Math.round(acompteAnnuel / 2);
+  const tranche2 = acompteAnnuel - tranche1;
+  const creditAcomptes = Math.max(0, Math.round((acomptesNum - Math.max(0, impot - retenuesNum)) * 100) / 100);
 
   // Régime forfaitaire (articles 62 à 66 du Code fiscal en vigueur depuis le 1er octobre 2026) : entreprises dont le
   // chiffre d'affaires de l'exercice précédent est inférieur à 10 000 000 HTG ; base = chiffre d'affaires après un
@@ -573,12 +584,38 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
                   className="w-28 border rounded px-2 py-1 text-xs tabular text-right" style={{ borderColor: "#DDD6C4" }} />
               </td>
             </tr>
+            <tr style={{ borderBottom: "1px solid #F3EFE3" }}>
+              <td colSpan={3}>
+                <label className="text-xs" style={{ color: "#8A8370" }}>Acomptes provisionnels déjà versés pour cet exercice (article 81)</label>
+              </td>
+              <td className="py-1.5 text-right">
+                <input type="number" min="0" value={acomptesVerses} onChange={(e) => setAcomptesVerses(e.target.value)} placeholder="0" data-testid="ir-acomptes-verses"
+                  className="w-28 border rounded px-2 py-1 text-xs tabular text-right" style={{ borderColor: "#DDD6C4" }} />
+              </td>
+            </tr>
             <tr>
               <td className="py-2 font-semibold" colSpan={3} style={{ color: "#152238" }}>IMPÔT NET À PAYER</td>
               <td className="py-2 tabular text-right font-semibold px-3 rounded" style={{ background: "#F7E9E3", color: "#A6432F" }}>{fmt(impotNet)}</td>
             </tr>
           </tbody>
         </table></div>
+            {creditAcomptes > 0 && (
+              <div className="text-xs px-3 py-2 rounded mb-4" style={{ background: "#E6F1EE", color: "#0F6B5C" }} data-testid="ir-credit-acomptes">
+                Les acomptes versés dépassent l'impôt de l'exercice : crédit de {fmt(creditAcomptes)} à déduire des prochains acomptes (article 81).
+              </div>
+            )}
+            <div className="p-3 rounded mb-4" style={{ background: "#FAF8F1", border: "1px solid #EEE9DA" }} data-testid="ir-acomptes">
+              <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Acomptes provisionnels à verser (article 81)</div>
+              <p className="text-xs mb-2" style={{ color: "#8A8370" }}>Entreprises au bénéfice réel : 60 % de l'impôt établi pour l'avant-dernier exercice, en deux tranches égales, versées entre le 1er et le 15 octobre et entre le 1er et le 15 décembre de l'exercice qui commence le 1er octobre {year}. Cette valeur n'est pas déduite de vos écritures : saisissez l'impôt de l'avant-dernier exercice tel qu'il figure sur votre déclaration.</p>
+              <label className="text-xs" style={{ color: "#8A8370" }}>Impôt établi sur le bénéfice réel de l'avant-dernier exercice</label>
+              <input type="number" min="0" value={impotN2} onChange={(e) => setImpotN2(e.target.value)} placeholder="0" data-testid="ir-impot-n2"
+                className="block w-48 border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
+              <div className="mt-3 text-sm tabular space-y-1">
+                <div className="flex justify-between"><span>Acompte annuel (60 %)</span><span data-testid="ir-acompte-annuel">{fmt(acompteAnnuel)}</span></div>
+                <div className="flex justify-between"><span>Tranche 1 — du 1er au 15 octobre {year}</span><span data-testid="ir-acompte-t1">{fmt(tranche1)}</span></div>
+                <div className="flex justify-between"><span>Tranche 2 — du 1er au 15 décembre {year}</span><span data-testid="ir-acompte-t2">{fmt(tranche2)}</span></div>
+              </div>
+            </div>
             {planTier === "assisted" && (
               <div className="mt-4 p-3 rounded" style={{ background: coherenceChecksReel.some((c) => !c.ok) ? "#FBF1DC" : "#E6F1EE" }}>
                 <div className="text-xs font-medium uppercase tracking-wide mb-2" style={{ color: coherenceChecksReel.some((c) => !c.ok) ? "#9A7B1E" : "#0F6B5C" }}>Vérifications avant dépôt</div>
@@ -704,3 +741,141 @@ function ComparatifPanel({ entries, accounts, planTier }) {
   );
 }
 
+
+// Liste annuelle des versements (article 95 du Code fiscal) : chaque entreprise déclare, entre le 1er et le 31 octobre,
+// les sommes versées au cours de l'exercice précédent (salaires, boni, primes, loyers, honoraires, prestations,
+// intérêts…) avec les retenues à la source, en identifiant chaque bénéficiaire (nom et NIF). L'exercice fiscal va du
+// 1er octobre au 30 septembre (article 69). Les salaires et primes sont lus des bulletins de paie ; les loyers,
+// honoraires, prestations et intérêts sont lus des achats, selon le compte de charge utilisé.
+function versementNatureDuCompte(code) {
+  const c = String(code || "");
+  if (c.startsWith("613")) return "Loyers";
+  if (c.startsWith("622")) return "Honoraires et prestations de services";
+  if (c.startsWith("66")) return "Intérêts";
+  return "";
+}
+function VersementsAnnuelsPanel({ payslips, employees, purchases, suppliers, entries, settings }) {
+  const now = new Date();
+  const [mode, setMode] = useState("exercice"); // exercice (1er oct. – 30 sept.) | civile
+  const [endYear, setEndYear] = useState(now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1);
+  const from = mode === "exercice" ? `${endYear - 1}-10-01` : `${endYear}-01-01`;
+  const to = mode === "exercice" ? `${endYear}-09-30` : `${endYear}-12-31`;
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const rows = [];
+  // Salaires, primes, boni : bulletins non annulés payés dans la période
+  const parEmp = {};
+  (payslips || []).filter((p) => p.status !== "annulé" && p.date && p.date >= from && p.date <= to).forEach((p) => {
+    const k = String(p.employeeId);
+    const emp = (employees || []).find((e) => String(e.id) === k);
+    if (!parEmp[k]) parEmp[k] = { name: p.employeeName, nif: (emp && emp.nif) || "", salaire: 0, prime: 0, boni: 0, retSal: 0, retPrime: 0, retBoni: 0 };
+    const bonus = Number(p.bonusAmount) || 0;
+    parEmp[k].salaire += (Number(p.grossTotal) || 0) - bonus;
+    if (p.bonusKind === "boni") { parEmp[k].boni += bonus; parEmp[k].retBoni += Number(p.bonusWithholding) || 0; }
+    else { parEmp[k].prime += bonus; parEmp[k].retPrime += Number(p.bonusWithholding) || 0; }
+    parEmp[k].retSal += Number(p.salaryWithholding) || 0;
+  });
+  Object.values(parEmp).forEach((e) => {
+    if (e.salaire > 0) rows.push({ name: e.name, nif: e.nif, nature: "Salaires", montant: r2(e.salaire), retenue: r2(e.retSal), source: "paie" });
+    if (e.prime > 0) rows.push({ name: e.name, nif: e.nif, nature: "Primes", montant: r2(e.prime), retenue: r2(e.retPrime), source: "paie" });
+    if (e.boni > 0) rows.push({ name: e.name, nif: e.nif, nature: "Boni", montant: r2(e.boni), retenue: r2(e.retBoni), source: "paie" });
+  });
+  // Loyers, honoraires et prestations, intérêts : achats non annulés, selon le compte de charge
+  const parFour = {};
+  (purchases || []).filter((p) => p.status !== "annulé" && p.date && p.date >= from && p.date <= to).forEach((p) => {
+    const e = (entries || []).find((x) => x.id === p.id);
+    const debit = e && (e.lines || []).find((l) => Number(l.debit) > 0 && l.account !== "4456");
+    const nature = versementNatureDuCompte(debit && debit.account);
+    if (!nature) return;
+    const sup = (suppliers || []).find((s) => s.name === p.supplier);
+    const k = `${p.supplier}|${nature}`;
+    if (!parFour[k]) parFour[k] = { name: p.supplier, nif: (sup && sup.nif) || "", nature, montant: 0 };
+    parFour[k].montant += Number(p.amount) || 0;
+  });
+  Object.values(parFour).forEach((f) => rows.push({ name: f.name, nif: f.nif, nature: f.nature, montant: r2(f.montant), retenue: 0, source: "achats" }));
+  rows.sort((a, b) => a.name.localeCompare(b.name) || a.nature.localeCompare(b.nature));
+  const total = r2(rows.reduce((t, r) => t + r.montant, 0));
+  const totalRet = r2(rows.reduce((t, r) => t + r.retenue, 0));
+  const sansNif = rows.filter((r) => !String(r.nif || "").trim()).length;
+  const libelle = mode === "exercice" ? `exercice du 1er octobre ${endYear - 1} au 30 septembre ${endYear}` : `année ${endYear}`;
+  const echeance = mode === "exercice" ? `1er au 31 octobre ${endYear}` : "1er au 31 octobre suivant";
+  const csv = () => {
+    const esc = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+    const lignes = [["Bénéficiaire", "NIF", "Nature", "Montant versé", "Retenue à la source"].map(esc).join(";")]
+      .concat(rows.map((r) => [r.name, r.nif, r.nature, r.montant, r.retenue].map(esc).join(";")));
+    const blob = new Blob(["﻿" + lignes.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `Liste-annuelle-des-versements-${mode === "exercice" ? endYear : "civile-" + endYear}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+  const pdf = () => {
+    downloadTablePDF({
+      title: `Liste annuelle des versements ${mode === "exercice" ? "exercice " + endYear : "annee " + endYear}`,
+      settings,
+      columns: ["Bénéficiaire", "NIF", "Nature", "Montant versé", "Retenue"],
+      rows: rows.map((r) => [r.name, r.nif || "NIF manquant", r.nature, fmt(r.montant), fmt(r.retenue)]),
+      footerLines: [
+        `Période : ${libelle}`,
+        `Total des sommes versées : ${fmt(total)} — Total des retenues : ${fmt(totalRet)}`,
+        `A déposer entre le ${echeance} (article 95).`,
+        settings.companyNIF ? `NIF de l'entreprise : ${settings.companyNIF}` : "NIF de l'entreprise : à renseigner dans Administration",
+      ],
+    });
+  };
+  return (
+    <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+      <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Liste annuelle des versements (article 95)</div>
+      <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
+        Chaque entreprise déclare, entre le 1er et le 31 octobre, les sommes versées durant l'exercice précédent (salaires, boni, primes, loyers, honoraires, prestations, intérêts…) avec les retenues à la source, en identifiant chaque bénéficiaire (nom et NIF). Salaires et primes viennent des bulletins de paie ; loyers, honoraires et prestations, intérêts viennent des achats d'après le compte de charge (613, 622, 66). Les dividendes, commissions, jetons de présence et autres versements ne sont pas calculés : ajoutez-les à la main sur le formulaire. Les retenues sur contrats de services et paiements à l'étranger (articles 96 et 97) ne sont pas encore suivies.
+      </p>
+      <FiscalValidationNotice />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div>
+          <label className="text-xs" style={{ color: "#8A8370" }}>Période</label>
+          <select value={mode} onChange={(e) => setMode(e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} data-testid="versements-mode">
+            <option value="exercice">Exercice fiscal (1er octobre – 30 septembre, article 69)</option>
+            <option value="civile">Année civile</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs" style={{ color: "#8A8370" }}>{mode === "exercice" ? "Exercice se terminant le 30 septembre" : "Année"}</label>
+          <input type="number" value={endYear} onChange={(e) => setEndYear(Number(e.target.value))} className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} data-testid="versements-annee" />
+        </div>
+      </div>
+      <div className="text-xs mb-3" style={{ color: "#7A7460" }}>Période couverte : {libelle}. À déposer entre le {echeance}.</div>
+      {sansNif > 0 && (
+        <div className="text-xs px-3 py-2 rounded mb-3" style={{ background: "#FBF1DC", color: "#9A7B1E" }} data-testid="versements-sans-nif">
+          {sansNif} ligne{sansNif > 1 ? "s" : ""} sans NIF : l'article 95 exige d'identifier chaque bénéficiaire. Renseignez le NIF dans la fiche employé (Salaires) ou la fiche fournisseur (Achats).
+        </div>
+      )}
+      {rows.length === 0 ? (
+        <div className="text-sm py-6 text-center" style={{ color: "#A39C87" }} data-testid="versements-vide">Aucun versement à déclarer sur cette période.</div>
+      ) : (
+        <div className="overflow-x-auto mb-4"><table className="w-full text-sm">
+          <thead><tr className="text-left text-xs" style={{ color: "#8A8370", borderBottom: "1px solid #E4DFD1" }}>
+            <th className="py-2 font-normal">Bénéficiaire</th><th className="py-2 font-normal">NIF</th><th className="py-2 font-normal">Nature</th>
+            <th className="py-2 font-normal text-right">Montant versé</th><th className="py-2 font-normal text-right">Retenue</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} data-testid="versements-ligne" style={{ borderBottom: "1px solid #F3EFE3" }}>
+                <td className="py-1.5">{r.name}</td>
+                <td className="py-1.5 text-xs">{r.nif || <span style={{ color: "#A6432F" }}>manquant</span>}</td>
+                <td className="py-1.5 text-xs">{r.nature}</td>
+                <td className="py-1.5 tabular text-right">{fmt(r.montant)}</td>
+                <td className="py-1.5 tabular text-right">{fmt(r.retenue)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+      )}
+      <div className="p-3 rounded mb-4" style={{ background: "#F7E9E3" }}>
+        <div className="flex justify-between text-sm tabular"><span>Total des sommes versées</span><span data-testid="versements-total">{fmt(total)}</span></div>
+        <div className="flex justify-between text-sm tabular"><span>Total des retenues à la source</span><span data-testid="versements-retenues">{fmt(totalRet)}</span></div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={pdf} disabled={rows.length === 0} className="px-4 py-2 rounded text-sm text-white" style={{ background: "#152238", opacity: rows.length === 0 ? 0.5 : 1 }} data-testid="versements-pdf">Télécharger (.pdf)</button>
+        <button onClick={csv} disabled={rows.length === 0} className="px-4 py-2 rounded text-sm" style={{ background: "#EFE9DD", color: "#152238", opacity: rows.length === 0 ? 0.5 : 1 }} data-testid="versements-csv">Télécharger (.csv)</button>
+      </div>
+    </div>
+  );
+}

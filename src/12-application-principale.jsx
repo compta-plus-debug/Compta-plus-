@@ -2758,6 +2758,9 @@ function App() {
         )}
         {active === "rapports" && (
           <RapportsModule
+            payslips={payslips}
+            employees={employees}
+            suppliers={suppliers}
             accounts={accounts}
             balances={balances}
             invoices={invoices}
