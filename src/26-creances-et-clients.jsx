@@ -177,7 +177,7 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
   // encaissement déjà enregistré — ces actions restent réservées à
   // Administrateur/Éditeur, conformément à la demande explicite de l'utilisateur.
   const canManageClients = role !== "Vendeur";
-  const [newClient, setNewClient] = useState({ name: "", email: "", phone: "" });
+  const [newClient, setNewClient] = useState({ name: "", email: "", phone: "", address: "" });
   const [selected, setSelected] = useState(null);
   const [historyClientName, setHistoryClientName] = useState(null);
   const [expandedDueClients, setExpandedDueClients] = useState({}); // { [nomNormalisé]: true } — replié par défaut
@@ -262,12 +262,20 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
       showToast("Le nom du client est requis.");
       return;
     }
-    if (clients.some((c) => c.name === newClient.name)) {
-      showToast("Ce client existe déjà.");
+    const existing = clients.find((c) => c.name === newClient.name);
+    if (existing) {
+      // Fiche déjà là : on la complète (adresse, e-mail, téléphone saisis) sans rien effacer.
+      const patch = {};
+      ["email", "phone", "address"].forEach((k) => { if ((newClient[k] || "").trim()) patch[k] = newClient[k].trim(); });
+      if (!Object.keys(patch).length) { showToast("Ce client existe déjà : renseignez au moins l'adresse, l'e-mail ou le téléphone pour le compléter."); return; }
+      setClients((prev) => prev.map((c) => (c.id === existing.id ? { ...c, ...patch } : c)));
+      setNewClient({ name: "", email: "", phone: "", address: "" });
+      showToast("Fiche client complétée.");
+      logAudit("CRM", "Fiche client complétée", newClient.name);
       return;
     }
     setClients((prev) => [...prev, { ...newClient, id: uid(), createdAt: new Date().toISOString() }]);
-    setNewClient({ name: "", email: "", phone: "" });
+    setNewClient({ name: "", email: "", phone: "", address: "" });
     showToast("Client ajouté.");
     logAudit("CRM", "Ajout client", newClient.name);
   };
@@ -439,6 +447,11 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
           <div>
             <label className="text-xs" style={{ color: "#8A8370" }}>Téléphone</label>
             <input value={newClient.phone} onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+              className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+          </div>
+          <div className="col-span-2 md:col-span-4">
+            <label className="text-xs" style={{ color: "#8A8370" }}>Adresse (imprimée sur les factures du client)</label>
+            <input value={newClient.address} onChange={(e) => setNewClient({ ...newClient, address: e.target.value })} data-testid="client-adresse"
               className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
           </div>
           <button onClick={addClient} className="flex items-center justify-center gap-2 px-4 py-2 rounded text-sm text-white h-[38px]" style={{ background: "#152238" }}>
@@ -768,7 +781,7 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
               </div>
             </div>
             <div className="rounded shadow-lg overflow-hidden" style={{ background: "#fff" }}>
-              <InvoiceSheet invoice={apercuInv} settings={cfg} />
+              <InvoiceSheet invoice={{ ...apercuInv, clientAddress: apercuInv.clientAddress || ((clients || []).find((c) => c && c.address && normalizeClientName(c.name) === normalizeClientName(apercuInv.client)) || {}).address }} settings={cfg} />
             </div>
             <div className="text-xs mt-2" style={{ color: "#EFE9DD" }}>Le logo, le NIF, le taux de taxe, la mention de franchise et la zone de signature sont ceux de votre paramétrage.</div>
           </div>

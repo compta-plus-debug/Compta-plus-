@@ -11,7 +11,7 @@
 //   _membership, allowedModulesFor, asstScan, bkBuildFile, bkDownload, chooseCompany
 //   clearMembershipCache, computeBalances, computeKpis, dlog, fetchHtgPerUsd, forgetCompanyChoice
 //   friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline
-//   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark, hlPinValid, hlSaveMeta
+//   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark, hlPinValid, hlSaveMeta, invoicePrefix
 //   invokeEdgeFunction, logClientError, monthLabel, oflIsNetworkError, oflLoad, oflSyncAll
 //   oflTimeout, perfMarkMount, perfMarkReady, pjTraceText, resolveMembership, roleLabel
 //   ruleRefusalMessage, sanitizeUserMessage, sealEntries, supabase, todayStr, uid, unwrapVersioned
@@ -1195,6 +1195,7 @@ function App() {
         }, delay));
       },
       logAudit,
+      invoicePrefix: invoicePrefix(settings),
     };
     const r = await oflSyncAll(ctx);
     if (r && r.done > 0) showToast(`${r.done} vente(s) hors ligne synchronisée(s) avec leur vrai numéro de facture${r.conflicts ? ` — ${r.conflicts} avec un stock insuffisant à vérifier (voir la facture)` : ""}.`);
@@ -2653,6 +2654,7 @@ function App() {
         )}
         {active === "vente" && (
           <VenteModule
+            clients={clients}
             setCheques={setCheques}
             accounts={accounts}
             entries={entries}
@@ -2791,7 +2793,7 @@ function App() {
               const { companyId } = await resolveMembership();
               const { data: n, error } = await supabase.rpc("next_invoice_number", { target_company_id: companyId });
               if (error) throw error;
-              return "F" + String(n).padStart(4, "0");
+              return invoicePrefix(settings) + String(n).padStart(4, "0");
             }}
           />
         )}

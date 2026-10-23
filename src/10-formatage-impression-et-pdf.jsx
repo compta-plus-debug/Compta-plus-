@@ -1,10 +1,10 @@
 // ═══ MODULE ═══
 // @module Formatage impression et pdf
 // @depends CURRENCIES, CURRENT_CURRENCY, todayStr
-// @exports HEADER_RGB, InvoiceSheet, MENTION_FRANCHISE_TCA, RecordedStamp, connectThermalPrinter
-//   disconnectThermalPrinter, downloadEtatsFinanciersPDF, downloadInvoicePDF, downloadTablePDF
-//   fmt, getRememberedPrinterName, isThermalPrinterConnected, nifLigne, pdfSafe
-//   printInvoiceBluetooth, tauxFactureTexte
+// @exports HEADER_RGB, InvoiceSheet, MENTION_FRANCHISE_TCA, RecordedStamp, adresseClientFacture
+//   connectThermalPrinter, disconnectThermalPrinter, downloadEtatsFinanciersPDF
+//   downloadInvoicePDF, downloadTablePDF, fmt, getRememberedPrinterName, invoicePrefix
+//   isThermalPrinterConnected, nifLigne, pdfSafe, printInvoiceBluetooth, tauxFactureTexte
 // ═══ FIN DE L'EN-TÊTE ═══
 // Mentions fiscales de la facture (nouveau Code fiscal : identité du vendeur et NIF obligatoires ; entreprise en
 // franchise de TCA : mention « TCA non applicable - article 193 du CGI »). Sources à confirmer dans le texte officiel.
@@ -16,6 +16,16 @@ function tauxFactureTexte(inv) {
   const t = [...taux];
   if (t.length === 0) return "";
   return t.length === 1 ? String(t[0]).replace(".", ",") + " %" : "taux variables";
+}
+// Adresse du client à imprimer : seulement si l'administrateur n'a pas désactivé l'option (Administration → Entreprise).
+function adresseClientFacture(inv, settings) {
+  if (settings && settings.clientAddressOnInvoice === false) return "";
+  return (inv && inv.clientAddress) || "";
+}
+// Préfixe de la série de numérotation des factures (réglable dans Administration ; « F » par défaut).
+function invoicePrefix(settings) {
+  const p = String((settings && settings.invoicePrefix) || "").replace(/[^A-Za-z0-9-]/g, "").slice(0, 8);
+  return p || "F";
 }
 function nifLigne(settings) { return settings && String(settings.companyNIF || "").trim() ? "NIF : " + String(settings.companyNIF).trim() : ""; }
 
@@ -43,6 +53,7 @@ function InvoiceSheet({ invoice, settings, testPrefix }) {
         </div>
         <div style={sep} />
         <div>Facture N° {inv.number}</div><div>{inv.date}</div><div>Client : {inv.client || "Client comptant"}</div>
+        {adresseClientFacture(inv, settings) && <div>Adresse : {adresseClientFacture(inv, settings)}</div>}
         {inv.soldByName && <div>Vendeur : {inv.soldByName}</div>}
         <div style={sep} />
         {(inv.lines || []).map((l, i) => (
@@ -90,6 +101,7 @@ function InvoiceSheet({ invoice, settings, testPrefix }) {
         <div>
           <div style={{ color: "#888", fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>Facturé à</div>
           <div style={{ fontWeight: 600, marginTop: 2 }}>{inv.client || "Client comptant"}</div>
+          {adresseClientFacture(inv, settings) && <div style={{ fontSize: 12, color: "#555", marginTop: 2 }} data-testid="facture-adresse-client">{adresseClientFacture(inv, settings)}</div>}
           {inv.soldByName && <div style={{ fontSize: 12, color: "#7A7460", marginTop: 2 }}>Vendeur : {inv.soldByName}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
@@ -364,6 +376,7 @@ function buildInvoiceEscPos(inv, settings, charsPerLine = 32) {
   line(`Facture N° ${inv.number}`);
   line(String(inv.date));
   line(`Client : ${inv.client || "Client comptant"}`);
+  if (adresseClientFacture(inv, settings)) line(`Adresse : ${adresseClientFacture(inv, settings)}`);
   if (inv.soldByName) line(`Vendeur : ${inv.soldByName}`);
   dashLine();
 
@@ -463,6 +476,7 @@ function downloadInvoiceTicketPDF(inv, settings, widthMm) {
   doc.text(pdfSafe(`Facture N° ${inv.number}`), margin, y); y += 4;
   doc.text(pdfSafe(String(inv.date)), margin, y); y += 4;
   doc.text(pdfSafe(`Client : ${inv.client || "Client comptant"}`), margin, y); y += 4;
+  if (adresseClientFacture(inv, settings)) { doc.text(pdfSafe(`Adresse : ${adresseClientFacture(inv, settings)}`), margin, y); y += 4; }
   if (inv.soldByName) { doc.text(pdfSafe(`Vendeur : ${inv.soldByName}`), margin, y); y += 4; }
   dashLine();
 
@@ -546,8 +560,9 @@ function downloadInvoicePDF(inv, settings) {
   doc.setTextColor(21, 34, 56);
   doc.setFontSize(10);
   doc.text(pdfSafe(`Client : ${inv.client || "Client comptant"}`), 14, headerBottom + 8);
+  if (adresseClientFacture(inv, settings)) { doc.setFontSize(9); doc.text(pdfSafe(`Adresse : ${adresseClientFacture(inv, settings)}`), 14, headerBottom + 13); doc.setFontSize(10); }
   doc.autoTable({
-    startY: headerBottom + 14,
+    startY: headerBottom + (adresseClientFacture(inv, settings) ? 19 : 14),
     head: [["Article", "Qté", "Prix unit.", "Remise", "Sous-total HT", inv.taxLabel || "Taxe"]],
     body: (inv.lines || []).map((l) => [
       l.name, String(l.qty), fmt(l.price),

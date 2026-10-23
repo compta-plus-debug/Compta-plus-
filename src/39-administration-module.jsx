@@ -3,8 +3,8 @@
 // @depends APP_VERSION, BK_LABELS, CURRENCIES, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
 //   DEFAULT_SUPPLIERS, GroupedTabNav, NET_MSG, PartialResetPanel, Plus, RestorePreviewModal
 //   TAX_SYSTEMS, bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify, ecInviteError, fmt
-//   genInviteToken, isFutureDate, isLocked, logClientError, resizeImage, resolveMembership
-//   roleLabel, rpSave, supabase, todayStr, uid, useBackNav, useEffect, useState
+//   genInviteToken, invoicePrefix, isFutureDate, isLocked, logClientError, resizeImage
+//   resolveMembership, roleLabel, rpSave, supabase, todayStr, uid, useBackNav, useEffect, useState
 // @exports AdminModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function AdminModule({
@@ -22,6 +22,8 @@ function AdminModule({
   const [companyPhone, setCompanyPhone] = useState(settings.companyPhone || "");
   const [companyEmail, setCompanyEmail] = useState(settings.companyEmail || "");
   const [companyNIF, setCompanyNIF] = useState(settings.companyNIF || "");
+  const [invoicePrefixIn, setInvoicePrefixIn] = useState(settings.invoicePrefix || "");
+  const [clientAddressOnInvoice, setClientAddressOnInvoice] = useState(settings.clientAddressOnInvoice !== false);
   const [tcaFranchise, setTcaFranchise] = useState(!!settings.tcaFranchise);
   const [companyVille, setCompanyVille] = useState(settings.companyVille || "");
   const [companySecteurCode, setCompanySecteurCode] = useState(settings.companySecteurCode || "");
@@ -268,7 +270,7 @@ function AdminModule({
       showToast("Le nom n'a peut-être pas pu être enregistré côté serveur — les autres informations ont quand même été sauvegardées localement.");
       logClientError("saveCompany_exception: " + String(e), String(e && e.stack || ""), window.location.href);
     }
-    setSettings({ ...settings, companyName: finalName, companyAddress, companyPhone, companyEmail, companyNIF, tcaFranchise, companyVille, companySecteurCode, companySecteurNom, companyType, currency });
+    setSettings({ ...settings, companyName: finalName, companyAddress, companyPhone, companyEmail, companyNIF, invoicePrefix: invoicePrefixIn.replace(/[^A-Za-z0-9-]/g, "").slice(0, 8), clientAddressOnInvoice, tcaFranchise, companyVille, companySecteurCode, companySecteurNom, companyType, currency });
     showToast("Paramètres de l'entreprise enregistrés.");
   };
 
@@ -646,6 +648,8 @@ function AdminModule({
       setCompanyPhone(data.settings.companyPhone || "");
       setCompanyEmail(data.settings.companyEmail || "");
       setCompanyNIF(data.settings.companyNIF || "");
+      setInvoicePrefixIn(data.settings.invoicePrefix || "");
+      setClientAddressOnInvoice(data.settings.clientAddressOnInvoice !== false);
       setTcaFranchise(!!data.settings.tcaFranchise);
       setCompanyVille(data.settings.companyVille || "");
       setCompanySecteurCode(data.settings.companySecteurCode || "");
@@ -821,6 +825,20 @@ function AdminModule({
                   <span className="block text-xs" style={{ color: "#8A8370" }}>La TCA n'est alors pas facturée et la facture porte la mention « TCA non applicable - article 193 du CGI ». La TCA payée sur vos achats n'est pas récupérable (article 193 du Code fiscal). Attention : facturer la TCA à tort vous en rend redevable. Faites confirmer par votre expert-comptable que vous êtes bien en dessous du seuil avant d'activer.</span>
                 </span>
               </label>
+            </div>
+            <div className="mb-4">
+              <label className="flex items-start gap-2 text-sm cursor-pointer" style={{ color: "#152238" }}>
+                <input type="checkbox" checked={clientAddressOnInvoice} onChange={(e) => setClientAddressOnInvoice(e.target.checked)} className="mt-1" data-testid="admin-adresse-client-facture" />
+                <span>Afficher l'adresse du client sur la facture
+                  <span className="block text-xs" style={{ color: "#8A8370" }}>Décochez si vos clients ne souhaitent pas donner leur adresse : le champ disparaît de la caisse et l'adresse n'est plus imprimée (facture, aperçu, PDF, ticket). Le Code fiscal la prévoit : à décider avec votre expert-comptable.</span>
+                </span>
+              </label>
+            </div>
+            <div className="mb-4">
+              <label className="text-xs" style={{ color: "#8A8370" }}>Préfixe de la série des factures (facultatif, « F » par défaut)</label>
+              <input value={invoicePrefixIn} onChange={(e) => setInvoicePrefixIn(e.target.value)} placeholder="F" maxLength={8} data-testid="admin-prefixe-facture"
+                className="block w-32 border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
+              <div className="text-xs mt-1" style={{ color: "#A39C87" }}>Exemple : « FA- » donne FA-0001, FA-0002… Le compteur continue sans trou ni doublon ; seul le début du numéro change, pour les nouvelles factures.</div>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>

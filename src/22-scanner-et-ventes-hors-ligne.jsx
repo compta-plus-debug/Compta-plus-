@@ -148,7 +148,7 @@ async function oflSyncAll(ctx) {
         if (!it.numberReal) {
           const { data: n, error } = await oflTimeout(ctx.supabase.rpc("next_invoice_number", { target_company_id: companyId }), 12000);
           if (error) throw error;
-          it = oflPatch(it.qid, { provNumber: it.provNumber || it.number, number: "F" + String(n).padStart(4, "0"), numberReal: true });
+          it = oflPatch(it.qid, { provNumber: it.provNumber || it.number, number: (ctx.invoicePrefix || "F") + String(n).padStart(4, "0"), numberReal: true });
         }
         // 2. stock : vérifié et décrémenté de façon atomique côté base (une seule fois)
         if ((it.stockLines || []).length > 0 && !it.stockDone) {
