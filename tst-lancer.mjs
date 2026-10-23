@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const ici = path.dirname(fileURLToPath(import.meta.url));
-const tests = ["h1", "k1", "g2", "p1", "p2", "p3", "p5", "p6", "r1", "c2", "c1", "d2", "d3", "d4", "e1", "i3", "i4", "i5", "j1", "l1", "l2", "l3", "c6", "m1", "m2", "n2", "n1", "n3", "s1", "s2", "t1", "t2", "u1", "u2", "u3", "u4", "u5", "u6"];
+const tests = ["h1", "k1", "g2", "p1", "p2", "p3", "p5", "p6", "r1", "c2", "c1", "d2", "d3", "d4", "e1", "i3", "i4", "i5", "j1", "l1", "l2", "l3", "c6", "m1", "m2", "n2", "n1", "n3", "s1", "s2", "t1", "t2", "u1", "u2", "u3", "u4", "u5", "u6", "u7"];
 let echecs = 0;
 for (const t of tests) {
   let sortie = "", ok = false;
