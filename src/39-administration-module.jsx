@@ -13,7 +13,7 @@ function AdminModule({
   employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
   setEmployees, setPayslips, setSalaryAdvances, setSalesStations, setAssets, setAccruals, setDeferrals, setRiskProvisions, setEntryTemplates, setPendingApprovals,
-  showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies,
+  showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged,
 }) {
   const [tab, setTab] = useState("entreprise");
   useBackNav(tab, setTab, "entreprise");
@@ -1019,6 +1019,9 @@ function AdminModule({
               )}
             </div>
           </div>
+          {secteurs && secteurs.ok && (
+            <SecteursCard companyId={secteurs.companyId} info={secteurs} droits={secteursDroits(secteurs, { planTier, groupId, planStatus })} showToast={showToast} onChanged={onSecteursChanged} currentUserEmail={currentUserEmail} />
+          )}
         </div>
       )}
 

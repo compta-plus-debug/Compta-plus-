@@ -6,16 +6,17 @@
 //   DEFAULT_SETTINGS, DEFAULT_SUPPLIERS, DEFAULT_USERS, Dashboard, FALLBACK_HTG_PER_USD
 //   GestionModule, GroupDashboardModule, HL_EVT, HelpCenterChat, Icon, LayoutDashboard, Lock
 //   MODULES, Menu, MessageCircle, NET_MSG, OFL_EVT, PLAN_TIER_INFO, PayrollModule
-//   ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL, SecurityPanel, Smartphone, StockModule
-//   SuperAdminModule, UpgradeModal, VENDEUR_WRITABLE_CATEGORIES, VenteModule, X, _backNavStack
-//   _membership, allowedModulesFor, asstScan, bkBuildFile, bkDownload, chooseCompany
-//   clearMembershipCache, computeBalances, computeKpis, dlog, fetchHtgPerUsd, forgetCompanyChoice
-//   friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline
-//   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark, hlPinValid, hlSaveMeta, invoicePrefix
-//   invokeEdgeFunction, logClientError, monthLabel, oflIsNetworkError, oflLoad, oflSyncAll
-//   oflTimeout, perfMarkMount, perfMarkReady, pjTraceText, resolveMembership, roleLabel
-//   ruleRefusalMessage, sanitizeUserMessage, sealEntries, supabase, todayStr, uid, unwrapVersioned
-//   useBackNav, useEffect, useMemo, useState
+//   ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL, SecteursChoixModal, SecurityPanel
+//   Smartphone, StockModule, SuperAdminModule, UpgradeModal, VENDEUR_WRITABLE_CATEGORIES
+//   VenteModule, X, _backNavStack, _membership, allowedModulesFor, asstScan, bkBuildFile
+//   bkDownload, chooseCompany, clearMembershipCache, computeBalances, computeKpis, dlog
+//   fetchHtgPerUsd, forgetCompanyChoice, friendlyError, genInviteToken, hlCacheAll, hlCachePut
+//   hlKeys, hlMeta, hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark
+//   hlPinValid, hlSaveMeta, invoicePrefix, invokeEdgeFunction, loadSecteursInfo, logClientError
+//   monthLabel, oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady
+//   pjTraceText, resolveMembership, roleLabel, ruleRefusalMessage, sanitizeUserMessage
+//   sealEntries, secteursDroits, supabase, todayStr, uid, unwrapVersioned, useBackNav, useEffect
+//   useMemo, useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 function App() {
@@ -218,6 +219,8 @@ function App() {
   }, [stationId, salesStations]);
   const [planStatus, setPlanStatus] = useState("suspended"); // valeur de repli la plus restrictive — écrasée dès que resolveMembership() confirme le vrai statut ; filet de sécurité en plus de la barrière de chargement
   const [planTier, setPlanTier] = useState("standard"); // "standard" | "assisted"
+  const [secteurs, setSecteurs] = useState({ sectors: [], locked: false, pack: false, extra: [], ok: false, companyId: null }); // blocs par secteur (étape 1)
+  const [secteursSkip, setSecteursSkip] = useState(false);
   const [trialEndsAt, setTrialEndsAt] = useState(null);
   // Groupe multi-entreprises : null si cette entreprise n'en fait pas partie.
   const [groupId, setGroupId] = useState(null);
@@ -925,6 +928,7 @@ function App() {
         }
         setPlanStatus(effectiveStatus);
         setPlanTier(membership.planTier || "standard");
+        if (membership.companyId) loadSecteursInfo(membership.companyId).then(setSecteurs);
         setIsAssistedSupervisor(!!membership.isAssistedSupervisor);
         setIsAccountant(!!membership.isAccountant);
         setCanAdjust(!!membership.isAccountant && !!membership.canAdjust);
@@ -2504,6 +2508,9 @@ function App() {
       <AnnouncementsBanner />
       <AdminMfaEnforcer role={role} settings={settings} showToast={showToast} onSignOut={() => { clearMembershipCache(); supabase.auth.signOut(); }} />
       {showHelpCenter && <HelpCenterChat onClose={() => { setShowHelpCenter(false); refreshHelpCounters(); }} />}
+      {role === "Administrateur" && secteurs.ok && !secteurs.locked && !secteursSkip && !needsWelcome && !isBlocked && secteursDroits(secteurs, { planTier, groupId, planStatus }).inclus && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" && (
+        <SecteursChoixModal companyId={secteurs.companyId} showToast={showToast} onClose={() => setSecteursSkip(true)} onSaved={() => loadSecteursInfo(secteurs.companyId).then(setSecteurs)} />
+      )}
       {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} planTier={planTier} groupId={groupId} groupName={groupName} showToast={showToast} />}
 
       {/* Main */}
@@ -2809,6 +2816,9 @@ function App() {
             setUsers={setUsers}
             currentUserEmail={currentUserEmail}
             companyId={companyPinCompanyId}
+            secteurs={secteurs}
+            planStatus={planStatus}
+            onSecteursChanged={() => loadSecteursInfo(secteurs.companyId).then(setSecteurs)}
             accounts={accounts}
             entries={entries}
             products={products}

@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Centre de gestion
 // @depends AnnouncementsAdminPanel, BadgeDollar, CabinetBillingPanel, CabinetRequestsPanel, GroupedTabNav
-//   SimpleGroupedBarChart, SupervisionPanel, SupportInbox, X, friendlyError, invokeEdgeFunction
-//   logClientError, roleLabel, supabase, useEffect, useState
+//   SecteursGestionPanel, SimpleGroupedBarChart, SupervisionPanel, SupportInbox, X, friendlyError
+//   invokeEdgeFunction, logClientError, roleLabel, supabase, useEffect, useState
 // @exports CentreDeGestionModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin }) {
@@ -466,7 +466,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
         tab={tab}
         setTab={setTab}
         groups={[
-          ...(perms.entreprises ? [{ label: "Entreprises", color: { bg: "#5B3FA0", text: "#fff", light: "#EDEAF7", lightText: "#5B3FA0" }, tabs: [["entreprises", "Entreprises"]] }] : []),
+          ...(perms.entreprises ? [{ label: "Entreprises", color: { bg: "#5B3FA0", text: "#fff", light: "#EDEAF7", lightText: "#5B3FA0" }, tabs: [["entreprises", "Entreprises"], ["secteurs", "Secteurs et blocs"]] }] : []),
           ...(perms.offres ? [{ label: "Campagnes", color: { bg: "#9A7B1E", text: "#fff", light: "#FBF1DC", lightText: "#9A7B1E" }, tabs: [["offres", "Offres spéciales"], ["annonces", "Annonces"], ["cabinets", "Cabinets"]] }] : []),
           ...(perms.statistiques ? [{ label: "Statistiques", color: { bg: "#0F6B5C", text: "#fff", light: "#E6F1EE", lightText: "#0F6B5C" }, tabs: [["statistiques", "Statistiques"]] }] : []),
           ...(perms.supervision ? [{ label: "Supervision", color: { bg: "#3B5C1F", text: "#fff", light: "#EEF4E2", lightText: "#3B5C1F" }, tabs: [["supervision", "Supervision"]] }] : []),
@@ -475,7 +475,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
         ]}
       />
 
-      {!perms[tab] && tab !== "entreprises" && (() => { setTab("entreprises"); return null; })()}
+      {!perms[tab] && tab !== "entreprises" && !(tab === "secteurs" && perms.entreprises) && (() => { setTab("entreprises"); return null; })()}
 
       {loading ? (
         <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }}>Chargement…</div>
@@ -639,6 +639,8 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
           </div>
           )}
         </div>
+      ) : tab === "secteurs" ? (
+        <SecteursGestionPanel showToast={showToast} currentUserEmail={currentUserEmail} logActivity={logActivity} />
       ) : tab === "annonces" ? (
         <AnnouncementsAdminPanel showToast={showToast} currentUserEmail={currentUserEmail} />
       ) : tab === "offres" ? (
