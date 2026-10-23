@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Paie
 // @depends AssistedPrincipleReminder, FISCAL_RULES_VALIDATED, Pencil, PendingRecommendationsBanner
-//   RecordedStamp, RotateCcw, _membership, detectAmountAnomaly, fmt, isFutureDate, isLocked
-//   todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useState
+//   RecordedStamp, RotateCcw, _membership, detectAmountAnomaly, downloadTablePDF, fmt
+//   isFutureDate, isLocked, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useState
 // @exports PayrollModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // ── Chantier C : cotisations de paie à taux paramétrables ───────────────────
@@ -111,6 +111,93 @@ function PayrollRatesPanel({ settings, setSettings, role, showToast, logAudit })
 }
 
 // --- Module 9 : Salaires (RH) ---
+// État mensuel des retenues à la source à verser à la DGI (articles 100 et 103 du Code fiscal) : retenue sur salaire
+// (1/12 de l'impôt annuel) et retenue sur primes / boni. Versement entre le 1er et le 15 du mois suivant, avec cet
+// état explicatif. Lu directement des bulletins de paie enregistrés (les bulletins annulés sont exclus).
+function RetenuesDGIPanel({ payslips, settings }) {
+  const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const pre = `${year}-${String(month).padStart(2, "0")}`;
+  const rows = (payslips || [])
+    .filter((p) => p.status !== "annulé" && p.date && p.date.startsWith(pre) && ((Number(p.salaryWithholding) || 0) + (Number(p.bonusWithholding) || 0)) > 0)
+    .map((p) => ({
+      id: p.id, name: p.employeeName, periode: `${p.periodStart || ""} au ${p.periodEnd || ""}`, brut: Number(p.grossTotal) || 0,
+      sal: Number(p.salaryWithholding) || 0, prime: Number(p.bonusAmount) || 0, taux: Number(p.bonusWithholdingRate) || 0,
+      kind: p.bonusKind === "boni" ? "Boni" : "Prime / autre", pw: Number(p.bonusWithholding) || 0,
+    }));
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const totSal = r2(rows.reduce((t, r) => t + r.sal, 0));
+  const totPrime = r2(rows.reduce((t, r) => t + r.pw, 0));
+  const total = r2(totSal + totPrime);
+  const nextM = month === 12 ? 1 : month + 1, nextY = month === 12 ? year + 1 : year;
+  const echeance = `15 ${MOIS[nextM - 1]} ${nextY}`;
+  const sansRetenue = (payslips || []).filter((p) => p.status !== "annulé" && p.date && p.date.startsWith(pre) && ((Number(p.salaryWithholding) || 0) + (Number(p.bonusWithholding) || 0)) === 0).length;
+  const downloadPdf = () => {
+    downloadTablePDF({
+      title: `Etat des retenues ${MOIS[month - 1]} ${year}`,
+      settings,
+      columns: ["Employé", "Période", "Brut", "Retenue salaire (art. 100)", "Prime / boni", "Taux", "Retenue prime (art. 103)"],
+      rows: rows.map((r) => [r.name, r.periode, fmt(r.brut), fmt(r.sal), r.prime > 0 ? `${fmt(r.prime)} (${r.kind})` : "—", r.taux > 0 ? `${r.taux} %` : "—", fmt(r.pw)]),
+      footerLines: [
+        `Total retenue sur salaires : ${fmt(totSal)}`,
+        `Total retenue sur primes et boni : ${fmt(totPrime)}`,
+        `TOTAL A VERSER A LA DGI : ${fmt(total)}`,
+        `Versement entre le 1er et le 15 ${MOIS[nextM - 1]} ${nextY} (art. 100 et 103).`,
+        settings.companyNIF ? `NIF : ${settings.companyNIF}` : "NIF : à renseigner dans Administration",
+      ],
+    });
+  };
+  return (
+    <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+      <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>État mensuel des retenues à verser à la DGI</div>
+      <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
+        Retenue sur salaire (articles 100 et 132) et retenue sur primes ou boni (article 103), lues de vos bulletins de paie enregistrés (bulletins annulés exclus). Le versement se fait entre le 1er et le 15 du mois suivant, accompagné de cet état. Les taux restent à valider avec votre expert-comptable.
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div>
+          <label className="text-xs" style={{ color: "#8A8370" }}>Année</label>
+          <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
+        </div>
+        <div>
+          <label className="text-xs" style={{ color: "#8A8370" }}>Mois des paies</label>
+          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} data-testid="retenues-mois">
+            {MOIS.map((m, i) => <option key={m} value={i + 1}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+          </select>
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <div className="text-sm py-6 text-center" style={{ color: "#A39C87" }} data-testid="retenues-vide">Aucune retenue sur les bulletins de ce mois.{sansRetenue > 0 ? ` (${sansRetenue} bulletin${sansRetenue > 1 ? "s" : ""} sans retenue.)` : ""}</div>
+      ) : (
+        <div className="overflow-x-auto mb-4"><table className="w-full text-sm">
+          <thead><tr className="text-left text-xs" style={{ color: "#8A8370", borderBottom: "1px solid #E4DFD1" }}>
+            <th className="py-2 font-normal">Employé</th><th className="py-2 font-normal">Période</th><th className="py-2 font-normal text-right">Brut</th>
+            <th className="py-2 font-normal text-right">Retenue salaire</th><th className="py-2 font-normal text-right">Prime / boni</th><th className="py-2 font-normal text-right">Retenue prime</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} data-testid="retenues-ligne" style={{ borderBottom: "1px solid #F3EFE3" }}>
+                <td className="py-1.5">{r.name}</td><td className="py-1.5 text-xs tabular">{r.periode}</td><td className="py-1.5 tabular text-right">{fmt(r.brut)}</td>
+                <td className="py-1.5 tabular text-right">{fmt(r.sal)}</td>
+                <td className="py-1.5 tabular text-right text-xs">{r.prime > 0 ? `${fmt(r.prime)} · ${r.kind} ${r.taux} %` : "—"}</td>
+                <td className="py-1.5 tabular text-right">{fmt(r.pw)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+      )}
+      <div className="p-3 rounded mb-4" style={{ background: "#F7E9E3" }}>
+        <div className="flex justify-between text-sm tabular"><span>Retenue sur salaires</span><span data-testid="retenues-sal">{fmt(totSal)}</span></div>
+        <div className="flex justify-between text-sm tabular"><span>Retenue sur primes et boni</span><span data-testid="retenues-prime">{fmt(totPrime)}</span></div>
+        <div className="flex justify-between text-sm font-semibold tabular mt-1" style={{ color: "#A6432F" }}><span>Total à verser à la DGI</span><span data-testid="retenues-total">{fmt(total)}</span></div>
+        <div className="text-xs mt-1" style={{ color: "#7A7460" }}>À verser entre le 1er et le 15 {MOIS[nextM - 1]} {nextY} (échéance : {echeance}).</div>
+      </div>
+      <button onClick={downloadPdf} disabled={rows.length === 0} className="px-4 py-2 rounded text-sm text-white" style={{ background: "#152238", opacity: rows.length === 0 ? 0.5 : 1 }} data-testid="retenues-pdf">Télécharger l'état (.pdf)</button>
+    </div>
+  );
+}
+
 function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, setEmployees, payslips, setPayslips, salaryAdvances, setSalaryAdvances, settings, setSettings, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation }) {
   const anomalyGate = useAssistedAnomalyGate();
   const hasPendingRH = (pendingRecommendations || []).some((r) => r.module === "salaires");
@@ -446,7 +533,7 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
       </header>
 
       <div className="flex gap-1 mb-6 overflow-x-auto">
-        {[["employes", "Employés"], ["avances", "Avances sur salaire"], ["bulletins", "Bulletins de paie"], ["cotisations", "Cotisations"]].map(([id, label]) => (
+        {[["employes", "Employés"], ["avances", "Avances sur salaire"], ["bulletins", "Bulletins de paie"], ["cotisations", "Cotisations"], ["retenues", "Retenues DGI"]].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className="px-4 py-2 text-sm rounded-t shrink-0 whitespace-nowrap"
             style={{
@@ -661,6 +748,7 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
         </div>
       )}
 
+      {tab === "retenues" && <RetenuesDGIPanel payslips={payslips} settings={settings} />}
       {tab === "cotisations" && <PayrollRatesPanel settings={settings} setSettings={setSettings} role={role} showToast={showToast} logAudit={logAudit} />}
 
       {tab === "bulletins" && (
