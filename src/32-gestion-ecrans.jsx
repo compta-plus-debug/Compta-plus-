@@ -207,7 +207,7 @@ function BzAvoirs({ P }) {
   const invList = invoices.filter((i) => !["annulée", "don"].includes(i.status) && i.total > 0 && !i.isOpeningBalance);
   const inv = invList.find((i) => String(i.id) === String(invId));
   const maxCn = inv ? bzR(inv.total - creditsFor(inv.id)) : 0;
-  const purList = purchases.filter((p) => p.status !== "annulé");
+  const purList = purchases.filter((p) => p.status !== "annulé" && !(Number(p.retenueSource) > 0)); // pas de retour sur un achat avec retenue à la source
   const pur = purList.find((p) => String(p.id) === String(purId));
   const maxRet = pur ? bzR(pur.amount - (pur.returnedAmount || 0)) : 0;
   const cns = bizdocs.filter((d) => d.type === "creditnote").sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));

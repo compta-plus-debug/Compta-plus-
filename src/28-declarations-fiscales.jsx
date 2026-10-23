@@ -2,7 +2,7 @@
 // @module Declarations fiscales
 // @depends HEADER_RGB, downloadTablePDF, fmt, pdfSafe, useState
 // @exports ComparatifPanel, DeclarationIRPanel, DeclarationTCAPanel, FISCAL_RULES_VALIDATED
-//   VersementsAnnuelsPanel
+//   RetenuesPrestationsPanel, VersementsAnnuelsPanel
 // ═══ FIN DE L'EN-TÊTE ═══
 const MOIS_NOMS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
@@ -784,14 +784,17 @@ function VersementsAnnuelsPanel({ payslips, employees, purchases, suppliers, ent
   (purchases || []).filter((p) => p.status !== "annulé" && p.date && p.date >= from && p.date <= to).forEach((p) => {
     const e = (entries || []).find((x) => x.id === p.id);
     const debit = e && (e.lines || []).find((l) => Number(l.debit) > 0 && l.account !== "4456");
-    const nature = versementNatureDuCompte(debit && debit.account);
+    const avecRet = Number(p.retenueSource) > 0;
+    const nature = avecRet ? (p.retenueType === "licence" ? "Redevances (licences, marques, brevets)" : p.retenueType === "etranger" ? "Prestations payées hors d'Haïti" : "Honoraires et prestations de services") : versementNatureDuCompte(debit && debit.account);
     if (!nature) return;
     const sup = (suppliers || []).find((s) => s.name === p.supplier);
     const k = `${p.supplier}|${nature}`;
-    if (!parFour[k]) parFour[k] = { name: p.supplier, nif: (sup && sup.nif) || "", nature, montant: 0 };
-    parFour[k].montant += Number(p.amount) || 0;
+    if (!parFour[k]) parFour[k] = { name: p.supplier, nif: (sup && sup.nif) || "", nature, montant: 0, retenue: 0 };
+    // Avec retenue, la fiche porte le net payé : la somme versée au sens de l'article 95 est la rémunération brute (hors taxe).
+    parFour[k].montant += avecRet ? Number(p.amountHT) || 0 : Number(p.amount) || 0;
+    if (avecRet) parFour[k].retenue += Number(p.retenueSource) || 0;
   });
-  Object.values(parFour).forEach((f) => rows.push({ name: f.name, nif: f.nif, nature: f.nature, montant: r2(f.montant), retenue: 0, source: "achats" }));
+  Object.values(parFour).forEach((f) => rows.push({ name: f.name, nif: f.nif, nature: f.nature, montant: r2(f.montant), retenue: r2(f.retenue), source: "achats" }));
   rows.sort((a, b) => a.name.localeCompare(b.name) || a.nature.localeCompare(b.nature));
   const total = r2(rows.reduce((t, r) => t + r.montant, 0));
   const totalRet = r2(rows.reduce((t, r) => t + r.retenue, 0));
@@ -825,7 +828,7 @@ function VersementsAnnuelsPanel({ payslips, employees, purchases, suppliers, ent
     <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
       <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Liste annuelle des versements (article 95)</div>
       <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-        Chaque entreprise déclare, entre le 1er et le 31 octobre, les sommes versées durant l'exercice précédent (salaires, boni, primes, loyers, honoraires, prestations, intérêts…) avec les retenues à la source, en identifiant chaque bénéficiaire (nom et NIF). Salaires et primes viennent des bulletins de paie ; loyers, honoraires et prestations, intérêts viennent des achats d'après le compte de charge (613, 622, 66). Les dividendes, commissions, jetons de présence et autres versements ne sont pas calculés : ajoutez-les à la main sur le formulaire. Les retenues sur contrats de services et paiements à l'étranger (articles 96 et 97) ne sont pas encore suivies.
+        Chaque entreprise déclare, entre le 1er et le 31 octobre, les sommes versées durant l'exercice précédent (salaires, boni, primes, loyers, honoraires, prestations, intérêts…) avec les retenues à la source, en identifiant chaque bénéficiaire (nom et NIF). Salaires et primes viennent des bulletins de paie ; loyers, honoraires et prestations, intérêts viennent des achats d'après le compte de charge (613, 622, 66). Les dividendes, commissions, jetons de présence et autres versements ne sont pas calculés : ajoutez-les à la main sur le formulaire. Les retenues des articles 96 et 97 saisies dans Achats sont reprises avec leur retenue.
       </p>
       <FiscalValidationNotice />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
@@ -876,6 +879,74 @@ function VersementsAnnuelsPanel({ payslips, employees, purchases, suppliers, ent
         <button onClick={pdf} disabled={rows.length === 0} className="px-4 py-2 rounded text-sm text-white" style={{ background: "#152238", opacity: rows.length === 0 ? 0.5 : 1 }} data-testid="versements-pdf">Télécharger (.pdf)</button>
         <button onClick={csv} disabled={rows.length === 0} className="px-4 py-2 rounded text-sm" style={{ background: "#EFE9DD", color: "#152238", opacity: rows.length === 0 ? 0.5 : 1 }} data-testid="versements-csv">Télécharger (.csv)</button>
       </div>
+    </div>
+  );
+}
+
+// Retenues à la source sur les rémunérations de prestataires (articles 96 et 97) : état mensuel à verser à la DGI,
+// entre le 1er et le 15 du mois qui suit celui du paiement. Lu des achats enregistrés avec une retenue.
+function RetenuesPrestationsPanel({ purchases, suppliers, settings }) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const mm = String(month).padStart(2, "0");
+  const pref = `${year}-${mm}`;
+  const rows = (purchases || []).filter((p) => p.status !== "annulé" && Number(p.retenueSource) > 0 && String(p.date || "").startsWith(pref))
+    .map((p) => {
+      const sup = (suppliers || []).find((s) => s.name === p.supplier);
+      const nature = p.retenueType === "licence" ? "Licence / marque / brevet (art. 96-2)" : p.retenueType === "etranger" ? "Bénéficiaire hors d'Haïti (art. 97)" : "Prestation de services (art. 96)";
+      return { date: p.date, name: p.supplier, nif: (sup && sup.nif) || "", nature, base: Number(p.amountHT) || 0, rate: p.retenueRate, retenue: Number(p.retenueSource) || 0, libre: p.retenueType === "etranger" };
+    }).sort((a, b) => a.date.localeCompare(b.date));
+  const total = Math.round(rows.reduce((t, r) => t + r.retenue, 0) * 100) / 100;
+  const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  const nextM = month === 12 ? 0 : month, nextY = month === 12 ? year + 1 : year;
+  const echeance = `1er au 15 ${MOIS[nextM]} ${nextY}`;
+  const pdf = () => downloadTablePDF({
+    title: `Retenues sur prestations ${MOIS[month - 1]} ${year}`,
+    settings,
+    columns: ["Date", "Bénéficiaire", "NIF", "Nature", "Base", "Taux", "Retenue"],
+    rows: rows.map((r) => [r.date, r.name, r.nif || "NIF manquant", r.nature, fmt(r.base), `${r.rate} %`, fmt(r.retenue)]),
+    footerLines: [`Total à verser à la DGI : ${fmt(total)}`, `A verser entre le ${echeance} (articles 96 et 97).`, settings.companyNIF ? `NIF de l'entreprise : ${settings.companyNIF}` : "NIF de l'entreprise : à renseigner dans Administration"],
+  });
+  return (
+    <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+      <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Retenues sur prestations de services (articles 96 et 97)</div>
+      <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
+        Retenues prélevées sur la rémunération de prestataires non soumis aux états financiers (10 %, ou 20 % pour licences, marques et brevets) et de bénéficiaires hors d'Haïti (20 %, retenue libératoire). Elles se saisissent dans Achats et sont reprises ici pour le versement à la DGI.
+      </p>
+      <FiscalValidationNotice />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div>
+          <label className="text-xs" style={{ color: "#8A8370" }}>Mois du paiement</label>
+          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} data-testid="retprest-mois">
+            {MOIS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs" style={{ color: "#8A8370" }}>Année</label>
+          <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} data-testid="retprest-annee" />
+        </div>
+      </div>
+      <div className="text-xs mb-3" style={{ color: "#7A7460" }}>À verser entre le {echeance}.</div>
+      {rows.length === 0 ? (
+        <div className="text-sm py-6 text-center" style={{ color: "#A39C87" }} data-testid="retprest-vide">Aucune retenue sur prestation ce mois-ci.</div>
+      ) : (
+        <div className="overflow-x-auto mb-4"><table className="w-full text-sm">
+          <thead><tr className="text-left text-xs" style={{ color: "#8A8370", borderBottom: "1px solid #E4DFD1" }}>
+            <th className="py-2 font-normal">Date</th><th className="py-2 font-normal">Bénéficiaire</th><th className="py-2 font-normal">Nature</th>
+            <th className="py-2 font-normal text-right">Base</th><th className="py-2 font-normal text-right">Taux</th><th className="py-2 font-normal text-right">Retenue</th>
+          </tr></thead>
+          <tbody>{rows.map((r, i) => (
+            <tr key={i} data-testid="retprest-ligne" style={{ borderBottom: "1px solid #F3EFE3" }}>
+              <td className="py-1.5 text-xs">{r.date}</td><td className="py-1.5">{r.name}</td><td className="py-1.5 text-xs">{r.nature}</td>
+              <td className="py-1.5 tabular text-right">{fmt(r.base)}</td><td className="py-1.5 tabular text-right">{r.rate} %</td><td className="py-1.5 tabular text-right">{fmt(r.retenue)}</td>
+            </tr>))}</tbody>
+        </table></div>
+      )}
+      <div className="p-3 rounded mb-4" style={{ background: "#F7E9E3" }}>
+        <div className="flex justify-between text-sm tabular"><span>Total à verser à la DGI</span><span data-testid="retprest-total">{fmt(total)}</span></div>
+      </div>
+      <button onClick={pdf} disabled={rows.length === 0} className="px-4 py-2 rounded text-sm text-white" style={{ background: "#152238", opacity: rows.length === 0 ? 0.5 : 1 }} data-testid="retprest-pdf">Télécharger l'état (.pdf)</button>
     </div>
   );
 }

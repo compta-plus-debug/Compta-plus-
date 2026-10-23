@@ -162,6 +162,7 @@ function App() {
       { code: "6811", name: "Dotations aux amortissements des immobilisations", type: "Charge" },
       { code: "404", name: "Fournisseurs d'immobilisations", type: "Passif" },
       { code: "4456", name: "Taxe déductible sur achats (TCA)", type: "Actif" },
+      { code: "431", name: "Charges sociales et fiscales à payer", type: "Passif" },
       { code: "4081", name: "Fournisseurs — Factures non parvenues", type: "Passif" },
       { code: "4181", name: "Clients — Factures à établir", type: "Actif" },
       { code: "6238", name: "Dons, libéralités", type: "Charge" },

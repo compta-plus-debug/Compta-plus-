@@ -87,6 +87,10 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
   const taxShort = (TAX_SYSTEMS[settings.taxSystem] && TAX_SYSTEMS[settings.taxSystem].label) || "TCA";
   const [tcaDeduct, setTcaDeduct] = useState("");
   const [supplierInvNo, setSupplierInvNo] = useState("");
+  // Retenue à la source sur la rémunération d'un prestataire (articles 96 et 97 du Code fiscal) : le montant retenu
+  // n'est pas payé au fournisseur mais versé à la DGI entre le 1er et le 15 du mois suivant (compte 431).
+  const [retType, setRetType] = useState("");
+  const RET_TYPES = { service: { rate: 10, label: "Prestation de services — prestataire établi en Haïti non soumis aux états financiers (art. 96) : 10 %", short: "Prestation de services (art. 96)" }, licence: { rate: 20, label: "Licence, brevet, marque, procédé de fabrication (art. 96-2) : 20 %", short: "Licence / marque / brevet (art. 96-2)" }, etranger: { rate: 20, label: "Prestation de services payée à un bénéficiaire résidant hors d'Haïti (art. 97) : 20 %", short: "Bénéficiaire hors d'Haïti (art. 97)" } };
   const [purchaseKind, setPurchaseKind] = useState("simple"); // "simple" | "marchandise"
   const [purchaseLines, setPurchaseLines] = useState([]); // [{ productId, qty, unitCost }]
   const [purchaseProductPick, setPurchaseProductPick] = useState("");
@@ -206,7 +210,9 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       return;
     }
     const amountHT = Math.round(Number(form.amount) * 100) / 100;
-    const amountTotal = Math.round((amountHT + tcaNum) * 100) / 100;
+    const retRate = retType && RET_TYPES[retType] ? RET_TYPES[retType].rate : 0;
+    const retenueSource = retRate > 0 ? Math.round(amountHT * retRate) / 100 : 0;
+    const amountTotal = Math.round((amountHT + tcaNum - retenueSource) * 100) / 100; // net réellement dû au fournisseur
     if (isFutureDate(form.date)) {
       showToast("Impossible d'enregistrer un achat à une date future.");
       return;
@@ -230,15 +236,23 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
     const payAccount = form.paymentMode === "caisse" ? "530" : form.paymentMode === "banque" ? "512" : "401";
     const label = `Achat — ${form.label} (${supplier?.name || "Fournisseur"})`;
     // Écriture d'achat : sans taxe déductible, l'écriture simple d'origine ; avec taxe : charge HT + 4456 au débit, règlement du total TTC au crédit.
-    const buildPurchaseEntry = () => (tcaNum > 0
+    const buildPurchaseEntry = () => (retenueSource > 0
+      ? { date: form.date, createdAt: new Date().toISOString(), label, lines: [
+          { account: effAccount, debit: amountHT, credit: 0 },
+          ...(tcaNum > 0 ? [{ account: "4456", debit: tcaNum, credit: 0 }] : []),
+          { account: payAccount, debit: 0, credit: amountTotal },
+          { account: "431", debit: 0, credit: retenueSource },
+        ] }
+      : tcaNum > 0
       ? { date: form.date, createdAt: new Date().toISOString(), label, lines: [
           { account: effAccount, debit: amountHT, credit: 0 },
           { account: "4456", debit: tcaNum, credit: 0 },
           { account: payAccount, debit: 0, credit: amountTotal },
         ] }
       : simpleEntry(form.date, label, effAccount, payAccount, Number(form.amount)));
-    const taxFields = tcaNum > 0 ? { amountHT, tcaDeductible: tcaNum, supplierInvoiceNo: (supplierInvNo || "").trim() || undefined }
-      : { amountHT: undefined, tcaDeductible: undefined, supplierInvoiceNo: (supplierInvNo || "").trim() || undefined };
+    const retFields = retenueSource > 0 ? { retenueType: retType, retenueRate: retRate, retenueSource } : { retenueType: undefined, retenueRate: undefined, retenueSource: undefined };
+    const taxFields = tcaNum > 0 || retenueSource > 0 ? { amountHT, tcaDeductible: tcaNum > 0 ? tcaNum : undefined, supplierInvoiceNo: (supplierInvNo || "").trim() || undefined, ...retFields }
+      : { amountHT: undefined, tcaDeductible: undefined, supplierInvoiceNo: (supplierInvNo || "").trim() || undefined, ...retFields };
 
     const commitPurchase = () => {
     if (editingPurchaseId) {
@@ -264,6 +278,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
         label: form.label,
         amount: amountTotal,
         ...(tcaNum > 0 ? { amountHT, tcaDeductible: tcaNum } : {}),
+        ...(retenueSource > 0 ? { amountHT, retenueType: retType, retenueRate: retRate, retenueSource } : {}),
         ...(taxFields.supplierInvoiceNo ? { supplierInvoiceNo: taxFields.supplierInvoiceNo } : {}),
         paymentMode: form.paymentMode,
         status: form.paymentMode === "credit" ? "à payer" : "payé",
@@ -281,7 +296,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       ], { showToast, logAudit });
     }
     setForm({ ...form, label: "", amount: "" });
-    setTcaDeduct(""); setSupplierInvNo("");
+    setTcaDeduct(""); setSupplierInvNo(""); setRetType("");
     setPurchaseLines([]); setPurchaseFreight(""); setPurchaseKind("simple");
     };
     if (planTier !== "assisted" || editingPurchaseId) { commitPurchase(); return; }
@@ -344,12 +359,13 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
     });
     setTcaDeduct(p.tcaDeductible ? String(p.tcaDeductible) : "");
     setSupplierInvNo(p.supplierInvoiceNo || "");
+    setRetType(p.retenueType || "");
   };
 
   const cancelEditPurchase = () => {
     setEditingPurchaseId(null);
     setForm({ ...form, label: "", amount: "" });
-    setTcaDeduct(""); setSupplierInvNo("");
+    setTcaDeduct(""); setSupplierInvNo(""); setRetType("");
   };
 
   const cancelPurchase = (p) => {
@@ -607,6 +623,27 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
             </div>
           )}
 
+          <div className="mb-5 p-3 rounded" style={{ background: "#FAF8F1", border: "1px solid #EEE9DA" }}>
+            <label className="text-xs" style={{ color: "#8A8370" }}>Retenue à la source sur la rémunération du prestataire (articles 96 et 97, facultatif)</label>
+            <select value={retType} onChange={(e) => setRetType(e.target.value)} data-testid="achat-retenue-type"
+              className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
+              <option value="">Aucune retenue</option>
+              {Object.entries(RET_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            {retType && RET_TYPES[retType] && (() => {
+              const ht = Math.round((Number(form.amount) || 0) * 100) / 100;
+              const ret = Math.round(ht * RET_TYPES[retType].rate) / 100;
+              const tc = taxDeductActive ? Math.max(0, Number(tcaDeduct) || 0) : 0;
+              return (
+                <div className="text-xs mt-2" style={{ color: "#7A7460" }} data-testid="achat-retenue-calc">
+                  Retenue ({RET_TYPES[retType].rate} % du montant hors taxe) : <span className="font-medium" style={{ color: "#152238" }} data-testid="achat-retenue-montant">{fmt(ret)}</span> — à verser à la DGI entre le 1er et le 15 du mois suivant.
+                  Net à payer au fournisseur : <span className="font-medium" style={{ color: "#152238" }} data-testid="achat-retenue-net">{fmt(Math.round((ht + tc - ret) * 100) / 100)}</span>.
+                  <span className="block" style={{ color: "#A39C87" }}>Ne s'applique pas à un prestataire imposé sur la base des états financiers. Les retours fournisseur ne sont pas disponibles sur un achat avec retenue.</span>
+                </div>
+              );
+            })()}
+          </div>
+
           {purchaseKind === "marchandise" && !editingPurchaseId && (
             <div className="mb-5 p-4 rounded" style={{ background: "#FAF8F1", border: "1px solid #EEE9DA" }}>
               <div className="text-xs font-medium mb-2" style={{ color: "#152238" }}>Produits reçus</div>
@@ -808,6 +845,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
                         <div>Mode de règlement : <span style={{ color: "#152238" }}>{p.paymentMode === "caisse" ? "Caisse (comptant)" : p.paymentMode === "banque" ? "Banque (comptant)" : "Crédit fournisseur"}</span></div>
                         <div>Montant : <span className="font-medium" style={{ color: "#152238" }}>{fmt(p.amount)}</span></div>
                         {p.tcaDeductible > 0 && <div data-testid="achat-detail-tca">dont {taxShort} déductible : <span style={{ color: "#152238" }}>{fmt(p.tcaDeductible)}</span> (hors taxe {fmt(p.amountHT)})</div>}
+                        {p.retenueSource > 0 && <div data-testid="achat-detail-retenue">Retenue à la source ({p.retenueRate} %) : <span style={{ color: "#152238" }}>{fmt(p.retenueSource)}</span> à verser à la DGI (montant ci-dessus = net dû au fournisseur)</div>}
                         {p.supplierInvoiceNo && <div>Facture du fournisseur : <span style={{ color: "#152238" }}>{p.supplierInvoiceNo}</span></div>}
                         <div>Statut : <span style={{ color: "#152238" }}>{p.status}</span></div>
                       </div>
