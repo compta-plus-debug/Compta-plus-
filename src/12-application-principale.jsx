@@ -429,7 +429,17 @@ function App() {
   }, [refreshHelpCounters]);
   const readOnly = role === "Lecture seule";
   const ecolesActif = secteursDroits(secteurs, { planTier, groupId, planStatus }).actifs.includes("ecoles");
-  const allowedModuleIds = allowedModulesFor(role, settings); // null = accès à tous les modules
+  const modulesDuRole = allowedModulesFor(role, settings); // null = accès à tous les modules
+  // Secrétaire-caissier(ère) : le rôle Vendeur d'une école accède aussi au module Écoles (encaissements seulement, voir le module)
+  const allowedModuleIds = modulesDuRole && role === "Vendeur" && ecolesActif ? [...modulesDuRole, "ecole"] : modulesDuRole;
+  // Espace de travail (entreprise qui a le secteur Écoles) : « École » met l'école en premier et replie les outils de commerce ;
+  // « Commerce » donne l'espace habituel. Le choix est mémorisé sur cet appareil.
+  const [espaceChoisi, setEspaceChoisi] = useState(() => { try { return localStorage.getItem("compta-plus-espace") || ""; } catch (e) { return ""; } });
+  const espace = ecolesActif && espaceChoisi !== "commerce" ? "ecole" : "commerce";
+  const choisirEspace = (e) => { setEspaceChoisi(e); try { localStorage.setItem("compta-plus-espace", e); } catch (x) {} };
+  const ESPACE_ECOLE_MODULES = ["ecole", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion"];
+  const ESPACE_ECOLE_LIBELLES = { achat: "Dépenses et fournisseurs", rh: "Salaires du personnel" };
+  const modulesVisibles = MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || (ecolesActif && espace === "ecole")) && (espace !== "ecole" || ESPACE_ECOLE_MODULES.includes(m.id)));
   // Contrôle de cohérence Facturation ↔ Journal calculé ici (niveau App), pas
   // seulement dans le module Comptabilité, pour que l'alerte soit visible dès la
   // connexion quel que soit le module ouvert — l'incident du 14/08 (91 factures
@@ -492,6 +502,12 @@ function App() {
   useEffect(() => {
     if (allowedModuleIds && !allowedModuleIds.includes(active)) setActive(allowedModuleIds[0]);
   }, [role, active, allowedModuleIds]);
+  useEffect(() => {
+    // espace École : l'accueil est le tableau de bord de l'école ; un module hors de l'espace choisi renvoie vers l'accueil de l'espace
+    const accueil = espace === "ecole" && modulesVisibles.some((m) => m.id === "ecole") ? "ecole" : (allowedModuleIds ? allowedModuleIds[0] : "dashboard");
+    if (active === "dashboard" && espace === "ecole") { setActive(accueil); return; }
+    if (MODULES.some((m) => m.id === active) && !modulesVisibles.some((m) => m.id === active)) setActive(accueil);
+  }, [espace, active, role, ecolesActif]);
   const [toast, setToast] = useState(null);
   const [syncErrorCategories, setSyncErrorCategories] = useState([]); // catégories dont la dernière sauvegarde a échoué
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -2394,7 +2410,7 @@ function App() {
             }}
           >
             <LayoutDashboard size={16} />
-            Tableau de bord
+            {espace === "ecole" ? "Tableau de bord de l'école" : "Tableau de bord"}
           </button>
           )}
           {!allowedModuleIds && groupId && isGroupOwner && (
@@ -2424,10 +2440,21 @@ function App() {
               <span className="flex-1 text-left">Fait partie du groupe « {groupName} »</span>
             </div>
           )}
+          {ecolesActif && (
+            <div className="mt-2 px-5 pt-3 pb-1" data-testid="espace-selecteur">
+              <div className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: "#5C6B8C" }}>Espace de travail</div>
+              <div className="flex gap-1">
+                {[["ecole", "École"], ["commerce", "Commerce"]].map(([id, l]) => (
+                  <button key={id} data-testid={"espace-" + id} onClick={() => { choisirEspace(id); setMobileMenuOpen(false); }} className="flex-1 px-2 py-1.5 rounded text-xs transition-colors"
+                    style={{ background: espace === id ? "#C9A24B" : "#1F3358", color: espace === id ? "#152238" : "#AEB8CE", fontWeight: espace === id ? 600 : 400 }}>{l}</button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mt-2 px-5 pt-3 pb-1 text-[10px] uppercase tracking-widest" style={{ color: "#5C6B8C" }}>
-            Modules{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
+            Modules{espace === "ecole" ? " — espace école" : ""}{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
           </div>
-          {MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || ecolesActif)).map((m) => {
+          {modulesVisibles.map((m) => {
             const Icon = m.icon;
             const isActive = active === m.id;
             return (
@@ -2443,7 +2470,7 @@ function App() {
               >
                 <span className="tabular text-xs w-4" style={{ color: "#6C7A9C" }}>{m.n}</span>
                 <Icon size={16} />
-                <span className="flex-1 text-left">{m.label}</span>
+                <span className="flex-1 text-left">{espace === "ecole" && ESPACE_ECOLE_LIBELLES[m.id] ? ESPACE_ECOLE_LIBELLES[m.id] : m.label}</span>
                 {!m.ready && <Lock size={12} style={{ color: "#4A587A" }} />}
               </button>
             );
@@ -2825,8 +2852,8 @@ function App() {
             }}
           />
         )}
-        {active === "ecole" && ecolesActif && role !== "Vendeur" && (
-          <EcolesModule ecole={ecole} setEcole={setEcole} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} />
+        {active === "ecole" && ecolesActif && (
+          <EcolesModule ecole={ecole} setEcole={setEcole} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
         )}
         {active === "admin" && role === "Administrateur" && (
           <AdminModule

@@ -53,7 +53,7 @@ function allowedModulesFor(role, settings) {
 // d'écrire ces catégories pour un Vendeur, échouerait à chaque fois (normal), et
 // afficherait indéfiniment la bannière d'erreur de synchronisation pour une
 // restriction de sécurité parfaitement normale.
-const VENDEUR_WRITABLE_CATEGORIES = ["products", "invoices", "movements", "entries"];
+const VENDEUR_WRITABLE_CATEGORIES = ["products", "invoices", "movements", "entries", "ecole"]; // « ecole » : secrétaire-caissier(ère) du bloc Écoles (nécessite le script SQL de la v261)
 
 const DEFAULT_ACCOUNTS = [
   { code: "101", name: "Capital", type: "Capitaux propres" },
