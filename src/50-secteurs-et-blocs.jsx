@@ -13,7 +13,7 @@ const SECTEURS_MAX = 3;
 // grille : A = plus important, B, C = moins important (prix mensuels du scénario « Équilibré », à confirmer)
 const SECTEURS_PRIX = { pack: 12, A: 8, B: 5, C: 3 };
 const SECTEURS_CATALOGUE = [
-  { id: "ecoles", label: "Écoles", desc: "Élèves, frais de scolarité, échéances, reçus, impayés", grille: "A", dispo: true },
+  { id: "ecoles", label: "Éducation", desc: "Écoles, formations professionnelles, universités : élèves ou étudiants, frais, crédits, échéances, reçus, impayés", grille: "A", dispo: true },
   { id: "import_export", label: "Import-export", desc: "Dossiers d'importation, coût de revient, TCA à l'importation, exportations", grille: "A", dispo: true },
   { id: "industrie", label: "Industries artisanales", desc: "Fiches de fabrication, coût de revient, matières premières", grille: "A", dispo: false },
   { id: "sante", label: "Santé (cabinets, cliniques, hôpitaux)", desc: "Facturation par acte, assureurs, pharmacie", grille: "B", dispo: false },

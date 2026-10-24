@@ -431,6 +431,7 @@ function App() {
   const readOnly = role === "Lecture seule";
   const secteursActifs = secteursDroits(secteurs, { planTier, groupId, planStatus }).actifs;
   const ecolesActif = secteursActifs.includes("ecoles");
+  const etabKind = ((ecole || []).find((r) => r && r.type === "etab") || {}).kind || "ecole"; // type d'établissement du bloc Éducation (noms des rôles)
   const ieActif = secteursActifs.includes("import_export");
   const modulesDuRole = allowedModulesFor(role, settings); // null = accès à tous les modules
   // Secrétaire-caissier(ère) : le rôle Vendeur d'une école accède aussi au module Écoles (encaissements seulement, voir le module)
@@ -2417,7 +2418,7 @@ function App() {
             }}
           >
             <LayoutDashboard size={16} />
-            {espace === "ecole" ? "Tableau de bord de l'école" : "Tableau de bord"}
+            {espace === "ecole" ? "Tableau de bord de l'établissement" : "Tableau de bord"}
           </button>
           )}
           {!allowedModuleIds && groupId && isGroupOwner && (
@@ -2451,7 +2452,7 @@ function App() {
             <div className="mt-2 px-5 pt-3 pb-1" data-testid="espace-selecteur">
               <div className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: "#5C6B8C" }}>Espace de travail</div>
               <div className="flex gap-1">
-                {[["ecole", "École"], ["impex", "Import-export"], ["commerce", "Commerce"]].filter(([id]) => espacesDispo.includes(id)).map(([id, l]) => (
+                {[["ecole", "Éducation"], ["impex", "Import-export"], ["commerce", "Commerce"]].filter(([id]) => espacesDispo.includes(id)).map(([id, l]) => (
                   <button key={id} data-testid={"espace-" + id} onClick={() => { choisirEspace(id); setMobileMenuOpen(false); }} className="flex-1 px-2 py-1.5 rounded text-xs transition-colors"
                     style={{ background: espace === id ? "#C9A24B" : "#1F3358", color: espace === id ? "#152238" : "#AEB8CE", fontWeight: espace === id ? 600 : 400 }}>{l}</button>
                 ))}
@@ -2459,7 +2460,7 @@ function App() {
             </div>
           )}
           <div className="mt-2 px-5 pt-3 pb-1 text-[10px] uppercase tracking-widest" style={{ color: "#5C6B8C" }}>
-            Modules{espace === "ecole" ? " — espace école" : espace === "impex" ? " — espace import-export" : ""}{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
+            Modules{espace === "ecole" ? " — espace éducation" : espace === "impex" ? " — espace import-export" : ""}{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
           </div>
           {modulesVisibles.map((m) => {
             const Icon = m.icon;
@@ -2498,7 +2499,7 @@ function App() {
           {readOnly ? (
             <span style={{ color: "#D9A441" }}>{isAccountant && canAdjust ? "Mode consultation — vous pouvez passer des écritures de régularisation dans Comptabilité." : (espace === "ecole" && !isAccountant ? "Suppléant — mode consultation : les modifications sont désactivées." : "Mode consultation — les modifications sont désactivées.")}</span>
           ) : (
-            <>Rôle : {roleLabel(role, espace === "ecole")}{role === "Vendeur" && currentStationForSidebar?.activeSellerName ? ` — ${currentStationForSidebar.activeSellerName}` : ""}</>
+            <>Rôle : {roleLabel(role, espace === "ecole" ? etabKind : false)}{role === "Vendeur" && currentStationForSidebar?.activeSellerName ? ` — ${currentStationForSidebar.activeSellerName}` : ""}</>
           )}
           {planStatus === "trial" && trialDaysLeft !== null && (
             <div className="mt-1" style={{ color: trialDaysLeft <= 5 ? "#D9A441" : "#5C6B8C" }}>
@@ -2867,7 +2868,7 @@ function App() {
         )}
         {active === "admin" && role === "Administrateur" && (
           <AdminModule
-            ecoleLabels={ecolesActif}
+            ecoleLabels={ecolesActif ? etabKind : false}
             settings={settings}
             setSettings={setSettings}
             users={users}

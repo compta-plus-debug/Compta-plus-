@@ -16,7 +16,7 @@ function AdminModule({
   showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged, ecoleLabels,
 }) {
   // École : le nom du métier suivi du rôle réel entre parenthèses (ex. « Secrétaire-caissier(ère) (Vendeur) »), quel que soit l'espace de travail ouvert
-  const roleOptionLabel = (r) => (ecoleLabels && roleLabel(r, true) !== roleLabel(r) ? roleLabel(r, true) + " (" + roleLabel(r) + ")" : roleLabel(r));
+  const roleOptionLabel = (r) => (ecoleLabels && roleLabel(r, ecoleLabels) !== roleLabel(r) ? roleLabel(r, ecoleLabels) + " (" + roleLabel(r) + ")" : roleLabel(r));
   const [tab, setTab] = useState("entreprise");
   useBackNav(tab, setTab, "entreprise");
   const [companyName, setCompanyName] = useState(settings.companyName);
@@ -1159,7 +1159,7 @@ function AdminModule({
       {tab === "utilisateurs" && (
         <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
           <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-            Invitez une personne par email : dès qu'elle se connecte avec cette adresse, elle rejoint automatiquement cette entreprise avec le rôle choisi. <b>Consultant</b> permet de consulter sans rien modifier ; <b>Expert-comptable</b> est une consultation avec exports et commentaires de révision (vous pouvez en plus l'autoriser à passer des écritures de régularisation, et retirer ce droit à tout moment) — un même cabinet peut être rattaché à plusieurs entreprises ; <b>Vendeur</b> n'a accès qu'au point de vente (POS), sans voir la comptabilité, les rapports ni l'administration ; <b>Gestionnaire</b> permet de saisir et modifier les données sur tous les modules ; <b>Administrateur</b> a en plus accès à ce module.{ecoleLabels && <> <i>Dans l'espace École : <b>Secrétaire-caissier(ère)</b> = le rôle Vendeur (encaissements, élèves et relances seulement), <b>Directeur</b> = le rôle Gestionnaire, <b>Suppléant</b> = le rôle Consultant (consultation sans rien modifier).</i></>}
+            Invitez une personne par email : dès qu'elle se connecte avec cette adresse, elle rejoint automatiquement cette entreprise avec le rôle choisi. <b>Consultant</b> permet de consulter sans rien modifier ; <b>Expert-comptable</b> est une consultation avec exports et commentaires de révision (vous pouvez en plus l'autoriser à passer des écritures de régularisation, et retirer ce droit à tout moment) — un même cabinet peut être rattaché à plusieurs entreprises ; <b>Vendeur</b> n'a accès qu'au point de vente (POS), sans voir la comptabilité, les rapports ni l'administration ; <b>Gestionnaire</b> permet de saisir et modifier les données sur tous les modules ; <b>Administrateur</b> a en plus accès à ce module.{ecoleLabels && <> <i>Dans l'espace Éducation : <b>{roleLabel("Vendeur", ecoleLabels)}</b> = le rôle Vendeur (encaissements, inscrits et relances seulement), <b>{roleLabel("Éditeur", ecoleLabels)}</b> = le rôle Gestionnaire, <b>{roleLabel("Lecture seule", ecoleLabels)}</b> = le rôle Consultant (consultation sans rien modifier).</i></>}
             {(planTier === "assisted" || !!groupId) && <> L'<b>Assistant de contrôle</b> n'est pas un rôle : il s'active automatiquement avec le forfait Assisté ou Extension et surveille les erreurs et données sensibles pour tous les utilisateurs autorisés.</>}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 items-end">

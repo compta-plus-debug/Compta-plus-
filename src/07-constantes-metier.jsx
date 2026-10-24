@@ -19,7 +19,7 @@ const MODULES = [
   { id: "rh", n: 9, label: "Salaires (RH)", icon: BadgeDollar, ready: true },
   { id: "gestion", n: 10, label: "Gestion avancée", icon: ClipboardIcon, ready: true },
   { id: "impex", n: 12, label: "Import-export", icon: Truck, ready: true }, // bloc par secteur : visible seulement si le secteur « Import-export » est actif et l'espace choisi
-  { id: "ecole", n: 11, label: "Écoles", icon: BookOpen, ready: true }, // bloc par secteur : visible seulement si le secteur « Écoles » est actif
+  { id: "ecole", n: 11, label: "Éducation", icon: BookOpen, ready: true }, // bloc par secteur : visible seulement si le secteur « Écoles » est actif
 ];
 
 // Modules accessibles par rôle. "null" = accès à tous les modules (comportement
@@ -31,8 +31,14 @@ const MODULES = [
 const ROLE_LABELS = { "Éditeur": "Gestionnaire", "Lecture seule": "Consultant" };
 // Dans l'espace École, les mêmes rôles portent les noms du métier : l'utilisateur se sent dans son école, pas dans un commerce.
 // Les valeurs stockées et les règles du serveur ne changent pas.
-const ROLE_LABELS_ECOLE = { "Vendeur": "Secrétaire-caissier(ère)", "Éditeur": "Directeur", "Lecture seule": "Suppléant" };
-const roleLabel = (r, ecole) => (ecole && ROLE_LABELS_ECOLE[r]) || ROLE_LABELS[r] || r;
+// Selon le type d'établissement du bloc Éducation : école, formation professionnelle ou université.
+const ROLE_LABELS_ECOLE = {
+  ecole: { "Vendeur": "Secrétaire-caissier(ère)", "Éditeur": "Directeur", "Lecture seule": "Suppléant" },
+  pro: { "Vendeur": "Secrétaire-caissier(ère)", "Éditeur": "Directeur", "Lecture seule": "Directeur adjoint" },
+  univ: { "Vendeur": "Secrétaire général(e)", "Éditeur": "Doyen", "Lecture seule": "Vice-doyen" },
+};
+// 2e argument : false = noms habituels ; true ou « ecole » = école ; « pro » ou « univ » = type d'établissement.
+const roleLabel = (r, ecole) => (ecole && (ROLE_LABELS_ECOLE[ecole === true ? "ecole" : ecole] || ROLE_LABELS_ECOLE.ecole)[r]) || ROLE_LABELS[r] || r;
 const ROLE_MODULE_ACCESS = {
   Vendeur: ["vente", "crm", "stock"],
 };

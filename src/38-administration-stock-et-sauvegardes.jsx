@@ -131,7 +131,7 @@ const BK_LABELS = {
   clients: "Clients", settings: "Paramètres", users: "Utilisateurs", employees: "Employés",
   salesStations: "Postes de vente", assets: "Immobilisations", accruals: "Charges à payer / produits à recevoir",
   deferrals: "Charges / produits d'avance", riskProvisions: "Provisions pour risques", entryTemplates: "Modèles d'écritures",
-  pendingApprovals: "Approbations en attente", cheques: "Chèques", bizdocs: "Documents commerciaux", ecole: "Écoles (élèves, frais, reçus)", impex: "Import-export (dossiers)",
+  pendingApprovals: "Approbations en attente", cheques: "Chèques", bizdocs: "Documents commerciaux", ecole: "Éducation (élèves, étudiants, frais, reçus)", impex: "Import-export (dossiers)",
   payslips: "Bulletins de paie", salaryAdvances: "Avances sur salaire", loans: "Emprunts",
 };
 // Empreinte (cyrb53) : détecte un fichier tronqué ou altéré (copier-coller incomplet,
