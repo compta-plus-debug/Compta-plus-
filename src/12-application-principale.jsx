@@ -2489,9 +2489,9 @@ function App() {
             </button>
           )}
           {readOnly ? (
-            <span style={{ color: "#D9A441" }}>{isAccountant && canAdjust ? "Mode consultation — vous pouvez passer des écritures de régularisation dans Comptabilité." : "Mode consultation — les modifications sont désactivées."}</span>
+            <span style={{ color: "#D9A441" }}>{isAccountant && canAdjust ? "Mode consultation — vous pouvez passer des écritures de régularisation dans Comptabilité." : (espace === "ecole" && !isAccountant ? "Suppléant — mode consultation : les modifications sont désactivées." : "Mode consultation — les modifications sont désactivées.")}</span>
           ) : (
-            <>Rôle : {roleLabel(role)}{role === "Vendeur" && currentStationForSidebar?.activeSellerName ? ` — ${currentStationForSidebar.activeSellerName}` : ""}</>
+            <>Rôle : {roleLabel(role, espace === "ecole")}{role === "Vendeur" && currentStationForSidebar?.activeSellerName ? ` — ${currentStationForSidebar.activeSellerName}` : ""}</>
           )}
           {planStatus === "trial" && trialDaysLeft !== null && (
             <div className="mt-1" style={{ color: trialDaysLeft <= 5 ? "#D9A441" : "#5C6B8C" }}>
@@ -2857,6 +2857,7 @@ function App() {
         )}
         {active === "admin" && role === "Administrateur" && (
           <AdminModule
+            ecoleLabels={espace === "ecole"}
             settings={settings}
             setSettings={setSettings}
             users={users}

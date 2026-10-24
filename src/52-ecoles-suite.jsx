@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Ecoles suite
-// @depends Plus, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecId, ecInput, ecR2, ecReste, ecRows, fmt
-//   isLocked, todayStr, uid, useBrouillon, useState
+// @depends Plus, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecId, ecInput, ecPastille, ecR2, ecReste, ecRows
+//   fmt, isLocked, todayStr, uid, useBrouillon, useState
 // @exports EcolesRapports, EcolesRelances, EcolesRemises, ecAppliquerRemisesAuxNouvelles
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Écoles — suite : bourses et rabais, impayés et relances, rapports de l'école.
@@ -104,7 +104,7 @@ function EcolesRemises({ ecole, setEcole, year, students, fees, charges, canEdit
     <div>
       <div className="text-xs p-2 rounded mb-4" style={{ background: "#F4F1E6", color: "#5B563F" }}>Une bourse ou un rabais (fratrie, personnel, mérite…) réduit ce que l'élève doit. Il s'applique aux échéances déjà créées et à celles qui seront créées plus tard. Une remise ne peut pas réduire une échéance en dessous de ce qui a déjà été payé dessus. Elle ne peut pas être retirée : vérifiez avant d'enregistrer.</div>
       {canEdit && year && (
-        <div className="p-3 rounded mb-5" style={{ background: "#fff", border: "1px solid #EEE9DA" }}>
+        <div className="ec-card p-4 mb-5">
           <div className="grid md:grid-cols-6 gap-2 items-end">
             <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Élève</label>
               <select value={f.studentId} onChange={(e) => setF({ ...f, studentId: e.target.value })} data-testid="ecole-remise-eleve" className={ecInput} style={ecBorder}>
@@ -122,9 +122,9 @@ function EcolesRemises({ ecole, setEcole, year, students, fees, charges, canEdit
           </div>
         </div>
       )}
-      <table className="w-full text-sm"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Élève</th><th>Remise</th><th>Forme</th><th>Motif</th><th className="text-right">Réduction accordée</th></tr></thead>
+      <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Élève</th><th>Remise</th><th>Forme</th><th>Motif</th><th className="text-right">Réduction accordée</th></tr></thead>
         <tbody>{discounts.map((d) => (
-          <tr key={d.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-remise-ligne"><td className="py-1.5">{stuName(d.studentId)}</td><td>{d.label}</td><td>{d.kind === "pct" ? d.value + " %" : fmt(d.value)}{d.feeIds && d.feeIds.length ? " sur " + ((fees.find((x) => x.id === d.feeIds[0]) || {}).label || "un frais") : " sur tous les frais"}</td><td className="text-xs">{d.reason || "—"}</td><td className="text-right tabular">{fmt(effet(d))}</td></tr>))}</tbody></table>
+          <tr key={d.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-remise-ligne"><td className="py-1.5">{stuName(d.studentId)}</td><td>{d.label}</td><td>{d.kind === "pct" ? d.value + " %" : fmt(d.value)}{d.feeIds && d.feeIds.length ? " sur " + ((fees.find((x) => x.id === d.feeIds[0]) || {}).label || "un frais") : " sur tous les frais"}</td><td className="text-xs">{d.reason || "—"}</td><td className="text-right tabular">{fmt(effet(d))}</td></tr>))}</tbody></table></div>
       {discounts.length === 0 && <div className="text-sm mt-2" style={{ color: "#8A8370" }}>Aucune remise pour cette année.</div>}
     </div>
   );
@@ -185,25 +185,25 @@ function EcolesRelances({ ecole, setEcole, year, families, students, charges, ca
         <button onClick={exporter} disabled={!lignes.length} className="px-3 py-1.5 rounded text-sm" style={{ ...ecBtn, opacity: lignes.length ? 1 : 0.5 }} data-testid="ecole-relance-export">Exporter la liste (tableur)</button>
       </div>
       {canAct && (
-        <div className="p-3 rounded mb-4" style={{ background: "#fff", border: "1px solid #EEE9DA" }}>
+        <div className="ec-card p-4 mb-4">
           <label className="text-xs" style={{ color: "#8A8370" }}>Message de relance (mots remplacés automatiquement : {"{famille}"}, {"{montant}"}, {"{depuis}"}, {"{ecole}"})</label>
           <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={3} data-testid="ecole-relance-message" className={ecInput} style={ecBorder} />
           <button onClick={sauverMessage} className="mt-2 px-3 py-1.5 rounded text-xs" style={ecBtn} data-testid="ecole-relance-enregistrer">Enregistrer ce message</button>
         </div>
       )}
       {lignes.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Aucun impayé échu : rien à relancer.</div> : (
-        <table className="w-full text-sm"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Famille</th><th>Retard</th><th className="text-right">Reste à payer</th><th>Dernière relance</th><th></th></tr></thead>
+        <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Famille</th><th>Retard</th><th className="text-right">Reste à payer</th><th>Dernière relance</th><th></th></tr></thead>
           <tbody>{lignes.map((l) => { const f = fam(l.familyId); const d = derniere(l.familyId); const wa = chiffres(f.phone); return (
             <tr key={l.familyId} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-relance-ligne">
               <td className="py-1.5">{f.name || "—"}<div className="text-xs" style={{ color: "#8A8370" }}>{[...new Set(l.items.map((c) => stuName(c.studentId)))].join(", ")}</div></td>
-              <td className="text-xs">{l.jours} j<div style={{ color: "#8A8370" }}>depuis le {ecDateFr(l.plusAncien)}</div></td>
+              <td className="text-xs">{ecPastille(l.jours + " j de retard", l.jours > 60 ? "alerte" : l.jours > 30 ? "attente" : "neutre")}<div style={{ color: "#8A8370", marginTop: 2 }}>depuis le {ecDateFr(l.plusAncien)}</div></td>
               <td className="text-right tabular">{fmt(l.total)}</td>
               <td className="text-xs">{d ? ecDateFr(d.date) + " (" + nb(l.familyId) + " relance" + (nb(l.familyId) > 1 ? "s" : "") + ")" : "Jamais relancée"}</td>
               <td className="text-right whitespace-nowrap">
                 {f.phone && <a href={"tel:" + f.phone} onClick={() => canAct && noter(l, "appel")} className="text-xs underline mr-3" style={{ color: "#0F6B5C" }} data-testid="ecole-relance-appel">Appeler</a>}
                 {wa.length >= 8 && <a href={"https://wa.me/" + wa + "?text=" + encodeURIComponent(texte(l))} target="_blank" rel="noopener noreferrer" onClick={() => canAct && noter(l, "WhatsApp")} className="text-xs underline mr-3" style={{ color: "#0F6B5C" }} data-testid="ecole-relance-wa">WhatsApp</a>}
                 <button onClick={() => copier(l)} className="text-xs underline" data-testid="ecole-relance-copier">Copier le message</button>
-              </td></tr>); })}</tbody></table>
+              </td></tr>); })}</tbody></table></div>
       )}
     </div>
   );
@@ -234,11 +234,11 @@ function EcolesRapports({ year, classes, students, families, charges, receipts, 
   return (
     <div>
       <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Situation par classe{year ? " — " + year.label : ""}</div><button onClick={exporterClasses} className="text-xs underline" data-testid="ecole-rapport-export-classes">Exporter</button></div>
-      <table className="w-full text-sm mb-6"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Classe</th><th className="text-right">Élèves</th><th className="text-right">Frais attendus</th><th className="text-right">Encaissé</th><th className="text-right">Impayés échus</th><th className="text-right">Recouvrement</th></tr></thead>
-        <tbody>{parClasse.map((c) => (<tr key={c.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-classe"><td className="py-1.5">{c.nom}</td><td className="text-right">{c.eleves}</td><td className="text-right tabular">{fmt(c.attendu)}</td><td className="text-right tabular">{fmt(c.paye)}</td><td className="text-right tabular">{fmt(c.impaye)}</td><td className="text-right">{c.taux == null ? "—" : c.taux + " %"}</td></tr>))}</tbody></table>
+      <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Classe</th><th className="text-right">Élèves</th><th className="text-right">Frais attendus</th><th className="text-right">Encaissé</th><th className="text-right">Impayés échus</th><th className="text-right">Recouvrement</th></tr></thead>
+        <tbody>{parClasse.map((c) => (<tr key={c.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-classe"><td className="py-1.5">{c.nom}</td><td className="text-right">{c.eleves}</td><td className="text-right tabular">{fmt(c.attendu)}</td><td className="text-right tabular">{fmt(c.paye)}</td><td className="text-right tabular">{fmt(c.impaye)}</td><td className="text-right">{c.taux == null ? "—" : c.taux + " %"}</td></tr>))}</tbody></table></div>
       <div className="display text-base mb-2" style={{ color: "#152238" }}>Âge des impayés</div>
-      <table className="w-full text-sm mb-6"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Ancienneté</th><th className="text-right">Familles</th><th className="text-right">Montant</th></tr></thead>
-        <tbody>{tranches.map((t) => (<tr key={t.lib} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-tranche"><td className="py-1.5">{t.lib}</td><td className="text-right">{t.nb}</td><td className="text-right tabular">{fmt(t.total)}</td></tr>))}</tbody></table>
+      <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Ancienneté</th><th className="text-right">Familles</th><th className="text-right">Montant</th></tr></thead>
+        <tbody>{tranches.map((t) => (<tr key={t.lib} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-tranche"><td className="py-1.5">{t.lib}</td><td className="text-right">{t.nb}</td><td className="text-right tabular">{fmt(t.total)}</td></tr>))}</tbody></table></div>
       <div className="flex flex-wrap items-end gap-3 mb-2">
         <div className="display text-base mr-3" style={{ color: "#152238" }}>Journal de caisse</div>
         <div><label className="text-xs" style={{ color: "#8A8370" }}>Du</label><input type="date" value={du.du} onChange={(e) => setDu({ ...du, du: e.target.value })} data-testid="ecole-journal-du" className="block border rounded px-2 py-1 text-sm" style={ecBorder} /></div>
@@ -247,8 +247,8 @@ function EcolesRapports({ year, classes, students, families, charges, receipts, 
       </div>
       <div className="text-sm mb-2" style={{ color: "#152238" }}>{jr.length} reçu(s) · espèces <b className="tabular" data-testid="ecole-journal-especes">{fmt(totalMode("caisse"))}</b> · banque <b className="tabular" data-testid="ecole-journal-banque">{fmt(totalMode("banque"))}</b> · total <b className="tabular" data-testid="ecole-journal-total">{fmt(ecR2(jr.reduce((s, r) => s + r.amount, 0)))}</b></div>
       {Object.keys(parAuteur).length > 0 && <div className="text-xs mb-2" style={{ color: "#7A7460" }}>Par personne : {Object.keys(parAuteur).map((k) => k + " " + fmt(parAuteur[k])).join(" · ")}</div>}
-      <table className="w-full text-sm"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Reçu</th><th>Date</th><th>Famille</th><th>Mode</th><th className="text-right">Montant</th><th>Encaissé par</th></tr></thead>
-        <tbody>{jr.map((r) => (<tr key={r.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-journal-ligne"><td className="py-1.5 tabular text-xs">{r.number}</td><td>{ecDateFr(r.date)}</td><td>{famName(r.familyId)}</td><td>{r.mode === "banque" ? "Banque" : "Espèces"}</td><td className="text-right tabular">{fmt(r.amount)}</td><td className="text-xs">{r.by || "—"}</td></tr>))}</tbody></table>
+      <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Reçu</th><th>Date</th><th>Famille</th><th>Mode</th><th className="text-right">Montant</th><th>Encaissé par</th></tr></thead>
+        <tbody>{jr.map((r) => (<tr key={r.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-journal-ligne"><td className="py-1.5 tabular text-xs">{r.number}</td><td>{ecDateFr(r.date)}</td><td>{famName(r.familyId)}</td><td>{r.mode === "banque" ? "Banque" : "Espèces"}</td><td className="text-right tabular">{fmt(r.amount)}</td><td className="text-xs">{r.by || "—"}</td></tr>))}</tbody></table></div>
     </div>
   );
 }

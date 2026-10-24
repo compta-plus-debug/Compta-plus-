@@ -13,7 +13,7 @@ function AdminModule({
   employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
   setEmployees, setPayslips, setSalaryAdvances, setSalesStations, setAssets, setAccruals, setDeferrals, setRiskProvisions, setEntryTemplates, setPendingApprovals,
-  showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged,
+  showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged, ecoleLabels,
 }) {
   const [tab, setTab] = useState("entreprise");
   useBackNav(tab, setTab, "entreprise");
@@ -347,7 +347,7 @@ function AdminModule({
         showToast(existing.user_id
           ? `${email} est déjà membre — rôle mis à jour.`
           : `Invitation déjà existante pour ${email} — rôle mis à jour.`);
-        logAudit("Administration", "Mise à jour invitation existante", `${email} — rôle ${roleLabel(newUser.role)}`);
+        logAudit("Administration", "Mise à jour invitation existante", `${email} — rôle ${roleLabel(newUser.role, ecoleLabels)}`);
         loadMembers();
         return;
       }
@@ -363,7 +363,7 @@ function AdminModule({
       setNewUser({ email: "", role: "Éditeur", assistedSupervisor: false, accountant: false });
       setLastInviteLink({ email, link: buildInviteLink(token) });
       showToast(`Invitation créée pour ${email}.`);
-      logAudit("Administration", "Invitation utilisateur", `${email} — rôle ${roleLabel(newUser.role)}`);
+      logAudit("Administration", "Invitation utilisateur", `${email} — rôle ${roleLabel(newUser.role, ecoleLabels)}`);
       loadMembers();
     } catch (e) {
       showToast("Action impossible pour le moment. Vérifiez votre connexion internet puis réessayez.");
@@ -1155,7 +1155,7 @@ function AdminModule({
       {tab === "utilisateurs" && (
         <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
           <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-            Invitez une personne par email : dès qu'elle se connecte avec cette adresse, elle rejoint automatiquement cette entreprise avec le rôle choisi. <b>Consultant</b> permet de consulter sans rien modifier ; <b>Expert-comptable</b> est une consultation avec exports et commentaires de révision (vous pouvez en plus l'autoriser à passer des écritures de régularisation, et retirer ce droit à tout moment) — un même cabinet peut être rattaché à plusieurs entreprises ; <b>Vendeur</b> n'a accès qu'au point de vente (POS), sans voir la comptabilité, les rapports ni l'administration ; <b>Gestionnaire</b> permet de saisir et modifier les données sur tous les modules ; <b>Administrateur</b> a en plus accès à ce module.
+            Invitez une personne par email : dès qu'elle se connecte avec cette adresse, elle rejoint automatiquement cette entreprise avec le rôle choisi. <b>Consultant</b> permet de consulter sans rien modifier ; <b>Expert-comptable</b> est une consultation avec exports et commentaires de révision (vous pouvez en plus l'autoriser à passer des écritures de régularisation, et retirer ce droit à tout moment) — un même cabinet peut être rattaché à plusieurs entreprises ; <b>Vendeur</b> n'a accès qu'au point de vente (POS), sans voir la comptabilité, les rapports ni l'administration ; <b>Gestionnaire</b> permet de saisir et modifier les données sur tous les modules ; <b>Administrateur</b> a en plus accès à ce module.{ecoleLabels && <> <i>Dans l'espace École : <b>Secrétaire-caissier(ère)</b> = le rôle Vendeur (encaissements, élèves et relances seulement), <b>Directeur</b> = le rôle Gestionnaire, <b>Suppléant</b> = le rôle Consultant (consultation sans rien modifier).</i></>}
             {(planTier === "assisted" || !!groupId) && <> L'<b>Assistant de contrôle</b> n'est pas un rôle : il s'active automatiquement avec le forfait Assisté ou Extension et surveille les erreurs et données sensibles pour tous les utilisateurs autorisés.</>}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 items-end">
@@ -1177,9 +1177,9 @@ function AdminModule({
                 }}
                 className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
                 <option value="Administrateur">Administrateur</option>
-                <option value="Éditeur">Gestionnaire</option>
-                <option value="Vendeur">Vendeur</option>
-                <option value="Lecture seule">Consultant</option>
+                <option value="Éditeur">{roleLabel("Éditeur", ecoleLabels)}</option>
+                <option value="Vendeur">{roleLabel("Vendeur", ecoleLabels)}</option>
+                <option value="Lecture seule">{roleLabel("Lecture seule", ecoleLabels)}</option>
                 <option value="Expert-comptable">Expert-comptable</option>
               </select>
             </div>
@@ -1245,9 +1245,9 @@ function AdminModule({
                       title={locked ? "Un administrateur principal ne peut pas être rétrogradé par un autre administrateur." : undefined}
                       className="border rounded px-2 py-1 text-xs" style={{ borderColor: "#DDD6C4", opacity: locked ? 0.6 : 1 }}>
                       <option value="Administrateur">Administrateur</option>
-                      <option value="Éditeur">Gestionnaire</option>
-                      <option value="Vendeur">Vendeur</option>
-                      <option value="Lecture seule">Consultant</option>
+                      <option value="Éditeur">{roleLabel("Éditeur", ecoleLabels)}</option>
+                      <option value="Vendeur">{roleLabel("Vendeur", ecoleLabels)}</option>
+                      <option value="Lecture seule">{roleLabel("Lecture seule", ecoleLabels)}</option>
                       <option value="Expert-comptable">Expert-comptable</option>
                     </select>
                   </td>

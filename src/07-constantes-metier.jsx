@@ -28,7 +28,10 @@ const MODULES = [
 // Libellés affichés des rôles. Les valeurs stockées (base de données, règles serveur) restent
 // « Éditeur » et « Lecture seule » : seuls les mots vus à l'écran changent.
 const ROLE_LABELS = { "Éditeur": "Gestionnaire", "Lecture seule": "Consultant" };
-const roleLabel = (r) => ROLE_LABELS[r] || r;
+// Dans l'espace École, les mêmes rôles portent les noms du métier : l'utilisateur se sent dans son école, pas dans un commerce.
+// Les valeurs stockées et les règles du serveur ne changent pas.
+const ROLE_LABELS_ECOLE = { "Vendeur": "Secrétaire-caissier(ère)", "Éditeur": "Directeur", "Lecture seule": "Suppléant" };
+const roleLabel = (r, ecole) => (ecole && ROLE_LABELS_ECOLE[r]) || ROLE_LABELS[r] || r;
 const ROLE_MODULE_ACCESS = {
   Vendeur: ["vente", "crm", "stock"],
 };
