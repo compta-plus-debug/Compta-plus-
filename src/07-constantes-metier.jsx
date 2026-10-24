@@ -18,6 +18,7 @@ const MODULES = [
   { id: "admin", n: 8, label: "Administration", icon: Settings, ready: true },
   { id: "rh", n: 9, label: "Salaires (RH)", icon: BadgeDollar, ready: true },
   { id: "gestion", n: 10, label: "Gestion avancée", icon: ClipboardIcon, ready: true },
+  { id: "ecole", n: 11, label: "Écoles", icon: BookOpen, ready: true }, // bloc par secteur : visible seulement si le secteur « Écoles » est actif
 ];
 
 // Modules accessibles par rôle. "null" = accès à tous les modules (comportement

@@ -81,6 +81,7 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
   // Téléphone du client (facultatif) : repris de la fiche client, sinon de sa dernière facture, dès que le nom correspond.
   const [clientPhone, setClientPhone] = useState(() => (dr && dr.clientPhone) || "");
   const [clientPhoneTouched, setClientPhoneTouched] = useState(false);
+  const [clientListOpen, setClientListOpen] = useState(false);
   useEffect(() => {
     if (clientPhoneTouched) return;
     const key = normalizeClientName(client);
@@ -1278,11 +1279,31 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
               <input type="date" value={saleDate} max={todayStr()} onChange={(e) => setSaleDate(e.target.value)}
                 className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
             </div>
-            <input value={client} onChange={(e) => { setClient(e.target.value); setClientPhoneTouched(false); }} placeholder="Nom du client (optionnel)" list="vente-clients-liste" autoComplete="off" data-testid="vente-client-nom"
-              className="w-full border rounded px-2 py-1.5 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />
-            <datalist id="vente-clients-liste" data-testid="vente-clients-liste">
-              {clientSuggestions.map((c) => <option key={c.name} value={c.name}>{c.phone}</option>)}
-            </datalist>
+            {/* Liste des anciens clients faite maison (la liste native du navigateur ne s'ouvre pas partout, surtout sur téléphone) */}
+            <div className="relative mb-2">
+              <input value={client} onChange={(e) => { setClient(e.target.value); setClientPhoneTouched(false); setClientListOpen(true); }} onFocus={() => setClientListOpen(true)} onBlur={() => setTimeout(() => setClientListOpen(false), 150)}
+                placeholder="Nom du client (optionnel)" autoComplete="off" data-testid="vente-client-nom"
+                className="w-full border rounded pl-2 pr-9 py-1.5 text-sm" style={{ borderColor: "#DDD6C4" }} />
+              <button type="button" tabIndex={-1} aria-label="Afficher la liste des clients" data-testid="vente-clients-fleche"
+                onMouseDown={(e) => { e.preventDefault(); setClientListOpen((o) => !o); }}
+                className="absolute right-0 top-0 h-full px-2.5 text-xs" style={{ color: "#8A8370" }}>{clientListOpen ? "▲" : "▼"}</button>
+              {clientListOpen && (() => {
+                const q = normalizeClientName(client);
+                const liste = clientSuggestions.filter((c) => !q || normalizeClientName(c.name).includes(q)).slice(0, 60);
+                return (
+                  <div className="absolute left-0 right-0 z-30 mt-1 rounded shadow-lg overflow-auto" style={{ background: "#fff", border: "1px solid #DDD6C4", maxHeight: 220 }} data-testid="vente-clients-liste">
+                    {liste.length === 0 && <div className="px-3 py-2 text-xs" style={{ color: "#8A8370" }}>{clientSuggestions.length === 0 ? "Aucun client enregistré pour le moment." : "Aucun client ne correspond : le nom saisi sera créé avec la vente."}</div>}
+                    {liste.map((c) => (
+                      <button type="button" key={c.name} data-testid="vente-client-option"
+                        onMouseDown={(e) => { e.preventDefault(); setClient(c.name); setClientPhoneTouched(false); setClientListOpen(false); }}
+                        className="w-full text-left px-3 py-2 text-sm flex justify-between gap-3" style={{ borderBottom: "1px solid #F1EDE0", color: "#152238" }}>
+                        <span>{c.name}</span>{c.phone && <span className="text-xs tabular" style={{ color: "#8A8370" }}>{c.phone}</span>}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
             {client.trim() && (
               <input type="tel" inputMode="tel" value={clientPhone} onChange={(e) => { setClientPhone(e.target.value); setClientPhoneTouched(true); }} placeholder="Téléphone du client (facultatif)" data-testid="vente-telephone-client"
                 className="w-full border rounded px-2 py-1.5 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />

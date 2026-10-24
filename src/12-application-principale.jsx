@@ -3,20 +3,20 @@
 // @depends APP_VERSION, AchatModule, AdminMfaEnforcer, AdminModule, AnnouncementsBanner, BZ_ACCOUNTS
 //   Boxes, CRMModule, CURRENT_CURRENCY, CabinetSpace, CaisseBanqueModule, CentreDeGestionModule
 //   ComingSoon, ComptaModule, CreditCard, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
-//   DEFAULT_SETTINGS, DEFAULT_SUPPLIERS, DEFAULT_USERS, Dashboard, FALLBACK_HTG_PER_USD
-//   GestionModule, GroupDashboardModule, HL_EVT, HelpCenterChat, Icon, LayoutDashboard, Lock
-//   MODULES, Menu, MessageCircle, NET_MSG, OFL_EVT, PLAN_TIER_INFO, PayrollModule
-//   ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL, SecteursChoixModal, SecurityPanel
-//   Smartphone, StockModule, SuperAdminModule, UpgradeModal, VENDEUR_WRITABLE_CATEGORIES
-//   VenteModule, X, _backNavStack, _membership, allowedModulesFor, asstScan, bkBuildFile
-//   bkDownload, chooseCompany, clearMembershipCache, computeBalances, computeKpis, dlog
-//   fetchHtgPerUsd, forgetCompanyChoice, friendlyError, genInviteToken, hlCacheAll, hlCachePut
-//   hlKeys, hlMeta, hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark
-//   hlPinValid, hlSaveMeta, invoicePrefix, invokeEdgeFunction, loadSecteursInfo, logClientError
-//   monthLabel, oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady
-//   pjTraceText, resolveMembership, roleLabel, ruleRefusalMessage, sanitizeUserMessage
-//   sealEntries, secteursDroits, supabase, todayStr, uid, unwrapVersioned, useBackNav, useEffect
-//   useMemo, useState
+//   DEFAULT_SETTINGS, DEFAULT_SUPPLIERS, DEFAULT_USERS, Dashboard, EcolesModule
+//   FALLBACK_HTG_PER_USD, GestionModule, GroupDashboardModule, HL_EVT, HelpCenterChat, Icon
+//   LayoutDashboard, Lock, MODULES, Menu, MessageCircle, NET_MSG, OFL_EVT, PLAN_TIER_INFO
+//   PayrollModule, ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL, SecteursChoixModal
+//   SecurityPanel, Smartphone, StockModule, SuperAdminModule, UpgradeModal
+//   VENDEUR_WRITABLE_CATEGORIES, VenteModule, X, _backNavStack, _membership, allowedModulesFor
+//   asstScan, bkBuildFile, bkDownload, chooseCompany, clearMembershipCache, computeBalances
+//   computeKpis, dlog, fetchHtgPerUsd, forgetCompanyChoice, friendlyError, genInviteToken
+//   hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel
+//   hlPendMark, hlPinMark, hlPinValid, hlSaveMeta, invoicePrefix, invokeEdgeFunction
+//   loadSecteursInfo, logClientError, monthLabel, oflIsNetworkError, oflLoad, oflSyncAll
+//   oflTimeout, perfMarkMount, perfMarkReady, pjTraceText, resolveMembership, roleLabel
+//   ruleRefusalMessage, sanitizeUserMessage, sealEntries, secteursDroits, supabase, todayStr, uid
+//   unwrapVersioned, useBackNav, useEffect, useMemo, useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 // Protection légère de l'affichage : on ne peut ni glisser un texte de l'écran, ni le déposer dans un champ.
@@ -86,6 +86,7 @@ function App() {
   const [purchases, setPurchases] = useState([]);
   // Registre des chèques (reçus de clients / émis à des fournisseurs), avec leur cycle de vie.
   const [cheques, setCheques] = useState([]);
+  const [ecole, setEcole] = useState([]); // bloc Écoles : années, classes, familles, élèves, frais, échéances, reçus
   const [bizdocs, setBizdocs] = useState([]); // Gestion avancée (devis, avoirs, acomptes, inventaires, abonnements, budgets...)
   const [movements, setMovements] = useState([]);
   const [clients, setClients] = useState(DEFAULT_CLIENTS);
@@ -427,6 +428,7 @@ function App() {
     return () => clearInterval(t);
   }, [refreshHelpCounters]);
   const readOnly = role === "Lecture seule";
+  const ecolesActif = secteursDroits(secteurs, { planTier, groupId, planStatus }).actifs.includes("ecoles");
   const allowedModuleIds = allowedModulesFor(role, settings); // null = accès à tous les modules
   // Contrôle de cohérence Facturation ↔ Journal calculé ici (niveau App), pas
   // seulement dans le module Comptabilité, pour que l'alerte soit visible dès la
@@ -546,6 +548,7 @@ function App() {
     pendingApprovals: setPendingApprovals,
     cheques: setCheques,
     bizdocs: setBizdocs,
+    ecole: setEcole,
   };
   const CATEGORIES = Object.keys(settersByCategory);
 
@@ -1034,7 +1037,7 @@ function App() {
     const daysSince = (Date.now() - last) / 86400000;
     if (daysSince < 7) return;
     try {
-      const data = { accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs };
+      const data = { accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole };
       bkDownload(bkBuildFile(data, _membership && _membership.companyId, "Sauvegarde automatique hebdomadaire"), `sauvegarde-auto-${settings.companyName || "erp"}-${todayStr()}.json`);
       const now = new Date().toISOString();
       setSettings((prev) => ({ ...prev, lastAutoBackupAt: now }));
@@ -1091,6 +1094,7 @@ function App() {
   useEffect(() => { if (loaded && loadedCategoriesRef.current.pendingApprovals) saveCategory("pendingApprovals", pendingApprovals); }, [pendingApprovals, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.cheques) saveCategory("cheques", cheques); }, [cheques, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.bizdocs) saveCategory("bizdocs", bizdocs); }, [bizdocs, loaded]);
+  useEffect(() => { if (loaded && loadedCategoriesRef.current.ecole) saveCategory("ecole", ecole); }, [ecole, loaded]);
   // Les entreprises existantes ont un plan comptable déjà enregistré : on y ajoute
   // une seule fois le compte 5112 (Chèques à encaisser) s'il manque.
   useEffect(() => {
@@ -1233,7 +1237,7 @@ function App() {
     const values = {
       accounts, entries, products, invoices, suppliers, purchases,
       movements, clients, settings, users, productImages, auditLog,
-      employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs,
+      employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole,
     };
     await Promise.all(Object.entries(values).map(async ([cat, val]) => {
       if (role === "Vendeur" && !VENDEUR_WRITABLE_CATEGORIES.includes(cat)) return;
@@ -2423,7 +2427,7 @@ function App() {
           <div className="mt-2 px-5 pt-3 pb-1 text-[10px] uppercase tracking-widest" style={{ color: "#5C6B8C" }}>
             Modules{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
           </div>
-          {MODULES.filter((m) => !allowedModuleIds || allowedModuleIds.includes(m.id)).map((m) => {
+          {MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || ecolesActif)).map((m) => {
             const Icon = m.icon;
             const isActive = active === m.id;
             return (
@@ -2821,6 +2825,9 @@ function App() {
             }}
           />
         )}
+        {active === "ecole" && ecolesActif && role !== "Vendeur" && (
+          <EcolesModule ecole={ecole} setEcole={setEcole} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} />
+        )}
         {active === "admin" && role === "Administrateur" && (
           <AdminModule
             settings={settings}
@@ -2857,6 +2864,8 @@ function App() {
             setCheques={setCheques}
             bizdocs={bizdocs}
             setBizdocs={setBizdocs}
+            ecole={ecole}
+            setEcole={setEcole}
             setAccounts={setAccounts}
             setEntries={setEntries}
             setProducts={setProducts}
@@ -2928,7 +2937,7 @@ function App() {
             </div>
           </div>
         )}
-        {active !== "dashboard" && active !== "compta" && active !== "caisse" && active !== "vente" && active !== "achat" && active !== "stock" && active !== "crm" && active !== "rapports" && active !== "admin" && active !== "rh" && active !== "gestion" && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" && active !== "groupdashboard" && (
+        {active !== "dashboard" && active !== "compta" && active !== "caisse" && active !== "vente" && active !== "achat" && active !== "stock" && active !== "crm" && active !== "rapports" && active !== "admin" && active !== "rh" && active !== "gestion" && active !== "ecole" && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" && active !== "groupdashboard" && (
           <ComingSoon module={MODULES.find((m) => m.id === active)} />
         )}
         </div>
