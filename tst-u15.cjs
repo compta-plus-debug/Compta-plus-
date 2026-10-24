@@ -15,11 +15,11 @@ const side=(p)=>p.locator('aside, nav').first().evaluate(()=>document.body.inner
  ok('Administrateur : rôle inchangé',/Rôle : Administrateur/.test(await side(p)));
  await p.getByText('Administration',{exact:true}).first().click();await p.waitForTimeout(800);await p.getByRole('button',{name:'Accès',exact:true}).click();await p.waitForTimeout(300);await p.getByRole('button',{name:'Utilisateurs',exact:true}).click();await p.waitForTimeout(800);
  const html=await p.content();
- ok('Administration (espace École) : options Directeur, Suppléant, Secrétaire-caissier(ère)',/>Directeur</.test(html)&&/>Suppléant</.test(html)&&/>Secrétaire-caissier\(ère\)</.test(html)&&!/>Gestionnaire</.test(html.replace(/<b>Gestionnaire<\/b>/g,'')));
+ ok('Administration (espace École) : Directeur (Gestionnaire), Suppléant (Consultant), Secrétaire-caissier(ère) (Vendeur)',/>Directeur \(Gestionnaire\)</.test(html)&&/>Suppléant \(Consultant\)</.test(html)&&/>Secrétaire-caissier\(ère\) \(Vendeur\)</.test(html));
  await p.locator('[data-testid="espace-commerce"]').click();await p.waitForTimeout(700);
  await p.getByText('Administration',{exact:true}).first().click();await p.waitForTimeout(800);await p.getByRole('button',{name:'Accès',exact:true}).click();await p.waitForTimeout(300);await p.getByRole('button',{name:'Utilisateurs',exact:true}).click();await p.waitForTimeout(800);
  const h2=await p.content();
- ok('Administration (espace Commerce) : options Gestionnaire, Consultant, Vendeur',/>Gestionnaire</.test(h2)&&/>Consultant</.test(h2)&&/>Vendeur</.test(h2));
+ ok('Administration (espace Commerce, école active) : mêmes noms avec le rôle réel',/>Directeur \(Gestionnaire\)</.test(h2)&&/>Secrétaire-caissier\(ère\) \(Vendeur\)</.test(h2));
  ok('aucune erreur de page',errs.length===0,errs.slice(0,3));await p.close();}
 {const {p}=await boot(b,{settings:base,primary:false,pageInit:mk('Vendeur',['commerce'])});await p.waitForTimeout(800);
  ok('sans secteur Écoles : « Rôle : Vendeur » inchangé',/Rôle : Vendeur/.test(await side(p)));await p.close();}
