@@ -15,12 +15,12 @@ const fn=f=>new Function('('+f.toString()+')()');
 (async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
 // A) sans le secteur Écoles : pas de module
 {const {p,errs}=await boot(b,{settings:base,primary:true,pageInit:fn(initNone)});
- ok('sans secteur : pas de module Écoles dans le menu',(await p.getByText('Écoles',{exact:true}).count())===0);
+ ok('sans secteur : pas de module Éducation dans le menu',(await p.getByText('Éducation',{exact:true}).count())===0);
  await p.close();}
 // B) parcours complet
 {const {p,errs}=await boot(b,{settings:base,primary:true,pageInit:fn(initEcoles)});
- ok('secteur actif : module Écoles dans le menu',(await p.getByText('Écoles',{exact:true}).count())>=1);
- await mod(p,'Écoles');
+ ok('secteur actif : module Éducation dans le menu',(await p.getByText('Éducation',{exact:true}).count())>=1);
+ await mod(p,'Éducation');
  ok('écran vide : message de démarrage',(await p.locator('[data-testid="ecole-vide"]').count())===1);
  await tab(p,'annees');
  await p.locator('[data-testid="ecole-annee-nom"]').fill('2026-2027');await p.locator('[data-testid="ecole-annee-ajouter"]').click();await p.waitForTimeout(400);
@@ -84,7 +84,7 @@ const fn=f=>new Function('('+f.toString()+')()');
  {type:'charge',id:'s1:fb:1',studentId:'s1',familyId:'f1',yearId:'y1',feeId:'fb',label:'Cantine',amount:1100,dueDate:jours(-1),account:'7068',tcaRate:10,recognized:false,advance:0,paid:0,status:'ok'},
 ];
  const {p,errs}=await boot(b,{settings:{...base,taxRate:10},primary:true,cats:{ecole:seed},pageInit:fn(initEcoles)});
- await mod(p,'Écoles');await tab(p,'apercu');
+ await mod(p,'Éducation');await tab(p,'apercu');
  ok('impayés échus affichés (famille Marc)',(await p.locator('[data-testid="ecole-impaye-ligne"]').count())===1);
  await tab(p,'echeances');
  await p.locator('[data-testid="ecole-constater"]').click();await p.waitForTimeout(600);

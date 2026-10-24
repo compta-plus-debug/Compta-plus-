@@ -18,13 +18,13 @@ const seed=()=>{const y='y1',c='c1',f='f1',s='s1';return [
  await p.waitForTimeout(800);
  ok('sélecteur d\'espace présent',(await p.locator('[data-testid="espace-selecteur"]').count())===1);
  let m=await menu(p);
- ok('espace École : Écoles présent, Vente et Comptes clients repliés',/Écoles/.test(m)&&!/Vente \(POS/.test(m)&&!/Comptes clients/.test(m)&&!/Stock et inventaire/.test(m),m);
+ ok('espace École : Écoles présent, Vente et Comptes clients repliés',/Éducation/.test(m)&&!/Vente \(POS/.test(m)&&!/Comptes clients/.test(m)&&!/Stock et inventaire/.test(m),m);
  ok('libellés adaptés (Dépenses et fournisseurs, Salaires du personnel)',/Dépenses et fournisseurs/.test(m)&&/Salaires du personnel/.test(m),m);
  ok('accueil = module Écoles',(await p.locator('[data-testid="ecoles-module"]').count())===1);
- ok('bouton tableau de bord de l\'école',/Tableau de bord de l'école/.test(m));
+ ok('bouton tableau de bord de l\'établissement',/Tableau de bord de l'établissement/.test(m));
  await p.locator('[data-testid="espace-commerce"]').click();await p.waitForTimeout(700);
  m=await menu(p);
- ok('espace Commerce : Vente et Stock présents, Écoles masqué',/Vente \(POS/.test(m)&&/Stock et inventaire/.test(m)&&!/Écoles/.test(m.replace(/Espace de travail[\s\S]*?Commerce/,'')),m);
+ ok('espace Commerce : Vente et Stock présents, Écoles masqué',/Vente \(POS/.test(m)&&/Stock et inventaire/.test(m)&&!/Éducation/.test(m.replace(/Espace de travail[\s\S]*?Commerce/,'')),m);
  ok('quitter l\'espace école ramène hors du module Écoles',(await p.locator('[data-testid="ecoles-module"]').count())===0);
  ok('choix mémorisé sur l\'appareil',(await p.evaluate(()=>localStorage.getItem('compta-plus-espace')))==='commerce');
  await p.locator('[data-testid="espace-ecole"]').click();await p.waitForTimeout(700);
@@ -43,7 +43,7 @@ const seed=()=>{const y='y1',c='c1',f='f1',s='s1';return [
 {const {p,errs}=await boot(b,{settings:base,primary:false,cats:{ecole:seed()},pageInit:mk('Vendeur',['ecoles'])});
  await p.waitForTimeout(1000);
  const m=await menu(p);
- ok('secrétaire : voit Écoles, pas Comptabilité ni Administration',/Écoles/.test(m)&&!/Comptabilité/.test(m)&&!/Administration/.test(m),m);
+ ok('secrétaire : voit Écoles, pas Comptabilité ni Administration',/Éducation/.test(m)&&!/Comptabilité/.test(m)&&!/Administration/.test(m),m);
  ok('secrétaire : arrive dans le module Écoles',(await p.locator('[data-testid="ecoles-module"]').count())===1);
  ok('secrétaire : bandeau explicatif',(await p.locator('[data-testid="ecole-secretaire"]').count())===1);
  ok('secrétaire : 3 onglets seulement',(await p.locator('[data-testid^="ecole-tab-"]').count())===3);

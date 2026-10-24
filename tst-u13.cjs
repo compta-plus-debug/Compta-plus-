@@ -15,7 +15,7 @@ const fn=f=>new Function('('+f.toString()+')()');
 const txt=async(p,t)=>(await p.locator('[data-testid="'+t+'"]').innerText()).replace(/\s/g,'');
 (async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
 const {p,errs}=await boot(b,{settings:base,primary:true,pageInit:fn(initEcoles)});
-await mod(p,'Écoles');
+await mod(p,'Éducation');
 ok('nouveaux onglets présents',(await p.locator('[data-testid="ecole-tab-relances"]').count())===1&&(await p.locator('[data-testid="ecole-tab-remises"]').count())===1&&(await p.locator('[data-testid="ecole-tab-rapports"]').count())===1);
 await tab(p,'annees');
 await p.locator('[data-testid="ecole-annee-nom"]').fill('2026-2027');await p.locator('[data-testid="ecole-annee-ajouter"]').click();await p.waitForTimeout(400);
