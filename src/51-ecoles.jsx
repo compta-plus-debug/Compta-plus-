@@ -2,8 +2,8 @@
 // @module Ecoles
 // @depends EcolesRapports, EcolesRelances, EcolesRemises, ecAppliquerRemisesAuxNouvelles, fmt
 //   isFutureDate, isLocked, todayStr, uid, useBrouillon, useEffect, useState
-// @exports EcolesModule, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecId, ecInput, ecPastille, ecR2, ecReste
-//   ecRows
+// @exports EC_CSS, EcolesModule, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecId, ecInput, ecPastille, ecR2
+//   ecReste, ecRows
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Écoles, première version : années scolaires, classes, familles et élèves, grille de frais, échéancier,
 // encaissements avec reçus numérotés, écritures comptables.

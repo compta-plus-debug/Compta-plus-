@@ -2,7 +2,7 @@
 // @module Ecoles suite
 // @depends Plus, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecId, ecInput, ecPastille, ecR2, ecReste, ecRows
 //   fmt, isLocked, todayStr, uid, useBrouillon, useState
-// @exports EcolesRapports, EcolesRelances, EcolesRemises, ecAppliquerRemisesAuxNouvelles
+// @exports EcolesRapports, EcolesRelances, EcolesRemises, ecAppliquerRemisesAuxNouvelles, ecTelecharger
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Écoles — suite : bourses et rabais, impayés et relances, rapports de l'école.
 // Les remises réduisent le montant des échéances de l'élève. Sur une échéance déjà constatée en comptabilité, la réduction est

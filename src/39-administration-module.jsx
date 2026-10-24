@@ -10,11 +10,13 @@
 function AdminModule({
   settings, setSettings, users, setUsers, currentUserEmail, companyId,
   accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, auditLog,
-  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole,
+  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
   setEmployees, setPayslips, setSalaryAdvances, setSalesStations, setAssets, setAccruals, setDeferrals, setRiskProvisions, setEntryTemplates, setPendingApprovals,
   showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged, ecoleLabels,
 }) {
+  // École : le nom du métier suivi du rôle réel entre parenthèses (ex. « Secrétaire-caissier(ère) (Vendeur) »), quel que soit l'espace de travail ouvert
+  const roleOptionLabel = (r) => (ecoleLabels && roleLabel(r, true) !== roleLabel(r) ? roleLabel(r, true) + " (" + roleLabel(r) + ")" : roleLabel(r));
   const [tab, setTab] = useState("entreprise");
   useBackNav(tab, setTab, "entreprise");
   const [companyName, setCompanyName] = useState(settings.companyName);
@@ -417,7 +419,7 @@ function AdminModule({
   };
 
   const [lastExportAt, setLastExportAt] = useState(() => { try { return localStorage.getItem("compta-plus-last-export"); } catch (e) { return null; } });
-  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole });
+  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex });
   const buildBackupNow = (label) => bkBuildFile(buildExportData(), companyId || myCompanyId, label);
   const exportData = () => {
     bkDownload(buildBackupNow("Export manuel"), `sauvegarde-${settings.companyName || "erp"}-${todayStr()}.json`);
@@ -481,6 +483,7 @@ function AdminModule({
     cheques: { kind: "array", requiredKeys: ["id", "kind"], numericKeys: ["amount"], dateKeys: ["date"] },
     bizdocs: { kind: "array", requiredKeys: ["id", "type"] },
     ecole: { kind: "array", requiredKeys: ["id", "type"] },
+    impex: { kind: "array", requiredKeys: ["id", "type"] },
     payslips: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["netAmount", "grossAmount"], dateKeys: ["date"] },
     salaryAdvances: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["amount", "repaidAmount"], dateKeys: ["date"] },
   };
@@ -671,6 +674,7 @@ function AdminModule({
     if (data.cheques) setCheques(data.cheques);
     if (data.bizdocs) setBizdocs(data.bizdocs);
     if (data.ecole && typeof setEcole === "function") setEcole(data.ecole);
+    if (data.impex && typeof setImpex === "function") setImpex(data.impex);
     if (data.payslips) setPayslips(data.payslips);
     if (data.salaryAdvances) setSalaryAdvances(data.salaryAdvances);
   };
@@ -759,7 +763,7 @@ function AdminModule({
     // Filet de sécurité : copie complète de l'état AVANT toute suppression.
     try { rpSave(companyId || myCompanyId, buildBackupNow("Avant réinitialisation"), "Avant réinitialisation", true).then(() => setRpRefresh((n) => n + 1)); } catch (e) { /* sans stockage local : la réinitialisation se fait quand même */ }
     if (sel.compta) {
-      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]);
+      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]);
       setPayslips([]); setSalaryAdvances([]);
       setAssets([]); setAccruals([]); setDeferrals([]); setRiskProvisions([]); setLoans([]);
     }
@@ -1177,9 +1181,9 @@ function AdminModule({
                 }}
                 className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }}>
                 <option value="Administrateur">Administrateur</option>
-                <option value="Éditeur">{roleLabel("Éditeur", ecoleLabels)}</option>
-                <option value="Vendeur">{roleLabel("Vendeur", ecoleLabels)}</option>
-                <option value="Lecture seule">{roleLabel("Lecture seule", ecoleLabels)}</option>
+                <option value="Éditeur">{roleOptionLabel("Éditeur")}</option>
+                <option value="Vendeur">{roleOptionLabel("Vendeur")}</option>
+                <option value="Lecture seule">{roleOptionLabel("Lecture seule")}</option>
                 <option value="Expert-comptable">Expert-comptable</option>
               </select>
             </div>
@@ -1245,9 +1249,9 @@ function AdminModule({
                       title={locked ? "Un administrateur principal ne peut pas être rétrogradé par un autre administrateur." : undefined}
                       className="border rounded px-2 py-1 text-xs" style={{ borderColor: "#DDD6C4", opacity: locked ? 0.6 : 1 }}>
                       <option value="Administrateur">Administrateur</option>
-                      <option value="Éditeur">{roleLabel("Éditeur", ecoleLabels)}</option>
-                      <option value="Vendeur">{roleLabel("Vendeur", ecoleLabels)}</option>
-                      <option value="Lecture seule">{roleLabel("Lecture seule", ecoleLabels)}</option>
+                      <option value="Éditeur">{roleOptionLabel("Éditeur")}</option>
+                      <option value="Vendeur">{roleOptionLabel("Vendeur")}</option>
+                      <option value="Lecture seule">{roleOptionLabel("Lecture seule")}</option>
                       <option value="Expert-comptable">Expert-comptable</option>
                     </select>
                   </td>
@@ -1385,7 +1389,7 @@ function AdminModule({
             )}
           </div>
           <PartialResetPanel
-            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
+            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
             isPrimaryAdmin={isPrimaryAdmin} settings={settings} setSettings={setSettings}
             exportData={exportData} showToast={showToast} logAudit={logAudit}
             apply={applyReset}
