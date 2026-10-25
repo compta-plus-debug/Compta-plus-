@@ -6,7 +6,7 @@
 //   DEFAULT_SETTINGS, DEFAULT_SUPPLIERS, DEFAULT_USERS, Dashboard, EcolesModule
 //   FALLBACK_HTG_PER_USD, GestionModule, GroupDashboardModule, HL_EVT, HelpCenterChat, Icon
 //   ImportExportModule, LayoutDashboard, Lock, MODULES, Menu, MessageCircle, NET_MSG, OFL_EVT
-//   PLAN_TIER_INFO, PayrollModule, ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL
+//   PLAN_TIER_INFO, PayrollModule, ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL, SanteModule
 //   SecteursChoixModal, SecurityPanel, Smartphone, StockModule, SuperAdminModule, UpgradeModal
 //   VENDEUR_WRITABLE_CATEGORIES, VenteModule, X, _backNavStack, _membership, allowedModulesFor
 //   asstScan, bkBuildFile, bkDownload, chooseCompany, clearMembershipCache, computeBalances
@@ -86,6 +86,7 @@ function App() {
   const [purchases, setPurchases] = useState([]);
   // Registre des chèques (reçus de clients / émis à des fournisseurs), avec leur cycle de vie.
   const [cheques, setCheques] = useState([]);
+  const [sante, setSante] = useState([]); // bloc Santé : patients, catalogue, factures, assureurs, praticiens, séjours, lots
   const [impex, setImpex] = useState([]); // bloc Import-export : réglages, dossiers d'importation et d'exportation
   const [ecole, setEcole] = useState([]); // bloc Écoles : années, classes, familles, élèves, frais, échéances, reçus
   const [bizdocs, setBizdocs] = useState([]); // Gestion avancée (devis, avoirs, acomptes, inventaires, abonnements, budgets...)
@@ -433,19 +434,21 @@ function App() {
   const ecolesActif = secteursActifs.includes("ecoles");
   const etabKind = ((ecole || []).find((r) => r && r.type === "etab") || {}).kind || "ecole"; // type d'établissement du bloc Éducation (noms des rôles)
   const ieActif = secteursActifs.includes("import_export");
+  const santeActif = secteursActifs.includes("sante");
+  const santeKind = ((sante || []).find((r) => r && r.type === "etab") || {}).kind || "cabinet"; // type d'établissement de santé (noms des rôles)
   const modulesDuRole = allowedModulesFor(role, settings); // null = accès à tous les modules
   // Secrétaire-caissier(ère) : le rôle Vendeur d'une école accède aussi au module Écoles (encaissements seulement, voir le module)
-  const allowedModuleIds = modulesDuRole && role === "Vendeur" && ecolesActif ? [...modulesDuRole, "ecole"] : modulesDuRole;
+  const allowedModuleIds = modulesDuRole && role === "Vendeur" && (ecolesActif || santeActif) ? [...modulesDuRole, ...(ecolesActif ? ["ecole"] : []), ...(santeActif ? ["sante"] : [])] : modulesDuRole;
   // Espace de travail (entreprise qui a le secteur Écoles) : « École » met l'école en premier et replie les outils de commerce ;
   // « Commerce » donne l'espace habituel. Le choix est mémorisé sur cet appareil.
   const [espaceChoisi, setEspaceChoisi] = useState(() => { try { return localStorage.getItem("compta-plus-espace") || ""; } catch (e) { return ""; } });
-  const espacesDispo = [...(ecolesActif ? ["ecole"] : []), ...(ieActif ? ["impex"] : []), "commerce"];
+  const espacesDispo = [...(ecolesActif ? ["ecole"] : []), ...(ieActif ? ["impex"] : []), ...(santeActif ? ["sante"] : []), "commerce"];
   const espace = espacesDispo.includes(espaceChoisi) ? espaceChoisi : espacesDispo[0];
   const choisirEspace = (e) => { setEspaceChoisi(e); try { localStorage.setItem("compta-plus-espace", e); } catch (x) {} };
   const ESPACE_ECOLE_MODULES = ["ecole", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion"];
   const ESPACE_ECOLE_LIBELLES = { achat: "Dépenses et fournisseurs", rh: "Salaires du personnel" };
-  const modulesVisibles = MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || (ecolesActif && espace === "ecole")) && (m.id !== "impex" || (ieActif && espace === "impex")) && (espace !== "ecole" || ESPACE_ECOLE_MODULES.includes(m.id)))
-    .sort((a, b) => (espace === "impex" ? (b.id === "impex") - (a.id === "impex") : 0));
+  const modulesVisibles = MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || (ecolesActif && espace === "ecole")) && (m.id !== "impex" || (ieActif && espace === "impex")) && (m.id !== "sante" || (santeActif && espace === "sante")) && (espace !== "ecole" || ESPACE_ECOLE_MODULES.includes(m.id)))
+    .sort((a, b) => (espace === "impex" ? (b.id === "impex") - (a.id === "impex") : espace === "sante" ? (b.id === "sante") - (a.id === "sante") : 0));
   // Contrôle de cohérence Facturation ↔ Journal calculé ici (niveau App), pas
   // seulement dans le module Comptabilité, pour que l'alerte soit visible dès la
   // connexion quel que soit le module ouvert — l'incident du 14/08 (91 factures
@@ -510,10 +513,10 @@ function App() {
   }, [role, active, allowedModuleIds]);
   useEffect(() => {
     // espace École : l'accueil est le tableau de bord de l'école ; un module hors de l'espace choisi renvoie vers l'accueil de l'espace
-    const accueil = espace === "ecole" && modulesVisibles.some((m) => m.id === "ecole") ? "ecole" : espace === "impex" && modulesVisibles.some((m) => m.id === "impex") ? "impex" : (allowedModuleIds ? allowedModuleIds[0] : "dashboard");
-    if (active === "dashboard" && (espace === "ecole" || espace === "impex")) { setActive(accueil); return; }
+    const accueil = espace === "ecole" && modulesVisibles.some((m) => m.id === "ecole") ? "ecole" : espace === "impex" && modulesVisibles.some((m) => m.id === "impex") ? "impex" : espace === "sante" && modulesVisibles.some((m) => m.id === "sante") ? "sante" : (allowedModuleIds ? allowedModuleIds[0] : "dashboard");
+    if (active === "dashboard" && (espace === "ecole" || espace === "impex" || espace === "sante")) { setActive(accueil); return; }
     if (MODULES.some((m) => m.id === active) && !modulesVisibles.some((m) => m.id === active)) setActive(accueil);
-  }, [espace, active, role, ecolesActif, ieActif]);
+  }, [espace, active, role, ecolesActif, ieActif, santeActif]);
   const [toast, setToast] = useState(null);
   const [syncErrorCategories, setSyncErrorCategories] = useState([]); // catégories dont la dernière sauvegarde a échoué
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -572,6 +575,7 @@ function App() {
     bizdocs: setBizdocs,
     ecole: setEcole,
     impex: setImpex,
+    sante: setSante,
   };
   const CATEGORIES = Object.keys(settersByCategory);
 
@@ -1060,7 +1064,7 @@ function App() {
     const daysSince = (Date.now() - last) / 86400000;
     if (daysSince < 7) return;
     try {
-      const data = { accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex };
+      const data = { accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante };
       bkDownload(bkBuildFile(data, _membership && _membership.companyId, "Sauvegarde automatique hebdomadaire"), `sauvegarde-auto-${settings.companyName || "erp"}-${todayStr()}.json`);
       const now = new Date().toISOString();
       setSettings((prev) => ({ ...prev, lastAutoBackupAt: now }));
@@ -1119,6 +1123,7 @@ function App() {
   useEffect(() => { if (loaded && loadedCategoriesRef.current.bizdocs) saveCategory("bizdocs", bizdocs); }, [bizdocs, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.ecole) saveCategory("ecole", ecole); }, [ecole, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.impex) saveCategory("impex", impex); }, [impex, loaded]);
+  useEffect(() => { if (loaded && loadedCategoriesRef.current.sante) saveCategory("sante", sante); }, [sante, loaded]);
   // Les entreprises existantes ont un plan comptable déjà enregistré : on y ajoute
   // une seule fois le compte 5112 (Chèques à encaisser) s'il manque.
   useEffect(() => {
@@ -1261,7 +1266,7 @@ function App() {
     const values = {
       accounts, entries, products, invoices, suppliers, purchases,
       movements, clients, settings, users, productImages, auditLog,
-      employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex,
+      employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante,
     };
     await Promise.all(Object.entries(values).map(async ([cat, val]) => {
       if (role === "Vendeur" && !VENDEUR_WRITABLE_CATEGORIES.includes(cat)) return;
@@ -2452,7 +2457,7 @@ function App() {
             <div className="mt-2 px-5 pt-3 pb-1" data-testid="espace-selecteur">
               <div className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: "#5C6B8C" }}>Espace de travail</div>
               <div className="flex gap-1">
-                {[["ecole", "Éducation"], ["impex", "Import-export"], ["commerce", "Commerce"]].filter(([id]) => espacesDispo.includes(id)).map(([id, l]) => (
+                {[["ecole", "Éducation"], ["impex", "Import-export"], ["sante", "Santé"], ["commerce", "Commerce"]].filter(([id]) => espacesDispo.includes(id)).map(([id, l]) => (
                   <button key={id} data-testid={"espace-" + id} onClick={() => { choisirEspace(id); setMobileMenuOpen(false); }} className="flex-1 px-2 py-1.5 rounded text-xs transition-colors"
                     style={{ background: espace === id ? "#C9A24B" : "#1F3358", color: espace === id ? "#152238" : "#AEB8CE", fontWeight: espace === id ? 600 : 400 }}>{l}</button>
                 ))}
@@ -2460,7 +2465,7 @@ function App() {
             </div>
           )}
           <div className="mt-2 px-5 pt-3 pb-1 text-[10px] uppercase tracking-widest" style={{ color: "#5C6B8C" }}>
-            Modules{espace === "ecole" ? " — espace éducation" : espace === "impex" ? " — espace import-export" : ""}{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
+            Modules{espace === "ecole" ? " — espace éducation" : espace === "impex" ? " — espace import-export" : espace === "sante" ? " — espace santé" : ""}{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
           </div>
           {modulesVisibles.map((m) => {
             const Icon = m.icon;
@@ -2499,7 +2504,7 @@ function App() {
           {readOnly ? (
             <span style={{ color: "#D9A441" }}>{isAccountant && canAdjust ? "Mode consultation — vous pouvez passer des écritures de régularisation dans Comptabilité." : (espace === "ecole" && !isAccountant ? "Suppléant — mode consultation : les modifications sont désactivées." : "Mode consultation — les modifications sont désactivées.")}</span>
           ) : (
-            <>Rôle : {roleLabel(role, espace === "ecole" ? etabKind : false)}{role === "Vendeur" && currentStationForSidebar?.activeSellerName ? ` — ${currentStationForSidebar.activeSellerName}` : ""}</>
+            <>Rôle : {roleLabel(role, espace === "ecole" ? etabKind : espace === "sante" ? "s_" + santeKind : false)}{role === "Vendeur" && currentStationForSidebar?.activeSellerName ? ` — ${currentStationForSidebar.activeSellerName}` : ""}</>
           )}
           {planStatus === "trial" && trialDaysLeft !== null && (
             <div className="mt-1" style={{ color: trialDaysLeft <= 5 ? "#D9A441" : "#5C6B8C" }}>
@@ -2860,6 +2865,9 @@ function App() {
             }}
           />
         )}
+        {active === "sante" && santeActif && (
+          <SanteModule sante={sante} setSante={setSante} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
+        )}
         {active === "impex" && ieActif && (
           <ImportExportModule impex={impex} setImpex={setImpex} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
         )}
@@ -2868,7 +2876,7 @@ function App() {
         )}
         {active === "admin" && role === "Administrateur" && (
           <AdminModule
-            ecoleLabels={ecolesActif ? etabKind : false}
+            ecoleLabels={ecolesActif ? etabKind : santeActif ? "s_" + santeKind : false}
             settings={settings}
             setSettings={setSettings}
             users={users}
@@ -2907,6 +2915,8 @@ function App() {
             setEcole={setEcole}
             impex={impex}
             setImpex={setImpex}
+            sante={sante}
+            setSante={setSante}
             setAccounts={setAccounts}
             setEntries={setEntries}
             setProducts={setProducts}
@@ -2978,7 +2988,7 @@ function App() {
             </div>
           </div>
         )}
-        {active !== "dashboard" && active !== "compta" && active !== "caisse" && active !== "vente" && active !== "achat" && active !== "stock" && active !== "crm" && active !== "rapports" && active !== "admin" && active !== "rh" && active !== "gestion" && active !== "ecole" && active !== "impex" && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" && active !== "groupdashboard" && (
+        {active !== "dashboard" && active !== "compta" && active !== "caisse" && active !== "vente" && active !== "achat" && active !== "stock" && active !== "crm" && active !== "rapports" && active !== "admin" && active !== "rh" && active !== "gestion" && active !== "ecole" && active !== "impex" && active !== "sante" && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" && active !== "groupdashboard" && (
           <ComingSoon module={MODULES.find((m) => m.id === active)} />
         )}
         </div>

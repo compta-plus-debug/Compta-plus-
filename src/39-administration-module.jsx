@@ -10,7 +10,7 @@
 function AdminModule({
   settings, setSettings, users, setUsers, currentUserEmail, companyId,
   accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, auditLog,
-  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex,
+  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex, sante, setSante,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
   setEmployees, setPayslips, setSalaryAdvances, setSalesStations, setAssets, setAccruals, setDeferrals, setRiskProvisions, setEntryTemplates, setPendingApprovals,
   showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged, ecoleLabels,
@@ -419,7 +419,7 @@ function AdminModule({
   };
 
   const [lastExportAt, setLastExportAt] = useState(() => { try { return localStorage.getItem("compta-plus-last-export"); } catch (e) { return null; } });
-  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex });
+  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante });
   const buildBackupNow = (label) => bkBuildFile(buildExportData(), companyId || myCompanyId, label);
   const exportData = () => {
     bkDownload(buildBackupNow("Export manuel"), `sauvegarde-${settings.companyName || "erp"}-${todayStr()}.json`);
@@ -484,6 +484,7 @@ function AdminModule({
     bizdocs: { kind: "array", requiredKeys: ["id", "type"] },
     ecole: { kind: "array", requiredKeys: ["id", "type"] },
     impex: { kind: "array", requiredKeys: ["id", "type"] },
+    sante: { kind: "array", requiredKeys: ["id", "type"] },
     payslips: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["netAmount", "grossAmount"], dateKeys: ["date"] },
     salaryAdvances: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["amount", "repaidAmount"], dateKeys: ["date"] },
   };
@@ -675,6 +676,7 @@ function AdminModule({
     if (data.bizdocs) setBizdocs(data.bizdocs);
     if (data.ecole && typeof setEcole === "function") setEcole(data.ecole);
     if (data.impex && typeof setImpex === "function") setImpex(data.impex);
+    if (data.sante && typeof setSante === "function") setSante(data.sante);
     if (data.payslips) setPayslips(data.payslips);
     if (data.salaryAdvances) setSalaryAdvances(data.salaryAdvances);
   };
@@ -763,7 +765,7 @@ function AdminModule({
     // Filet de sécurité : copie complète de l'état AVANT toute suppression.
     try { rpSave(companyId || myCompanyId, buildBackupNow("Avant réinitialisation"), "Avant réinitialisation", true).then(() => setRpRefresh((n) => n + 1)); } catch (e) { /* sans stockage local : la réinitialisation se fait quand même */ }
     if (sel.compta) {
-      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]);
+      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]); if (typeof setSante === "function") setSante([]);
       setPayslips([]); setSalaryAdvances([]);
       setAssets([]); setAccruals([]); setDeferrals([]); setRiskProvisions([]); setLoans([]);
     }
@@ -1159,7 +1161,7 @@ function AdminModule({
       {tab === "utilisateurs" && (
         <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
           <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-            Invitez une personne par email : dès qu'elle se connecte avec cette adresse, elle rejoint automatiquement cette entreprise avec le rôle choisi. <b>Consultant</b> permet de consulter sans rien modifier ; <b>Expert-comptable</b> est une consultation avec exports et commentaires de révision (vous pouvez en plus l'autoriser à passer des écritures de régularisation, et retirer ce droit à tout moment) — un même cabinet peut être rattaché à plusieurs entreprises ; <b>Vendeur</b> n'a accès qu'au point de vente (POS), sans voir la comptabilité, les rapports ni l'administration ; <b>Gestionnaire</b> permet de saisir et modifier les données sur tous les modules ; <b>Administrateur</b> a en plus accès à ce module.{ecoleLabels && <> <i>Dans l'espace Éducation : <b>{roleLabel("Vendeur", ecoleLabels)}</b> = le rôle Vendeur (encaissements, inscrits et relances seulement), <b>{roleLabel("Éditeur", ecoleLabels)}</b> = le rôle Gestionnaire, <b>{roleLabel("Lecture seule", ecoleLabels)}</b> = le rôle Consultant (consultation sans rien modifier).</i></>}
+            Invitez une personne par email : dès qu'elle se connecte avec cette adresse, elle rejoint automatiquement cette entreprise avec le rôle choisi. <b>Consultant</b> permet de consulter sans rien modifier ; <b>Expert-comptable</b> est une consultation avec exports et commentaires de révision (vous pouvez en plus l'autoriser à passer des écritures de régularisation, et retirer ce droit à tout moment) — un même cabinet peut être rattaché à plusieurs entreprises ; <b>Vendeur</b> n'a accès qu'au point de vente (POS), sans voir la comptabilité, les rapports ni l'administration ; <b>Gestionnaire</b> permet de saisir et modifier les données sur tous les modules ; <b>Administrateur</b> a en plus accès à ce module.{ecoleLabels && <> <i>Dans l'espace {String(ecoleLabels).startsWith("s_") ? "Santé" : "Éducation"} : <b>{roleLabel("Vendeur", ecoleLabels)}</b> = le rôle Vendeur (encaissements, inscrits et relances seulement), <b>{roleLabel("Éditeur", ecoleLabels)}</b> = le rôle Gestionnaire, <b>{roleLabel("Lecture seule", ecoleLabels)}</b> = le rôle Consultant (consultation sans rien modifier).</i></>}
             {(planTier === "assisted" || !!groupId) && <> L'<b>Assistant de contrôle</b> n'est pas un rôle : il s'active automatiquement avec le forfait Assisté ou Extension et surveille les erreurs et données sensibles pour tous les utilisateurs autorisés.</>}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 items-end">
@@ -1389,7 +1391,7 @@ function AdminModule({
             )}
           </div>
           <PartialResetPanel
-            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
+            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length + (sante || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
             isPrimaryAdmin={isPrimaryAdmin} settings={settings} setSettings={setSettings}
             exportData={exportData} showToast={showToast} logAudit={logAudit}
             apply={applyReset}
