@@ -11,7 +11,7 @@ const txt=async(p,t)=>(await g(p,t).innerText()).replace(/\s/g,'');
 (async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
 {const {p}=await boot(b,{settings:base,primary:true,pageInit:mk('Administrateur',['sante'])});await p.waitForTimeout(1200);
  ok('espace Santé ouvert par défaut',(await g(p,'sante-module').count())===1);
- ok('sélecteur d\'espace Santé + Commerce',(await g(p,'espace-sante').count())===1&&(await g(p,'espace-commerce').count())===1&&(await g(p,'espace-impex').count())===0);
+ ok('Santé seule (cabinet) : pas de sélecteur d\'espaces (Commerce non nécessaire)',(await g(p,'espace-selecteur').count())===0&&(await g(p,'espace-impex').count())===0);
  ok('message de départ affiché',(await g(p,'sante-vide').count())===1);
  await tab(p,'assureurs');await g(p,'sante-assureur-nom').fill('Assurance Alpha');await g(p,'sante-assureur-pct').fill('80');await g(p,'sante-assureur-ajouter').click();await p.waitForTimeout(300);
  await tab(p,'praticiens');await g(p,'sante-prat-nom').fill('Dr Jean');await g(p,'sante-prat-part').fill('50');await g(p,'sante-prat-ajouter').click();await p.waitForTimeout(300);

@@ -14,7 +14,7 @@ const seed=()=>{const y='y1',c='c1',f='f1',s='s1';return [
  ...[0,1,2].map(i=>({type:'charge',id:s+':fe1:'+(i+1),studentId:s,familyId:f,yearId:y,feeId:'fe1',label:'Écolage '+(i+1)+'/3',amount:1000,dueDate:jours(-40+30*i),account:'7061',tcaRate:0,recognized:false,advance:0,paid:0,status:'ok'}))];};
 (async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
 // A) administrateur, secteur Écoles : espace École par défaut
-{const {p,errs}=await boot(b,{settings:base,primary:true,cats:{ecole:seed()},pageInit:mk('Administrateur',['ecoles','sante'])});
+{const {p,errs}=await boot(b,{settings:base,primary:true,cats:{ecole:seed()},pageInit:mk('Administrateur',['ecoles','import_export'])});
  await p.waitForTimeout(800);
  ok('sélecteur d\'espace présent',(await p.locator('[data-testid="espace-selecteur"]').count())===1);
  let m=await menu(p);

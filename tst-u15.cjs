@@ -11,7 +11,7 @@ const side=(p)=>p.locator('aside, nav').first().evaluate(()=>document.body.inner
  ok('Gestionnaire d\'une école : « Rôle : Directeur »',/Rôle : Directeur/.test(await side(p)));await p.close();}
 {const {p,errs}=await boot(b,{settings:base,primary:false,pageInit:mk('Lecture seule',['ecoles'])});await p.waitForTimeout(1000);
  ok('Consultant d\'une école : Suppléant',/Suppléant/.test(await side(p)));await p.close();}
-{const {p,errs}=await boot(b,{settings:base,primary:true,pageInit:mk('Administrateur',['ecoles','commerce'])});await p.waitForTimeout(1000);
+{const {p,errs}=await boot(b,{settings:base,primary:true,pageInit:mk('Administrateur',['ecoles','import_export'])});await p.waitForTimeout(1000);
  ok('Administrateur : rôle inchangé',/Rôle : Administrateur/.test(await side(p)));
  await p.getByText('Administration',{exact:true}).first().click();await p.waitForTimeout(800);await p.getByRole('button',{name:'Accès',exact:true}).click();await p.waitForTimeout(300);await p.getByRole('button',{name:'Utilisateurs',exact:true}).click();await p.waitForTimeout(800);
  const html=await p.content();
