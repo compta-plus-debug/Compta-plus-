@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Import export
-// @depends EC_CSS, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille, ecTelecharger, fmt
-//   isFutureDate, isLocked, todayStr, uid, useBrouillon, useState
+// @depends EC_CSS, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille, ecTelecharger
+//   fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon, useState
 // @exports ImportExportModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Import-export : dossiers d'importation (coût de revient réel) et dossiers d'exportation.
@@ -645,6 +645,24 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
     );
   };
 
+  // ───────── Statistiques ─────────
+  const Stats = () => {
+    const impCalc = imps.map((d) => ({ d, c: ieImpCalc(d) }));
+    const expCalc = exps.map((d) => ({ d, c: ieExpCalc(d) }));
+    const mois = statMois(6, today);
+    const data = mois.map((m) => ({ mois: m.label, imports: statSomme(impCalc.map((x) => ({ date: x.d.date, v: x.c.totalUSD })), "date", m.key, (x) => x.v), exports: statSomme(expCalc.map((x) => ({ date: x.d.date, v: x.c.totalUSD })), "date", m.key, (x) => x.v) }));
+    const margeTotale = ieR2(expCalc.reduce((s, x) => s + x.c.marge, 0));
+    const caExport = ieR2(expCalc.reduce((s, x) => s + x.c.ht, 0));
+    const parType = {};
+    imps.forEach((d) => (d.charges || []).filter((x) => x.status !== "annulé").forEach((x) => { const k = (IE_FRAIS.find((f) => f[0] === x.kind) || [0, x.label])[1]; parType[k] = ieR2((parType[k] || 0) + x.amount); }));
+    const parClient = {}; expCalc.forEach((x) => { const k = x.d.customer || "—"; parClient[k] = ieR2((parClient[k] || 0) + x.c.ht); });
+    return <StatsBloc
+      vide={imps.length + exps.length === 0 ? "Aucun dossier pour le moment : les statistiques apparaîtront avec vos premières importations et exportations." : ""}
+      kpis={[["Importations", String(imps.length), "ie-stat-imports"], ["Valeur importée", ieUsd(ieR2(impCalc.reduce((s, x) => s + x.c.totalUSD, 0))), "ie-stat-valeur-imp"], ["Chiffre d'affaires export", fmt(caExport), "ie-stat-ca-export"], ["Marge des exportations", fmt(margeTotale), "ie-stat-marge"]]}
+      evolution={{ titre: "Importations et exportations (en dollars) — 6 derniers mois", data, series: [{ key: "imports", name: "Importations", color: "#3F4F73" }, { key: "exports", name: "Exportations", color: "#0F6B5C" }] }}
+      repartitions={[{ titre: "Frais d'approche par nature", data: Object.keys(parType).map((k) => ({ name: k, value: parType[k] })) }, { titre: "Chiffre d'affaires export par client", data: Object.keys(parClient).map((k) => ({ name: k, value: parClient[k] })) }]} />;
+  };
+
   // ───────── Réglages ─────────
   const [rg, setRg] = useState(null);
   const Reglages = () => {
@@ -669,7 +687,7 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
     );
   };
 
-  const tabs = [["apercu", "Vue d'ensemble"], ["imports", "Importations"], ["exports", "Exportations"], ["rapports", "Rapports"], ["reglages", "Réglages"]];
+  const tabs = [["apercu", "Vue d'ensemble"], ["imports", "Importations"], ["exports", "Exportations"], ["rapports", "Rapports"], ["stats", "Statistiques"], ["reglages", "Réglages"]];
   return (
     <div className="p-4 md:p-8 max-w-6xl" data-testid="importexport-module">
       <style>{EC_CSS + '[data-testid="importexport-module"] .display.text-base{border-left:3px solid #C9A24B;padding-left:10px;margin-bottom:12px}[data-testid="importexport-module"] input,[data-testid="importexport-module"] select,[data-testid="importexport-module"] textarea{background:#fff}'}</style>
@@ -682,6 +700,7 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
       {tab === "imports" && Importations()}
       {tab === "exports" && Exportations()}
       {tab === "rapports" && Rapports()}
+      {tab === "stats" && Stats()}
       {tab === "reglages" && Reglages()}
     </div>
   );

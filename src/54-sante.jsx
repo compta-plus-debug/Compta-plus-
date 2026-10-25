@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Sante
-// @depends EC_CSS, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille, ecTelecharger, fmt
-//   isFutureDate, isLocked, todayStr, uid, useBrouillon, useState
+// @depends EC_CSS, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille, ecTelecharger
+//   fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon, useState
 // @exports SanteModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Santé : cabinets et cliniques, pharmacies, laboratoires et imagerie, hôpitaux.
@@ -680,7 +680,24 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
     );
   };
 
-  const tabs = [["apercu", "Vue d'ensemble"], ["patients", V.Patients], ["actes", V.Actes], ["factures", V.Factures], ...(isVendeur ? [] : [["assureurs", "Assureurs"], ["praticiens", V.Praticiens]]), ...(kind === "hopital" ? [["sejours", "Séjours"]] : []), ...(kind === "pharmacie" ? [["lots", "Lots et péremptions"]] : []), ...(isVendeur ? [] : [["rapports", "Rapports"]])];
+  const Stats = () => {
+    const actives = invoices.filter((i) => i.status !== "annulee");
+    const sols = actives.map(saSoldes);
+    const factureT = saR2(actives.reduce((s, i) => s + i.total, 0));
+    const encaisseT = saR2(sols.reduce((s, x) => s + x.paye + x.recu, 0));
+    const mois = statMois(6, today);
+    const payments = actives.flatMap((i) => [...(i.payments || []), ...(i.claims || [])].filter((x) => x.status !== "annulé"));
+    const data = mois.map((m) => ({ mois: m.label, facture: statSomme(actives, "date", m.key, (i) => i.total), encaisse: statSomme(payments, "date", m.key, (x) => x.amount) }));
+    const parCat = {}; actives.forEach((i) => (i.lines || []).forEach((l) => { const k = (SA_CATS.find((c) => c[0] === l.cat) || [0, l.cat])[1]; parCat[k] = saR2((parCat[k] || 0) + l.qty * l.unit); }));
+    const parPayeur = { [V.Patients]: saR2(actives.reduce((s, i) => s + i.patientAmount, 0)) };
+    actives.filter((i) => i.insurerId).forEach((i) => { const k = nomAssureur(i.insurerId); parPayeur[k] = saR2((parPayeur[k] || 0) + i.insurerAmount); });
+    return <StatsBloc
+      vide={invoices.length === 0 ? "Aucune facture pour le moment : les statistiques apparaîtront avec vos premières factures." : ""}
+      kpis={[[V.Patients, String(patients.length), "sante-stat-patients"], ["Facturé", fmt(factureT), "sante-stat-facture"], ["Encaissé (patients et assureurs)", fmt(encaisseT), "sante-stat-encaisse"], ["Taux d'encaissement", (factureT > 0 ? Math.round(encaisseT / factureT * 100) : 0) + " %", "sante-stat-taux"]]}
+      evolution={{ titre: "Facturé et encaissé — 6 derniers mois", data, series: [{ key: "facture", name: "Facturé", color: "#9A7B1E" }, { key: "encaisse", name: "Encaissé", color: "#0F6B5C" }] }}
+      repartitions={[{ titre: "Chiffre d'affaires par catégorie", data: Object.keys(parCat).map((k) => ({ name: k, value: parCat[k] })) }, { titre: "Qui paie : " + V.patient + " et assureurs", data: Object.keys(parPayeur).map((k) => ({ name: k, value: parPayeur[k] })) }]} />;
+  };
+  const tabs = [["apercu", "Vue d'ensemble"], ["patients", V.Patients], ["actes", V.Actes], ["factures", V.Factures], ...(isVendeur ? [] : [["assureurs", "Assureurs"], ["praticiens", V.Praticiens]]), ...(kind === "hopital" ? [["sejours", "Séjours"]] : []), ...(kind === "pharmacie" ? [["lots", "Lots et péremptions"]] : []), ...(isVendeur ? [] : [["rapports", "Rapports"], ["stats", "Statistiques"]])];
   return (
     <>
       <div className={"p-4 md:p-8 max-w-6xl" + (imprimer ? " no-print" : "")} data-testid="sante-module">
@@ -700,6 +717,7 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
         {tab === "sejours" && kind === "hopital" && Sejours()}
         {tab === "lots" && kind === "pharmacie" && Lots()}
         {tab === "rapports" && Rapports()}
+        {tab === "stats" && !isVendeur && Stats()}
       </div>
       {imprimer && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto p-3 md:p-8 no-print" style={{ background: "rgba(21,34,56,0.55)" }} onClick={() => setImprimer(null)} data-testid="sante-facture-apercu">

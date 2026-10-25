@@ -442,12 +442,16 @@ function App() {
   // Espace de travail (entreprise qui a le secteur Écoles) : « École » met l'école en premier et replie les outils de commerce ;
   // « Commerce » donne l'espace habituel. Le choix est mémorisé sur cet appareil.
   const [espaceChoisi, setEspaceChoisi] = useState(() => { try { return localStorage.getItem("compta-plus-espace") || ""; } catch (e) { return ""; } });
-  const espacesDispo = [...(ecolesActif ? ["ecole"] : []), ...(ieActif ? ["impex"] : []), ...(santeActif ? ["sante"] : []), "commerce"];
+  // Commerce (vente, stock, clients…) n'est proposé que si l'activité en dépend : import-export, pharmacie, ou entreprise sans secteur.
+  // Éducation et santé hors pharmacie ont leurs propres outils de facturation et d'encaissement.
+  const commerceUtile = ieActif || (santeActif && santeKind === "pharmacie") || (!ecolesActif && !santeActif);
+  const espacesDispo = [...(ecolesActif ? ["ecole"] : []), ...(ieActif ? ["impex"] : []), ...(santeActif ? ["sante"] : []), ...(commerceUtile ? ["commerce"] : [])];
   const espace = espacesDispo.includes(espaceChoisi) ? espaceChoisi : espacesDispo[0];
   const choisirEspace = (e) => { setEspaceChoisi(e); try { localStorage.setItem("compta-plus-espace", e); } catch (x) {} };
   const ESPACE_ECOLE_MODULES = ["ecole", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion"];
+  const ESPACE_SANTE_MODULES = ["sante", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion", ...(santeKind === "pharmacie" ? ["stock"] : [])];
   const ESPACE_ECOLE_LIBELLES = { achat: "Dépenses et fournisseurs", rh: "Salaires du personnel" };
-  const modulesVisibles = MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || (ecolesActif && espace === "ecole")) && (m.id !== "impex" || (ieActif && espace === "impex")) && (m.id !== "sante" || (santeActif && espace === "sante")) && (espace !== "ecole" || ESPACE_ECOLE_MODULES.includes(m.id)))
+  const modulesVisibles = MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || (ecolesActif && espace === "ecole")) && (m.id !== "impex" || (ieActif && espace === "impex")) && (m.id !== "sante" || (santeActif && espace === "sante")) && (espace !== "ecole" || ESPACE_ECOLE_MODULES.includes(m.id)) && (espace !== "sante" || ESPACE_SANTE_MODULES.includes(m.id)))
     .sort((a, b) => (espace === "impex" ? (b.id === "impex") - (a.id === "impex") : espace === "sante" ? (b.id === "sante") - (a.id === "sante") : 0));
   // Contrôle de cohérence Facturation ↔ Journal calculé ici (niveau App), pas
   // seulement dans le module Comptabilité, pour que l'alerte soit visible dès la
@@ -2456,10 +2460,10 @@ function App() {
           {espacesDispo.length > 1 && (
             <div className="mt-2 px-5 pt-3 pb-1" data-testid="espace-selecteur">
               <div className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: "#5C6B8C" }}>Espace de travail</div>
-              <div className="flex gap-1">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
                 {[["ecole", "Éducation"], ["impex", "Import-export"], ["sante", "Santé"], ["commerce", "Commerce"]].filter(([id]) => espacesDispo.includes(id)).map(([id, l]) => (
-                  <button key={id} data-testid={"espace-" + id} onClick={() => { choisirEspace(id); setMobileMenuOpen(false); }} className="flex-1 px-2 py-1.5 rounded text-xs transition-colors"
-                    style={{ background: espace === id ? "#C9A24B" : "#1F3358", color: espace === id ? "#152238" : "#AEB8CE", fontWeight: espace === id ? 600 : 400 }}>{l}</button>
+                  <button key={id} data-testid={"espace-" + id} onClick={() => { choisirEspace(id); setMobileMenuOpen(false); }} className="rounded text-xs transition-colors"
+                    style={{ padding: "9px 6px", lineHeight: 1.25, background: espace === id ? "#C9A24B" : "#1F3358", color: espace === id ? "#152238" : "#AEB8CE", fontWeight: espace === id ? 600 : 400 }}>{l}</button>
                 ))}
               </div>
             </div>
@@ -2483,7 +2487,7 @@ function App() {
               >
                 <span className="tabular text-xs w-4" style={{ color: "#6C7A9C" }}>{m.n}</span>
                 <Icon size={16} />
-                <span className="flex-1 text-left">{espace === "ecole" && ESPACE_ECOLE_LIBELLES[m.id] ? ESPACE_ECOLE_LIBELLES[m.id] : m.label}</span>
+                <span className="flex-1 text-left">{(espace === "ecole" || espace === "sante") && ESPACE_ECOLE_LIBELLES[m.id] ? ESPACE_ECOLE_LIBELLES[m.id] : m.label}</span>
                 {!m.ready && <Lock size={12} style={{ color: "#4A587A" }} />}
               </button>
             );

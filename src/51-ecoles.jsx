@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Ecoles
-// @depends EcolesRapports, EcolesRelances, EcolesRemises, _membership, ecAppliquerRemisesAuxNouvelles
-//   fmt, isFutureDate, isLocked, roleLabel, supabase, todayStr, uid, useBrouillon, useEffect
-//   useState
+// @depends EcolesRapports, EcolesRelances, EcolesRemises, StatsBloc, _membership
+//   ecAppliquerRemisesAuxNouvelles, fmt, isFutureDate, isLocked, roleLabel, statMois, statSomme
+//   supabase, todayStr, uid, useBrouillon, useEffect, useState
 // @exports EC_CSS, EC_VOCAB, EcolesModule, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecId, ecInput
 //   ecPastille, ecR2, ecReste, ecRows
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -200,8 +200,26 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
   const yCharges = year ? charges.filter((c) => c.yearId === year.id && c.status !== "annulée") : [];
   const [printRec, setPrintRec] = useState(null);
 
-  const tabsTous = [["apercu", "Vue d'ensemble"], ["annees", "Années et " + V.Classes.toLowerCase()], ["eleves", V.Familles + " et " + V.Eleves.toLowerCase()], ["frais", "Frais"], ...(sup ? [["cours", "Cours et crédits"]] : []), ["echeances", "Échéances"], ["recus", "Encaissements"], ["relances", "Impayés et relances"], ["remises", "Bourses et rabais"], ["rapports", "Rapports"]];
+  const tabsTous = [["apercu", "Vue d'ensemble"], ["annees", "Années et " + V.Classes.toLowerCase()], ["eleves", V.Familles + " et " + V.Eleves.toLowerCase()], ["frais", "Frais"], ...(sup ? [["cours", "Cours et crédits"]] : []), ["echeances", "Échéances"], ["recus", "Encaissements"], ["relances", "Impayés et relances"], ["remises", "Bourses et rabais"], ["rapports", "Rapports"], ["stats", "Statistiques"]];
   const tabs = secretaire ? tabsTous.filter(([id]) => ["eleves", "recus", "relances"].includes(id)) : tabsTous;
+
+  // ───────── Statistiques ─────────
+  const Stats = () => {
+    const actifs = students.filter((s) => s.status !== "sorti" && (!year || s.yearId === year.id)).length;
+    const attenduS = ecR2(yCharges.reduce((s, c) => s + c.amount, 0));
+    const paye = ecR2(yCharges.reduce((s, c) => s + (c.paid || 0), 0));
+    const impayeS = ecR2(yCharges.filter((c) => c.dueDate <= today && ecReste(c) > 0).reduce((s, c) => s + ecReste(c), 0));
+    const recOk = receipts.filter((r) => r.status !== "annulé");
+    const mois = statMois(6, today);
+    const data = mois.map((m) => ({ mois: m.label, facture: statSomme(yCharges, "dueDate", m.key, (c) => c.amount), encaisse: statSomme(recOk, "date", m.key, (r) => r.amount) }));
+    const parClasse = (year ? classes.filter((c) => c.yearId === year.id) : []).map((c) => { const ids = new Set(students.filter((s) => s.classId === c.id).map((s) => s.id)); return { name: c.name, value: ecR2(yCharges.filter((x) => ids.has(x.studentId)).reduce((s, x) => s + x.amount, 0)) }; });
+    const modes = {}; recOk.forEach((r) => { const k = r.mode === "banque" ? "Banque" : r.mode === "moncash" ? "MonCash" : r.mode === "cheque" ? "Chèque" : "Espèces"; modes[k] = ecR2((modes[k] || 0) + r.amount); });
+    return <StatsBloc
+      vide={!year ? "Créez d'abord une année pour voir les statistiques." : ""}
+      kpis={[[V.Eleves + " inscrit(e)s", String(actifs), "ecole-stat-inscrits"], ["Attendu sur l'année", fmt(attenduS), "ecole-stat-attendu"], ["Encaissé", fmt(paye), "ecole-stat-encaisse"], ["Taux d'encaissement", (attenduS > 0 ? Math.round(paye / attenduS * 100) : 0) + " %", "ecole-stat-taux"], ["Impayés échus", fmt(impayeS), "ecole-stat-impayes"]]}
+      evolution={{ titre: "Échéances et encaissements — 6 derniers mois", data, series: [{ key: "facture", name: "Échéances", color: "#9A7B1E" }, { key: "encaisse", name: "Encaissé", color: "#0F6B5C" }] }}
+      repartitions={[{ titre: "Montants attendus par " + V.classe.toLowerCase(), data: parClasse }, { titre: "Encaissements par mode de paiement", data: Object.keys(modes).map((k) => ({ name: k, value: modes[k] })) }]} />;
+  };
 
   // ───────── Vue d'ensemble ─────────
   const attendu = ecR2(yCharges.reduce((s, c) => s + c.amount, 0));
@@ -843,6 +861,7 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
         {tabs.map(([id, l]) => (<button key={id} onClick={() => setTab(id)} data-testid={"ecole-tab-" + id} className="px-3 py-2 text-sm rounded-lg transition-colors" style={{ background: tab === id ? "#152238" : "transparent", color: tab === id ? "#EFE9DD" : "#6B6552", fontWeight: tab === id ? 600 : 500 }}>{l}</button>))}
       </div>
       {tab === "apercu" && Apercu()}
+      {tab === "stats" && Stats()}
       {tab === "annees" && Annees()}
       {tab === "eleves" && Eleves()}
       {tab === "frais" && Frais()}
