@@ -1,12 +1,13 @@
 // ═══ MODULE ═══
 // @module Assistant blocs
-// @depends —
+// @depends Menu
 // @exports asstHowToBlocs, asstScanBlocs
 // ═══ FIN DE L'EN-TÊTE ═══
 // Assistant de contrôle (forfaits Assisté et Extension) — contrôles propres à chaque bloc d'activité.
 // Même principe que l'assistant du journal : il DÉTECTE et EXPLIQUE (cause + solution pas à pas) ; il ne modifie jamais rien tout seul.
 // Aucun de ces points n'a de correction automatique : chacun demande un jugement humain (pièce, accord du client, décision de gestion).
 // Éducation : élève sans frais, impayés anciens. Import-export : marchandise au port, dossier non réglé, taux inhabituel.
+// Restauration : plat sans recette, plat peu rentable, commande restée ouverte, service non reversé.
 // Santé : assureur en retard, lot périmé ou proche de la péremption, honoraires non versés.
 
 const asbR2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -17,7 +18,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -107,6 +108,28 @@ function asstScanBlocs({ ecole, impex, sante, actifs, today }) {
       if (reste > 0.5 && asbDays(o.plus, today) > 30) push({ key: "sante-hono:" + id, severity: "medium", category: "sante", title: "Honoraires non versés au praticien", detail: `${praticiens.get(id) || "Praticien"} : ${asbG(reste)} d'honoraires à reverser (total dû ${asbG(o.du)}, déjà versé ${asbG(verse)}). Le plus ancien remonte au ${asbFr(o.plus)}.` });
     });
   }
+
+  // ───── Restauration ─────
+  if (A.includes("restauration") && (resto || []).length) {
+    const plats = asbRows(resto, "dish").filter((d) => d.active !== false);
+    const march = (products || []).filter((p) => p.type === "marchandise");
+    plats.forEach((d) => {
+      const rec = d.recipe || [];
+      if (!rec.length) { push({ key: "resto-recette:" + d.id, severity: "low", category: "resto", title: "Plat sans fiche recette", detail: `« ${d.name} » est au menu à ${asbG(d.price)}, mais sans recette : son coût et sa marge sont inconnus, et ses ingrédients ne sortent pas du stock quand il est vendu.` }); return; }
+      const cout = asbR2(rec.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number((march.find((p) => String(p.id) === String(r.productId)) || {}).costPrice) || 0), 0));
+      if (cout > 0 && Number(d.price) > 0 && cout / Number(d.price) > 0.7) push({ key: "resto-marge:" + d.id, severity: "medium", category: "resto", title: "Plat peu rentable", detail: `« ${d.name} » : coût ${asbG(cout)} pour un prix de ${asbG(d.price)}, soit ${Math.round(cout / d.price * 100)} % du prix (marge de ${Math.round((1 - cout / d.price) * 100)} %). Au-delà de 70 %, il reste très peu pour couvrir salaires, loyer et charges.` });
+    });
+    asbRows(resto, "order").filter((o) => o.status === "ouverte" && o.date && asbDays(o.date, today) >= 1).slice(0, 25).forEach((o) => {
+      push({ key: "resto-ouverte:" + o.id, severity: "medium", category: "resto", title: "Commande restée ouverte", detail: `La commande ${o.number} ouverte le ${asbFr(o.date)} n'a jamais été encaissée ni annulée (${asbDays(o.date, today)} jour(s)) : elle n'est pas comptabilisée.` });
+    });
+    const payees = asbRows(resto, "order").filter((o) => o.status === "payee" && ((Number(o.service) || 0) + (Number(o.tip) || 0)) > 0);
+    const verse = asbR2(asbRows(resto, "payout").filter((p) => p.status !== "annulé").reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
+    const du = asbR2(payees.reduce((sum, o) => sum + (Number(o.service) || 0) + (Number(o.tip) || 0), 0) - verse);
+    if (du > 0.5) {
+      const plus = payees.map((o) => o.paidDate).filter(Boolean).sort()[0];
+      if (plus && asbDays(plus, today) > 30) push({ key: "resto-service:pool", severity: "medium", category: "resto", title: "Service non reversé au personnel", detail: `${asbG(du)} de service et de pourboires encaissés attendent d'être répartis. Le plus ancien remonte au ${asbFr(plus)} (${asbDays(plus, today)} jours). Cet argent appartient au personnel, pas à l'entreprise.` });
+    }
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -148,6 +171,27 @@ function asstHowToBlocs(f) {
       "Comparez avec le taux réellement appliqué par votre banque ou votre fournisseur de change le jour de l'opération.",
       "Si c'est une faute de frappe, corrigez le taux dans le dossier tant qu'aucune écriture n'est passée ; sinon, demandez à votre comptable comment régulariser.",
       "Si le taux est exact (opération à un taux très différent), cliquez sur « Ignorer »."] },
+    "resto-recette": { why: "Sans recette, le coût du plat est inconnu : impossible de savoir si vous gagnez de l'argent dessus, et le stock ne baisse pas quand il est vendu.", steps: [
+      "Ouvrez l'espace Restauration → onglet « Menu et recettes » et cliquez sur « Recette » à côté du plat.",
+      "Ajoutez chaque ingrédient (produit du stock) avec la quantité utilisée pour UNE portion.",
+      "Si l'ingrédient n'existe pas encore, créez-le dans le module Stock avec son prix de revient, puis revenez.",
+      "Si le plat n'est plus servi, cliquez sur « Retirer du menu ».",
+      "Si c'est normal (boisson servie sans préparation, par exemple), cliquez sur « Ignorer »."] },
+    "resto-marge": { why: "Quand les ingrédients coûtent plus de 70 % du prix, il ne reste presque rien pour payer le personnel, le loyer, l'électricité et les taxes.", steps: [
+      "Ouvrez l'espace Restauration → « Menu et recettes » → « Recette » du plat et vérifiez les quantités : une portion est-elle trop généreuse ?",
+      "Vérifiez le prix de revient des ingrédients dans le module Stock (une erreur de prix fausse le coût).",
+      "Si les coûts sont exacts, augmentez le prix du plat ou réduisez la portion.",
+      "Si c'est un plat d'appel voulu à marge faible, cliquez sur « Ignorer »."] },
+    "resto-ouverte": { why: "Tant qu'une commande n'est pas encaissée, aucune écriture n'est passée : le chiffre d'affaires et l'argent en caisse ne concordent pas.", steps: [
+      "Ouvrez l'espace Restauration → « Commandes » et cliquez sur « Ouvrir » à côté de la commande indiquée.",
+      "Si le client a payé, cliquez sur « Encaisser l'addition » (la date sera celle d'aujourd'hui : notez-le si le paiement date d'un autre jour).",
+      "Si le client n'a jamais consommé ou est parti sans payer, cliquez sur « Annuler la commande » ; une perte réelle se traite avec votre comptable.",
+      "Prenez l'habitude de clôturer les commandes avant la fermeture."] },
+    "resto-service": { why: "Le service et les pourboires sont encaissés pour le personnel : ils restent en compte 4677 (dette envers les employés) tant qu'ils ne sont pas reversés.", steps: [
+      "Ouvrez l'espace Restauration → onglet « Service ».",
+      "Vérifiez la liste des employés et leurs points (leur part), puis le montant prévu pour chacun.",
+      "Choisissez espèces ou banque et cliquez sur « Répartir » : l'écriture est passée toute seule.",
+      "Faites-le régulièrement (chaque semaine ou chaque quinzaine) et remettez à chaque employé sa part."] },
     "sante-assureur": { why: "Tant que l'assureur n'a pas remboursé sa part, vous avancez l'argent ; au-delà de 45 jours, le risque de rejet ou d'oubli augmente.", steps: [
       "Ouvrez l'espace Santé → onglet « Factures » et filtrez les factures de cet assureur : repérez celles dont la part assureur reste à recevoir.",
       "Envoyez-lui le relevé des factures en attente et demandez la date de paiement.",

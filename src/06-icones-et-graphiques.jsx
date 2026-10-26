@@ -6,7 +6,7 @@
 //   FileDown, History, Icon, ImageIcon, LayoutDashboard, Lock, Menu, MessageCircle, Minus, Pencil
 //   Plus, Printer, Receipt, RotateCcw, ScanLine, Send, Settings, ShoppingCart, SimpleDonutChart
 //   SimpleGroupedBarChart, SimpleGrowthBarChart, SimpleLineChart, Smartphone, Trash2, Truck, Users
-//   Wallet, X
+//   Utensils, Wallet, X
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Icônes (SVG minimalistes, remplacent lucide-react pour un usage sans build) ---
 const Icon = ({ children, size = 16, style, className }) => (
@@ -38,6 +38,7 @@ const LayoutDashboard = (p) => <Icon {...p}><rect x="3" y="3" width="7" height="
 const BookOpen = (p) => <Icon {...p}><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z" /><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z" /></Icon>;
 const Wallet = (p) => <Icon {...p}><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" /></Icon>;
 const ShoppingCart = (p) => <Icon {...p}><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></Icon>;
+const Utensils = (p) => <Icon {...p}><path d="M4 3v7a2 2 0 0 0 2 2v9" /><path d="M8 3v7" /><path d="M12 3v7a2 2 0 0 1-2 2" /><path d="M18 21V3c-2 1-3 4-3 8h3" /></Icon>;
 const Cross = (p) => <Icon {...p}><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" /></Icon>;
 const Truck = (p) => <Icon {...p}><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></Icon>;
 const History = (p) => <Icon {...p}><path d="M3 3v5h5" /><path d="M3.05 13a9 9 0 1 0 2.13-7.36L3 8" /><polyline points="12 7 12 12 16 14" /></Icon>;
