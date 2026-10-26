@@ -32,6 +32,7 @@ const okfn="async function(o){return {data:{success:true,alreadyExisted:false,co
  const t0=await txt(p);
  ok('B : écran de bienvenue',/Bienvenue sur Compta\+/.test(t0),t0.slice(0,200));
  await p.locator('input[placeholder*="Nom de l\'entreprise"]').fill('Ma Boutique');
+ await p.locator('[data-testid="welcome-phone"]').fill('509 3712 3456');
  await p.getByRole('button',{name:'Commencer'}).click();await p.waitForTimeout(1200);
  const e=p.locator('[data-testid="welcome-error"]');
  ok('B : message de refus affiché',await e.count()===1&&/2 essais gratuits/.test(await e.innerText()),await e.count());
@@ -43,6 +44,7 @@ const okfn="async function(o){return {data:{success:true,alreadyExisted:false,co
  const t0=await txt(p);
  ok('C : bienvenue malgré ancien marqueur appareil',/Bienvenue sur Compta\+/.test(t0)&&!/déjà été utilisé depuis cet appareil/.test(t0),t0.slice(0,200));
  await p.locator('input[placeholder*="Nom de l\'entreprise"]').fill('Seconde Boutique');
+ await p.locator('[data-testid="welcome-phone"]').fill('509 3712 3456');
  await p.getByRole('button',{name:'Commencer'}).click();await p.waitForTimeout(1500);
  ok('C : bienvenue fermé après création',!/Bienvenue sur Compta\+/.test(await txt(p)),(await txt(p)).slice(0,200));
  ok('C : aucune erreur JS',errs.length===0,errs.slice(0,3));await p.close();}

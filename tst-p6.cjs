@@ -8,6 +8,7 @@ const allowFn="S.fnH={'create-company':async function(o){S.lastCheck=o.body;retu
 // A) Groupe : refus serveur -> bannière, aucun groupe créé
 {const {p,errs}=await boot(b,{skipSeed:true,pageInit:noMember(blockedFn+"S.tables.company_groups=[];")});
  await p.locator('input[placeholder*="Nom de l\'entreprise"]').fill('Mon Groupe');
+ await p.locator('[data-testid="welcome-phone"]').fill('509 3712 3456');
  await p.getByText('Extension',{exact:false}).first().click();
  await p.getByRole('button',{name:'Commencer'}).click();await p.waitForTimeout(1200);
  ok('A : refus affiché',/2 essais gratuits/.test(await p.locator('[data-testid="welcome-error"]').innerText().catch(()=>'')));
@@ -16,6 +17,7 @@ const allowFn="S.fnH={'create-company':async function(o){S.lastCheck=o.body;retu
 // B) Groupe : autorisé -> vérification envoyée avec checkOnly puis groupe créé
 {const {p,errs}=await boot(b,{skipSeed:true,pageInit:noMember(allowFn+"S.tables.company_groups=[];")});
  await p.locator('input[placeholder*="Nom de l\'entreprise"]').fill('Mon Groupe');
+ await p.locator('[data-testid="welcome-phone"]').fill('509 3712 3456');
  await p.getByText('Extension',{exact:false}).first().click();
  await p.getByRole('button',{name:'Commencer'}).click();await p.waitForTimeout(1500);
  const chk=await p.evaluate(()=>window.__srv.lastCheck);
@@ -25,6 +27,7 @@ const allowFn="S.fnH={'create-company':async function(o){S.lastCheck=o.body;retu
 // B2) Groupe : réponse inattendue (ancienne fonction) -> pas de groupe
 {const {p,errs}=await boot(b,{skipSeed:true,pageInit:noMember("S.fnH={'create-company':async function(){return {data:{success:true,companyId:'z'},error:null}}};S.tables.company_groups=[];")});
  await p.locator('input[placeholder*="Nom de l\'entreprise"]').fill('Mon Groupe');
+ await p.locator('[data-testid="welcome-phone"]').fill('509 3712 3456');
  await p.getByText('Extension',{exact:false}).first().click();
  await p.getByRole('button',{name:'Commencer'}).click();await p.waitForTimeout(1200);
  ok('B2 : pas de groupe sans accord explicite',await p.evaluate(()=>window.__srv.tables.company_groups.length)===0);await p.close();}
