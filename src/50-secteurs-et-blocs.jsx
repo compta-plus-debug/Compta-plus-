@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Secteurs et blocs
 // @depends Plus, friendlyError, supabase, useEffect, useState
-// @exports SecteursChoixModal, SecteursGestionPanel, loadSecteursInfo, secteursDroits
+// @exports SECTEURS_CATALOGUE, SecteursChoixModal, SecteursGestionPanel, loadSecteursInfo, secteursDroits
 // ═══ FIN DE L'EN-TÊTE ═══
 // Blocs par secteur d'activité (étape 1 : le socle).
 // Chaque entreprise choisit UNE SEULE FOIS jusqu'à 3 secteurs ; le choix est ensuite verrouillé, et seule une demande

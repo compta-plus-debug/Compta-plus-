@@ -10,13 +10,13 @@
 //   SecteursChoixModal, SecurityPanel, Smartphone, StockModule, SuperAdminModule, UpgradeModal
 //   VENDEUR_WRITABLE_CATEGORIES, VenteModule, X, _backNavStack, _membership, allowedModulesFor
 //   asstScan, bkBuildFile, bkDownload, chooseCompany, clearMembershipCache, computeBalances
-//   computeKpis, dlog, fetchHtgPerUsd, forgetCompanyChoice, friendlyError, genInviteToken
-//   hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel
-//   hlPendMark, hlPinMark, hlPinValid, hlSaveMeta, invoicePrefix, invokeEdgeFunction
-//   loadSecteursInfo, logClientError, monthLabel, oflIsNetworkError, oflLoad, oflSyncAll
-//   oflTimeout, perfMarkMount, perfMarkReady, pjTraceText, resolveMembership, roleLabel
-//   ruleRefusalMessage, sanitizeUserMessage, sealEntries, secteursDroits, supabase, todayStr, uid
-//   unwrapVersioned, useBackNav, useEffect, useMemo, useState
+//   computeKpis, dlog, fbEnregistrerContact, fbTelValide, fetchHtgPerUsd, forgetCompanyChoice
+//   friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline
+//   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark, hlPinValid, hlSaveMeta, invoicePrefix
+//   invokeEdgeFunction, loadSecteursInfo, logClientError, monthLabel, oflIsNetworkError, oflLoad
+//   oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady, pjTraceText, resolveMembership
+//   roleLabel, ruleRefusalMessage, sanitizeUserMessage, sealEntries, secteursDroits, supabase
+//   todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo, useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 // Protection légère de l'affichage : on ne peut ni glisser un texte de l'écran, ni le déposer dans un champ.
@@ -1530,6 +1530,8 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [welcomeName, setWelcomeName] = useState("");
+  const [welcomePhone, setWelcomePhone] = useState("");
+  const [welcomeOptin, setWelcomeOptin] = useState(false);
   // Verrou synchrone (une ref, pas un state — qui ne serait mis à jour qu'au
   // rendu suivant, trop tard pour empêcher un second déclenchement immédiat)
   // contre toute double soumission de l'inscription (double-clic, ou Entrée
@@ -1649,6 +1651,12 @@ function App() {
       setWelcomeSubmitting(false);
       return;
     }
+    if (!fbTelValide(welcomePhone)) {
+      setWelcomeError("Indiquez le numéro de téléphone WhatsApp de l'entreprise, avec l'indicatif du pays (exemple 509 3712 3456) — il sert à vous prévenir pour vos factures.");
+      welcomeSubmittingRef.current = false;
+      setWelcomeSubmitting(false);
+      return;
+    }
     try {
       const current = await resolveMembership();
       if (current.pendingCreation && welcomeTier === "group") {
@@ -1676,6 +1684,7 @@ function App() {
           return;
         }
         setWelcomeError("");
+        try { localStorage.setItem("compta-plus-pending-phone", JSON.stringify({ phone: welcomePhone.trim(), optin: !!welcomeOptin })); } catch (e) {}
         const grp = await createStandaloneGroup(name);
         if (!grp) { return; }
         try { localStorage.setItem("compta-plus-trial-used", new Date().toISOString()); } catch (e) {}
@@ -1730,7 +1739,8 @@ function App() {
           setSettings({ ...settings, companyName: _membership.companyName });
         } else {
           await supabase.from("companies").update({ plan_tier: effectiveTier }).eq("id", createResult.companyId);
-          setSettings({ ...settings, companyName: name });
+          await fbEnregistrerContact(createResult.companyId, welcomePhone, welcomeOptin);
+          setSettings({ ...settings, companyName: name, companyPhone: welcomePhone.trim() });
           if (welcomeTier === "group") {
             const grp = await createGroupForNewCompany(createResult.companyId, name);
             if (grp) {
@@ -1767,7 +1777,8 @@ function App() {
       // payante, au tarif correspondant (20 $ Standard / 80 $ Assisté).
       const effectiveTier2 = welcomeTier === "group" ? "assisted" : welcomeTier;
       await supabase.from("companies").update({ name, plan_tier: effectiveTier2 }).eq("id", companyId);
-      setSettings({ ...settings, companyName: name });
+      await fbEnregistrerContact(companyId, welcomePhone, welcomeOptin);
+      setSettings({ ...settings, companyName: name, companyPhone: welcomePhone.trim() });
       setPlanTier(effectiveTier2);
       if (welcomeTier === "group") {
         const grp = await createGroupForNewCompany(companyId, name);
@@ -1868,7 +1879,12 @@ function App() {
             placeholder="Nom de l'entreprise (obligatoire)" autoFocus
             className="w-full border rounded px-3 py-2 text-sm mb-1" style={{ borderColor: "#DDD6C4" }}
             onKeyDown={(e) => e.key === "Enter" && submitWelcome()} />
-          <p className="text-xs mb-4" style={{ color: "#A39C87" }}>Requis pour identifier votre entreprise.</p>
+          <p className="text-xs mb-3" style={{ color: "#A39C87" }}>Requis pour identifier votre entreprise.</p>
+          <input value={welcomePhone} onChange={(e) => setWelcomePhone(e.target.value)} type="tel" inputMode="tel"
+            placeholder="Téléphone WhatsApp (obligatoire) — ex. 509 3712 3456" data-testid="welcome-phone"
+            className="w-full border rounded px-3 py-2 text-sm mb-1" style={{ borderColor: "#DDD6C4" }} />
+          <p className="text-xs mb-2" style={{ color: "#A39C87" }}>Avec l'indicatif du pays. Il sert à vous prévenir pour vos factures.</p>
+          <label className="flex items-start gap-2 text-xs mb-4" style={{ color: "#7A7460" }}><input type="checkbox" checked={welcomeOptin} onChange={(e) => setWelcomeOptin(e.target.checked)} data-testid="welcome-optin" style={{ marginTop: 2 }} /> J'accepte de recevoir les nouveautés et offres de Compta+ sur WhatsApp (facultatif).</label>
           <div className="text-xs font-medium mb-2" style={{ color: "#152238" }}>Choisissez votre forfait</div>
           <div className="flex flex-col gap-2 mb-4">
             <button onClick={() => setWelcomeTier("standard")}

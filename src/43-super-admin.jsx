@@ -1,6 +1,7 @@
 // ═══ MODULE ═══
 // @module Super admin
-// @depends FALLBACK_HTG_PER_USD, NET_MSG, PAYMENT_METHODS, SimpleDonutChart, SimpleLineChart
+// @depends BillingAdminPanel, FALLBACK_HTG_PER_USD, FB_WA_MODELES, NET_MSG, PAYMENT_METHODS
+//   SimpleDonutChart, SimpleLineChart, _membership, fbTelValide, fbWaLien, fbWaTexte
 //   fetchHtgPerUsd, friendlyError, isFutureDate, monthLabel, periodLabel, supabase, todayStr
 //   useEffect, useState
 // @exports SuperAdminModule
@@ -39,6 +40,11 @@ function SuperAdminModule({ showToast }) {
   const [histCompanyFilter, setHistCompanyFilter] = useState("");
 
   const [members, setMembers] = useState([]);
+  const [phones, setPhones] = useState({});
+
+  const loadPhones = async () => {
+    try { const { data, error } = await supabase.from("companies").select("id, phone"); if (!error && data) { const m = {}; data.forEach((r) => { m[r.id] = r.phone || ""; }); setPhones(m); } } catch (e) { /* colonne pas encore créée */ }
+  };
 
   const loadCompanies = async () => {
     let { data, error } = await supabase.from("companies").select("id, name, plan_status, plan_tier, trial_ends_at, created_at, signup_device_id, group_id").order("created_at", { ascending: false });
@@ -148,7 +154,7 @@ function SuperAdminModule({ showToast }) {
     logSA("essai_oublie", { id: t.company_id, name: t.company_name }, `${t.email_raw || t.email_normalized} (${t.outcome})`);
     loadTrialSignups();
   };
-  useEffect(() => { loadCompanies(); loadAllPayments(); loadMembers(); }, []);
+  useEffect(() => { loadCompanies(); loadAllPayments(); loadMembers(); loadPhones(); }, []);
   // Chargé seulement à la première ouverture de l'onglet, pas systématiquement —
   // ces journaux ne sont consultés qu'occasionnellement, contrairement au
   // tableau de bord et aux entreprises.
@@ -400,6 +406,7 @@ function SuperAdminModule({ showToast }) {
         {(() => {
           const SA_GROUPS = [
             { id: "activite", label: "Activité et finances", tabs: [["dashboard", "Tableau de bord"], ["entreprises", "Entreprises"], ["rapports", "Rapports et analyse"]] },
+            { id: "facturation", label: "Facturation", tabs: [["fact_factures", "Factures"], ["fact_relances", "Relances"], ["fact_reglages", "Réglages de facturation"]] },
             { id: "essais", label: "Essais et inscriptions", tabs: [["suivi", "Suivi des essais"], ["inscriptions", "Inscriptions et essais"]] },
             { id: "controle", label: "Contrôle et sécurité", tabs: [["journal", "Journal"], ["erreurs", "Erreurs"], ["perf", "Performances"], ["integrite", "Intégrité des données"]] },
           ];
@@ -590,6 +597,7 @@ function SuperAdminModule({ showToast }) {
                           ) : (
                             <button onClick={() => setPlanTierForCompany(co, "assisted")} className="text-xs px-2 py-1.5 rounded" style={{ background: "#5B3FA0", color: "#fff" }}>Passer en Assisté (80 $/mois)</button>
                           )}
+                          <button onClick={() => { if (!fbTelValide(phones[co.id])) { showToast("Aucun numéro WhatsApp enregistré pour " + (co.name || "cette entreprise") + "."); return; } try { window.open(fbWaLien(phones[co.id], fbWaTexte(FB_WA_MODELES.contact, co.name, null)), "_blank", "noopener"); } catch (e) { /* bloqué */ } }} className="text-xs px-2 py-1.5 rounded" style={{ background: "#1F9D55", color: "#fff" }} data-testid="sa-co-wa">WhatsApp</button>
                           {!co.group_id && (
                             <button onClick={() => createGroupForCompany(co)} className="text-xs px-2 py-1.5 rounded" style={{ background: "#0F6B5C", color: "#fff" }}>Créer un groupe multi-entreprises</button>
                           )}
@@ -1013,6 +1021,9 @@ function SuperAdminModule({ showToast }) {
           );
         })()}
 
+        {tab === "fact_factures" && <BillingAdminPanel view="factures" showToast={showToast} currentUserEmail={(typeof _membership !== "undefined" && _membership && _membership.email) || ""} />}
+        {tab === "fact_relances" && <BillingAdminPanel view="relances" showToast={showToast} currentUserEmail={(typeof _membership !== "undefined" && _membership && _membership.email) || ""} />}
+        {tab === "fact_reglages" && <BillingAdminPanel view="reglages" showToast={showToast} currentUserEmail={(typeof _membership !== "undefined" && _membership && _membership.email) || ""} />}
         {tab === "journal" && (() => {
           const LAB = { statut_modifie: "Statut modifié", forfait_modifie: "Forfait modifié", paiement_enregistre: "Paiement enregistré", groupe_cree: "Groupe créé", entreprise_supprimee: "Entreprise supprimée", essai_prolonge: "Essai prolongé", essai_oublie: "Essai oublié", relance: "Relance préparée" };
           const rows = (superLog || []).filter((l) => (!logFilter || l.action_type === logFilter) && (!logSearch.trim() || `${l.target_description || ""} ${l.details || ""} ${l.actor_email || ""}`.toLowerCase().includes(logSearch.trim().toLowerCase())));
