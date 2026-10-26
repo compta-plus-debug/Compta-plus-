@@ -9,14 +9,15 @@
 //   PLAN_TIER_INFO, PayrollModule, ROLE_MODULE_ACCESS, RapportsModule, SUPABASE_URL, SanteModule
 //   SecteursChoixModal, SecurityPanel, Smartphone, StockModule, SuperAdminModule, UpgradeModal
 //   VENDEUR_WRITABLE_CATEGORIES, VenteModule, X, _backNavStack, _membership, allowedModulesFor
-//   asstScan, bkBuildFile, bkDownload, chooseCompany, clearMembershipCache, computeBalances
-//   computeKpis, dlog, fbEnregistrerContact, fbTelValide, fetchHtgPerUsd, forgetCompanyChoice
-//   friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta, hlNetDown, hlOffline
-//   hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark, hlPinValid, hlSaveMeta, invoicePrefix
-//   invokeEdgeFunction, loadSecteursInfo, logClientError, monthLabel, oflIsNetworkError, oflLoad
-//   oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady, pjTraceText, resolveMembership
-//   roleLabel, ruleRefusalMessage, sanitizeUserMessage, sealEntries, secteursDroits, supabase
-//   todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo, useState
+//   asstScan, asstScanBlocs, bkBuildFile, bkDownload, chooseCompany, clearMembershipCache
+//   computeBalances, computeKpis, dlog, fbEnregistrerContact, fbTelValide, fetchHtgPerUsd
+//   forgetCompanyChoice, friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta
+//   hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark, hlPinValid
+//   hlSaveMeta, invoicePrefix, invokeEdgeFunction, loadSecteursInfo, logClientError, monthLabel
+//   oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady, pjTraceText
+//   resolveMembership, roleLabel, ruleRefusalMessage, sanitizeUserMessage, sealEntries
+//   secteursDroits, supabase, todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo
+//   useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 // Protection légère de l'affichage : on ne peut ni glisser un texte de l'écran, ni le déposer dans un champ.
@@ -392,8 +393,14 @@ function App() {
     if (!assistantActive || !loaded) return [];
     let lastBackupAt = null;
     try { lastBackupAt = localStorage.getItem("compta-plus-last-export"); } catch (e) {}
-    try { return asstScan({ entries, accounts, settings, today: todayStr(), hasSecurityPin: companyHasPin, lastBackupAt, products }); } catch (e) { return []; }
-  }, [assistantActive, loaded, entries, accounts, settings, companyHasPin, products]);
+    let base = [];
+    try { base = asstScan({ entries, accounts, settings, today: todayStr(), hasSecurityPin: companyHasPin, lastBackupAt, products }); } catch (e) { base = []; }
+    // contrôles propres à chaque bloc d'activité (Éducation, Import-export, Santé) : seulement pour les blocs actifs
+    let blocs = [];
+    try { blocs = asstScanBlocs({ ecole, impex, sante, actifs: secteursDroits(secteurs, { planTier, groupId, planStatus }).actifs, today: todayStr() }); } catch (e) { blocs = []; }
+    const rank = { high: 0, medium: 1, low: 2 };
+    return [...base, ...blocs].sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
+  }, [assistantActive, loaded, entries, accounts, settings, companyHasPin, products, ecole, impex, sante, secteurs, planTier, groupId, planStatus]);
   const assistantVisible = useMemo(() => assistantAll.filter((f) => !(settings.assistantIgnored || {})[f.key]), [assistantAll, settings.assistantIgnored]);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
