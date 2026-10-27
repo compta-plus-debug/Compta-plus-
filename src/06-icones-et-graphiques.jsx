@@ -181,7 +181,8 @@ function SimpleLineChart({ data, xKey, yKey, color, name }) {
   );
 }
 
-function SimpleDonutChart({ data, nameKey, valueKey, colors }) {
+function SimpleDonutChart({ data, nameKey, valueKey, colors, unit }) {
+  const fv = unit === "nombre" ? (n) => String(Math.round(Number(n) || 0)) : fmt; // « nombre » : effectifs (élèves, séjours…) au lieu de montants en gourdes
   const total = data.reduce((s, d) => s + (d[valueKey] || 0), 0);
   const palette = colors || ["#0F6B5C", "#9A7B1E", "#3F4F73", "#A6432F", "#7C6BAA", "#5B8A72", "#C9A24B", "#6E8CA0"];
   const size = 220, cx = size / 2, cy = size / 2, rOuter = 100, rInner = 55;
@@ -205,11 +206,11 @@ function SimpleDonutChart({ data, nameKey, valueKey, colors }) {
       <svg width={size} height={size} style={{ flexShrink: 0 }}>
         {arcs.map((a, i) => (
           <path key={i} d={a.path} fill={a.color}>
-            <title>{a.name} — {fmt(a.value)} ({a.pct}%)</title>
+            <title>{a.name} — {fv(a.value)} ({a.pct}%)</title>
           </path>
         ))}
         <text x={cx} y={cy - 3} textAnchor="middle" fontSize="11" fill="#8A8370">Total</text>
-        <text x={cx} y={cy + 13} textAnchor="middle" fontSize="13" fontWeight="700" fill="#152238" className="tabular">{fmt(total)}</text>
+        <text x={cx} y={cy + 13} textAnchor="middle" fontSize="13" fontWeight="700" fill="#152238" className="tabular">{fv(total)}</text>
       </svg>
       <div className="flex-1 min-w-[160px] space-y-1.5">
         {arcs.map((a, i) => (
@@ -218,7 +219,7 @@ function SimpleDonutChart({ data, nameKey, valueKey, colors }) {
               <span style={{ width: 10, height: 10, borderRadius: 2, background: a.color, flexShrink: 0, display: "inline-block" }} />
               <span className="truncate" style={{ color: "#152238" }}>{a.name}</span>
             </div>
-            <span className="tabular flex-shrink-0" style={{ color: "#8A8370" }}>{fmt(a.value)} ({a.pct}%)</span>
+            <span className="tabular flex-shrink-0" style={{ color: "#8A8370" }}>{fv(a.value)} ({a.pct}%)</span>
           </div>
         ))}
       </div>

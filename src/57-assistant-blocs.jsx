@@ -6,7 +6,7 @@
 // Assistant de contrôle (forfaits Assisté et Extension) — contrôles propres à chaque bloc d'activité.
 // Même principe que l'assistant du journal : il DÉTECTE et EXPLIQUE (cause + solution pas à pas) ; il ne modifie jamais rien tout seul.
 // Aucun de ces points n'a de correction automatique : chacun demande un jugement humain (pièce, accord du client, décision de gestion).
-// Éducation : élève sans frais, impayés anciens. Import-export : marchandise au port, dossier non réglé, taux inhabituel.
+// Éducation : élève sans frais, impayés anciens, échéances échues jamais constatées. Import-export : marchandise au port, dossier non réglé, taux inhabituel.
 // Restauration : plat sans recette, plat peu rentable, commande restée ouverte, service non reversé.
 // Hôtellerie : client attendu ni arrivé ni annulé, séjour dépassé sans départ.
 // Santé : assureur en retard, lot périmé ou proche de la péremption, honoraires non versés.
@@ -36,6 +36,8 @@ function asstScanBlocs({ ecole, impex, sante, resto, hotel, products, actifs, to
         push({ key: "ecole-sansfrais:" + s.id, severity: "medium", category: "ecole", title: "Élève sans aucun frais", detail: `${s.firstName || ""} ${s.lastName || ""} (matricule ${s.matricule || "?"}) est inscrit et actif, mais aucune échéance de frais n'a été créée pour lui : rien ne lui sera facturé.` });
       });
     }
+    const nonConst = charges.filter((c) => !c.recognized && c.dueDate && c.dueDate < asbAdd(today, -30));
+    if (nonConst.length) push({ key: "ecole-constater:all", severity: "medium", category: "ecole", title: "Échéances échues jamais constatées en comptabilité", detail: `${nonConst.length} échéance(s) (${asbG(nonConst.reduce((s, c) => s + (Number(c.amount) || 0), 0))}) sont échues depuis plus de 30 jours sans avoir été constatées : les frais scolaires ne figurent pas encore dans vos comptes (compte 4111 et produits).` });
     const limite = asbAdd(today, -60);
     const parFamille = {};
     charges.filter((c) => c.dueDate && c.dueDate < limite && asbR2((Number(c.amount) || 0) - (Number(c.paid) || 0)) > 0.005).forEach((c) => { (parFamille[c.familyId] = parFamille[c.familyId] || []).push(c); });
@@ -164,6 +166,11 @@ function asstHowToBlocs(f) {
       "Si la famille a payé sans que ce soit enregistré, saisissez l'encaissement dans l'onglet « Encaissements » (le reçu sera numéroté).",
       "Si un arrangement est convenu, notez-le et fixez une date ; si le montant est irrécouvrable, parlez-en à votre comptable avant toute décision.",
       "Si c'est normal, cliquez sur « Ignorer »."] },
+    "ecole-constater": { why: "Tant qu'une échéance échue n'est pas constatée, elle n'existe pas en comptabilité : les produits de scolarité et les sommes dues par les familles sont sous-estimés.", steps: [
+      "Ouvrez l'espace Éducation → onglet « Échéances ».",
+      "Cliquez sur « Constater les échéances échues » (réservé à l'administrateur ou au gestionnaire) : une écriture est passée automatiquement (Familles / Produit).",
+      "Si la période comptable est clôturée, demandez à votre comptable la marche à suivre.",
+      "Faites-le chaque mois, avant d'établir vos états."] },
     "impex-port": { why: "Chaque jour au port coûte (magasinage, surestaries) et ces frais augmentent le coût de revient de la marchandise.", steps: [
       "Ouvrez l'espace Import-export, ouvrez le dossier d'importation indiqué et regardez la section des documents : lesquels manquent ?",
       "Contactez votre transitaire pour savoir ce qui bloque le dédouanement (document, paiement des droits, vérification).",

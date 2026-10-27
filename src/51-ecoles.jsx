@@ -1,10 +1,10 @@
 // ═══ MODULE ═══
 // @module Ecoles
-// @depends EcolesRapports, EcolesRelances, EcolesRemises, StatsBloc, _membership
-//   ecAppliquerRemisesAuxNouvelles, fmt, isFutureDate, isLocked, roleLabel, statMois, statSomme
-//   supabase, todayStr, uid, useBrouillon, useEffect, useState
-// @exports EC_CSS, EC_VOCAB, EcolesModule, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecId, ecInput
-//   ecPastille, ecR2, ecReste, ecRows
+// @depends EC_CSS, EC_TRANCHES, EcolesRapports, EcolesRelances, EcolesRemises, StatsBloc, _membership
+//   ecAppliquerRemisesAuxNouvelles, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecJoursEntre
+//   ecPastille, fmt, isFutureDate, isLocked, roleLabel, statMois, statSomme, supabase, todayStr
+//   uid, useBrouillon, useEffect, useState
+// @exports EC_VOCAB, EcolesModule, ecId, ecR2, ecReste, ecRows
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Écoles, première version : années scolaires, classes, familles et élèves, grille de frais, échéancier,
 // encaissements avec reçus numérotés, écritures comptables.
@@ -38,7 +38,6 @@ const ecAddMonths = (iso, n) => {
   const dt = new Date(y, mo, Math.min(d, last));
   return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
 };
-const ecDateFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const ecReste = (c) => ecR2((Number(c.amount) || 0) - (Number(c.paid) || 0));
 
 // Vocabulaire selon le type d'établissement (le bloc s'appelle « Éducation » : école, formation professionnelle, université)
@@ -111,32 +110,6 @@ function ecAjouterComptes(accounts, setAccounts, codes, role) {
   if (missing.length) setAccounts((prev) => [...prev, ...missing.filter((m) => !prev.some((a) => a.code === m.code))]);
 }
 
-// Pastille d'état (couleurs douces) et feuille de style des tableaux de l'école
-const ecPastille = (txt, kind) => {
-  const c = { ok: ["#E3F2EE", "#0F6B5C"], alerte: ["#F9E4DF", "#A6432F"], info: ["#E8EEF8", "#2B4C8C"], neutre: ["#F0EEE6", "#6B6552"], attente: ["#FFF3D6", "#8A6A12"] }[kind] || ["#F0EEE6", "#6B6552"];
-  return <span style={{ display: "inline-block", padding: "2px 9px", borderRadius: 999, background: c[0], color: c[1], fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>{txt}</span>;
-};
-const EC_CSS = `
-.grid>*{min-width:0}.ec-wrap{max-width:100%;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #E4DFD1;border-radius:12px;overflow-x:auto;box-shadow:0 1px 3px rgba(21,34,56,.07);margin-bottom:22px}
-.ec-table{width:100%;font-size:14px;border-collapse:collapse;min-width:540px}
-.ec-table thead tr{background:#152238}
-.ec-table thead th{color:#EFE9DD !important;font-weight:600;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;padding:11px 12px !important;white-space:nowrap}
-.ec-table tbody td{padding:10px 12px;vertical-align:middle}
-.ec-table tbody tr{border-top:1px solid #EEE9DA !important}
-.ec-table tbody tr:nth-child(even){background:#FAF8F1}
-.ec-table tbody tr:hover{background:#F3EFE0}
-[data-testid="ecoles-module"] .display.text-base{border-left:3px solid #C9A24B;padding-left:10px;margin-bottom:12px}
-[data-testid="ecoles-module"] input,[data-testid="ecoles-module"] select,[data-testid="ecoles-module"] textarea{background:#fff}
-[data-testid="ecoles-module"] input:focus,[data-testid="ecoles-module"] select:focus,[data-testid="ecoles-module"] textarea:focus{outline:2px solid #C9A24B55;border-color:#C9A24B}
-.ec-kpi{background:#fff;border:1px solid #EEE9DA;border-top:3px solid #C9A24B;border-radius:10px;box-shadow:0 1px 3px rgba(21,34,56,.07);padding:12px 14px}
-.ec-card{background:#fff;border:1px solid #E4DFD1;border-radius:12px;box-shadow:0 1px 3px rgba(21,34,56,.06)}
-.ec-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;padding:6px;background:#EFEBDD;border-radius:12px}
-`;
-const ecInput = "w-full border rounded px-2 py-1.5 text-sm mt-1";
-const ecBorder = { borderColor: "#DDD6C4" };
-const ecBtn = { background: "#152238", color: "#EFE9DD" };
-const ecBtnGold = { background: "#C9A24B", color: "#152238" };
-
 // Un frais s'applique-t-il à cet élève ? (classes visées ; les frais facultatifs — cantine, transport — seulement si l'élève y est abonné)
 const ecEligible = (f, s) => (!f.classIds || f.classIds.length === 0 || f.classIds.includes(s.classId)) && (!f.optional || (s.options || []).includes(f.id));
 
@@ -199,8 +172,19 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
   const className = (id) => (classes.find((c) => c.id === id) || {}).name || "—";
   const yCharges = year ? charges.filter((c) => c.yearId === year.id && c.status !== "annulée") : [];
   const [printRec, setPrintRec] = useState(null);
+  const [fmtOvr, setFmtOvr] = useState(null); // null = format choisi dans les réglages ; true = ticket ; false = A4
+  const fmtRecu = fmtOvr == null ? (settings.receiptFormat || "a4") : (fmtOvr ? (settings.receiptFormat === "ticket58" ? "ticket58" : "ticket80") : "a4");
+  const [printRel, setPrintRel] = useState(null); // relevé de compte d'une famille : { familyId }
+  const [fq, setFq] = useState("");
+  const [fcl, setFcl] = useState("");
+  const [edFam, setEdFam] = useState(null);
+  const [fEch, setFEch] = useState({ etat: "", classId: "", q: "", du: "", au: "" });
+  const [fRec, setFRec] = useState({ du: "", au: "", familyId: "", mode: "", etat: "" });
+  const joursPlus = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:00:00"); d.setDate(d.getDate() + n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  const nomMode = (m) => (m === "banque" ? "Banque" : m === "moncash" ? "MonCash" : m === "cheque" ? "Chèque" : "Espèces");
+  const totalRow = (cells, testid) => <tr className="font-semibold" style={{ borderTop: "2px solid #152238", background: "#F4F1E6" }} data-testid={testid}>{cells}</tr>;
 
-  const tabsTous = [["apercu", "Vue d'ensemble"], ["annees", "Années et " + V.Classes.toLowerCase()], ["eleves", V.Familles + " et " + V.Eleves.toLowerCase()], ["frais", "Frais"], ...(sup ? [["cours", "Cours et crédits"]] : []), ["echeances", "Échéances"], ["recus", "Encaissements"], ["relances", "Impayés et relances"], ["remises", "Bourses et rabais"], ["rapports", "Rapports"], ["stats", "Statistiques"]];
+  const tabsTous = [["apercu", "Tableau de bord"], ["annees", "Années et " + V.Classes.toLowerCase()], ["eleves", V.Familles + " et " + V.Eleves.toLowerCase()], ["frais", "Frais"], ...(sup ? [["cours", "Cours et crédits"]] : []), ["echeances", "Échéances"], ["recus", "Encaissements"], ["relances", "Impayés et relances"], ["remises", "Bourses et rabais"], ["rapports", "Rapports"], ["stats", "Statistiques"]];
   const tabs = secretaire ? tabsTous.filter(([id]) => ["eleves", "recus", "relances"].includes(id)) : tabsTous;
 
   // ───────── Statistiques ─────────
@@ -213,12 +197,14 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
     const mois = statMois(6, today);
     const data = mois.map((m) => ({ mois: m.label, facture: statSomme(yCharges, "dueDate", m.key, (c) => c.amount), encaisse: statSomme(recOk, "date", m.key, (r) => r.amount) }));
     const parClasse = (year ? classes.filter((c) => c.yearId === year.id) : []).map((c) => { const ids = new Set(students.filter((s) => s.classId === c.id).map((s) => s.id)); return { name: c.name, value: ecR2(yCharges.filter((x) => ids.has(x.studentId)).reduce((s, x) => s + x.amount, 0)) }; });
+    const effClasse = (year ? classes.filter((c) => c.yearId === year.id) : []).map((c) => ({ name: c.name, value: students.filter((x) => x.classId === c.id && x.status !== "sorti").length }));
+    const anciennete = EC_TRANCHES.map(([lib, a1, b1]) => ({ name: lib, value: ecR2(yCharges.filter((c) => c.dueDate <= today && ecReste(c) > 0 && ecJoursEntre(c.dueDate, today) >= a1 && ecJoursEntre(c.dueDate, today) <= b1).reduce((t, c) => t + ecReste(c), 0)) }));
     const modes = {}; recOk.forEach((r) => { const k = r.mode === "banque" ? "Banque" : r.mode === "moncash" ? "MonCash" : r.mode === "cheque" ? "Chèque" : "Espèces"; modes[k] = ecR2((modes[k] || 0) + r.amount); });
     return <StatsBloc
       vide={!year ? "Créez d'abord une année pour voir les statistiques." : ""}
       kpis={[[V.Eleves + " inscrit(e)s", String(actifs), "ecole-stat-inscrits"], ["Attendu sur l'année", fmt(attenduS), "ecole-stat-attendu"], ["Encaissé", fmt(paye), "ecole-stat-encaisse"], ["Taux d'encaissement", (attenduS > 0 ? Math.round(paye / attenduS * 100) : 0) + " %", "ecole-stat-taux"], ["Impayés échus", fmt(impayeS), "ecole-stat-impayes"]]}
       evolution={{ titre: "Échéances et encaissements — 6 derniers mois", data, series: [{ key: "facture", name: "Échéances", color: "#9A7B1E" }, { key: "encaisse", name: "Encaissé", color: "#0F6B5C" }] }}
-      repartitions={[{ titre: "Montants attendus par " + V.classe.toLowerCase(), data: parClasse }, { titre: "Encaissements par mode de paiement", data: Object.keys(modes).map((k) => ({ name: k, value: modes[k] })) }]} />;
+      repartitions={[{ titre: "Montants attendus par " + V.classe.toLowerCase(), data: parClasse }, { titre: V.Eleves + " par " + V.classe.toLowerCase(), data: effClasse, unite: "nombre" }, { titre: "Impayés échus selon l'ancienneté", data: anciennete }, { titre: "Encaissements par mode de paiement", data: Object.keys(modes).map((k) => ({ name: k, value: modes[k] })) }]} />;
   };
 
   // ───────── Vue d'ensemble ─────────
@@ -233,21 +219,58 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
     const parFamille = {};
     echuNonPaye.forEach((c) => { const f = parFamille[c.familyId] || (parFamille[c.familyId] = { total: 0, plusAncien: c.dueDate }); f.total = ecR2(f.total + ecReste(c)); if (c.dueDate < f.plusAncien) f.plusAncien = c.dueDate; });
     const lignes = Object.keys(parFamille).map((id) => ({ id, ...parFamille[id] })).sort((a, b) => b.total - a.total);
+    const recOk = receipts.filter((r) => r.status !== "annulé");
+    const duJour = ecR2(recOk.filter((r) => r.date === today).reduce((t, r) => t + r.amount, 0));
+    const duMois = ecR2(recOk.filter((r) => String(r.date).startsWith(today.slice(0, 7))).reduce((t, r) => t + r.amount, 0));
+    const taux = attendu > 0 ? Math.round(encaisse / attendu * 100) : 0;
+    const inscrits = students.filter((s) => year && s.yearId === year.id && s.status !== "sorti");
+    const etapes = [
+      ["Créer l'" + V.annee, !!year, "annees", "Années et " + V.Classes.toLowerCase()],
+      ["Créer les " + V.Classes.toLowerCase(), !!year && classes.some((c) => c.yearId === year.id), "annees", "Années et " + V.Classes.toLowerCase()],
+      ["Enregistrer les " + V.Familles.toLowerCase(), families.length > 0, "eleves", V.Familles + " et " + V.Eleves.toLowerCase()],
+      ["Inscrire les " + V.Eleves.toLowerCase(), inscrits.length > 0, "eleves", V.Familles + " et " + V.Eleves.toLowerCase()],
+      ["Créer la grille de frais", !!year && fees.some((f) => f.yearId === year.id), "frais", "Frais"],
+      ["Appliquer les frais (créer les échéances)", yCharges.length > 0, "frais", "Frais"],
+      ["Faire le premier encaissement", recOk.length > 0, "recus", "Encaissements"],
+    ];
+    const fini = etapes.every((e) => e[1]);
+    const limite = joursPlus(today, 30);
+    const aVenir = yCharges.filter((c) => c.dueDate > today && c.dueDate <= limite && ecReste(c) > 0).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+    const effectifs = (year ? classes.filter((c) => c.yearId === year.id) : []).map((c) => { const ids = students.filter((s) => s.classId === c.id && s.status !== "sorti"); const set = new Set(ids.map((s) => s.id)); return { id: c.id, nom: c.name, n: ids.length, attendu: ecR2(yCharges.filter((x) => set.has(x.studentId)).reduce((t, x) => t + x.amount, 0)), reste: ecR2(yCharges.filter((x) => set.has(x.studentId)).reduce((t, x) => t + ecReste(x), 0)) }; });
+    const recents = recOk.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 5);
     return (
       <div>
-        {!year && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="ecole-vide">Pour commencer : créez une <b>{V.annee}</b> et ses <b>{V.Classes.toLowerCase()}</b> (onglet « Années et {V.Classes.toLowerCase()} »), puis les <b>{V.Familles.toLowerCase()} et {V.Eleves.toLowerCase()}</b>, puis la <b>grille de frais</b>.</div>}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          {[[V.Eleves + " inscrits", String(students.filter((s) => year && s.yearId === year.id && s.status !== "sorti").length), "ecole-kpi-eleves"], ["Frais attendus", fmt(attendu), "ecole-kpi-attendu"], ["Encaissé", fmt(encaisse), "ecole-kpi-encaisse"], ["Impayés échus", fmt(impayes), "ecole-kpi-impayes"]].map(([l, v, t]) => (
+        {!fini && (<div className="p-4 rounded text-sm mb-5" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="ecole-vide">
+          <div className="font-semibold mb-2">Pour démarrer, dans cet ordre (chaque étape cochée est faite) :</div>
+          {etapes.map(([l, fait, onglet, nomOnglet], i) => (<div key={i} className="flex flex-wrap items-center gap-2 py-0.5" data-testid="ecole-etape"><span style={{ width: 20, color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : "○"}</span><span style={{ textDecoration: fait ? "line-through" : "none", opacity: fait ? 0.6 : 1 }}>{i + 1}. {l}</span>{!fait && <button onClick={() => setTab(onglet)} className="text-xs underline" data-testid="ecole-etape-ouvrir">Ouvrir « {nomOnglet} »</button>}</div>))}
+        </div>)}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          {[[V.Eleves + " inscrits", String(inscrits.length), "ecole-kpi-eleves"], ["Frais attendus", fmt(attendu), "ecole-kpi-attendu"], ["Encaissé", fmt(encaisse), "ecole-kpi-encaisse"], ["Impayés échus", fmt(impayes), "ecole-kpi-impayes"], ["Encaissé aujourd'hui", fmt(duJour), "ecole-kpi-jour"], ["Encaissé ce mois", fmt(duMois), "ecole-kpi-mois"], ["Taux d'encaissement", taux + " %", "ecole-kpi-taux"], [V.Familles + " avec impayés", String(lignes.length), "ecole-kpi-nbimpayes"]].map(([l, v, t]) => (
             <div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>
           ))}
         </div>
-        <div className="text-xs mb-3" style={{ color: "#7A7460" }}>Avances reçues sur des échéances à venir (compte 487) : <span className="tabular" data-testid="ecole-kpi-avances">{fmt(avances)}</span> · Échéances échues à constater en comptabilité : <span data-testid="ecole-kpi-aconstater">{aConstater.length}</span></div>
-        <div className="display text-base mb-2" style={{ color: "#152238" }}>Familles avec impayés</div>
-        {lignes.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Aucun impayé échu.</div> : (
-          <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Famille</th><th>Téléphone</th><th>Depuis le</th><th className="text-right">Reste à payer</th></tr></thead>
+        <div className="text-xs mb-5" style={{ color: "#7A7460" }}>Avances reçues sur des échéances à venir (compte 487) : <span className="tabular" data-testid="ecole-kpi-avances">{fmt(avances)}</span> · Échéances échues à constater en comptabilité : <span data-testid="ecole-kpi-aconstater">{aConstater.length}</span></div>
+        <div className="grid md:grid-cols-2 gap-4 mb-4">
+          <div><div className="display text-base mb-2" style={{ color: "#152238" }}>Échéances des 30 prochains jours</div>
+            {aVenir.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Aucune échéance à venir dans les 30 jours.</div> : (
+              <div className="ec-wrap"><table className="ec-table" style={{ minWidth: 420 }}><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Date</th><th>{V.Eleve}</th><th>Frais</th><th className="text-right">Reste</th></tr></thead>
+                <tbody>{aVenir.slice(0, 8).map((c) => (<tr key={c.id} data-testid="ecole-avenir-ligne"><td className="py-1.5">{ecDateFr(c.dueDate)}</td><td>{stuName(c.studentId)}</td><td>{c.label}</td><td className="text-right tabular">{fmt(ecReste(c))}</td></tr>))}
+                  {totalRow([<td key="a" className="py-1.5" colSpan={3}>Total ({aVenir.length} échéance(s)){aVenir.length > 8 ? " — 8 premières affichées" : ""}</td>, <td key="b" className="text-right tabular" data-testid="ecole-avenir-total-montant">{fmt(ecR2(aVenir.reduce((t, c) => t + ecReste(c), 0)))}</td>], "ecole-avenir-total")}</tbody></table></div>)}</div>
+          <div><div className="display text-base mb-2" style={{ color: "#152238" }}>Effectifs par {V.classe}</div>
+            {effectifs.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Aucune {V.classe} pour cette {V.annee}.</div> : (
+              <div className="ec-wrap"><table className="ec-table" style={{ minWidth: 420 }}><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">{V.Classe}</th><th className="text-right">{V.Eleves}</th><th className="text-right">Attendu</th><th className="text-right">Reste à payer</th></tr></thead>
+                <tbody>{effectifs.map((c) => (<tr key={c.id} data-testid="ecole-effectif-ligne"><td className="py-1.5">{c.nom}</td><td className="text-right tabular">{c.n}</td><td className="text-right tabular">{fmt(c.attendu)}</td><td className="text-right tabular">{fmt(c.reste)}</td></tr>))}
+                  {totalRow([<td key="a" className="py-1.5">Total</td>, <td key="b" className="text-right tabular" data-testid="ecole-effectif-total">{effectifs.reduce((t, c) => t + c.n, 0)}</td>, <td key="c" className="text-right tabular">{fmt(ecR2(effectifs.reduce((t, c) => t + c.attendu, 0)))}</td>, <td key="d" className="text-right tabular">{fmt(ecR2(effectifs.reduce((t, c) => t + c.reste, 0)))}</td>], "ecole-effectif-total-ligne")}</tbody></table></div>)}</div>
+        </div>
+        <div className="display text-base mb-2" style={{ color: "#152238" }}>{V.Familles} avec impayés</div>
+        {lignes.length === 0 ? <div className="text-sm mb-4" style={{ color: "#8A8370" }}>Aucun impayé échu.</div> : (
+          <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">{V.Famille}</th><th>Téléphone</th><th>Depuis le</th><th className="text-right">Reste à payer</th></tr></thead>
             <tbody>{lignes.map((l) => { const f = families.find((x) => x.id === l.id) || {}; return (
-              <tr key={l.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-impaye-ligne"><td className="py-1.5">{f.name || "—"}</td><td>{f.phone ? <a href={"tel:" + f.phone} style={{ color: "#0F6B5C" }}>{f.phone}</a> : "—"}</td><td>{ecDateFr(l.plusAncien)}</td><td className="text-right tabular">{fmt(l.total)}</td></tr>); })}</tbody></table></div>
+              <tr key={l.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-impaye-ligne"><td className="py-1.5">{f.name || "—"}</td><td>{f.phone ? <a href={"tel:" + f.phone} style={{ color: "#0F6B5C" }}>{f.phone}</a> : "—"}</td><td>{ecDateFr(l.plusAncien)}</td><td className="text-right tabular">{fmt(l.total)}</td></tr>); })}
+              {totalRow([<td key="a" className="py-1.5" colSpan={3}>Total ({lignes.length} {V.famille}(s))</td>, <td key="b" className="text-right tabular" data-testid="ecole-impaye-total-montant">{fmt(ecR2(lignes.reduce((t, l) => t + l.total, 0)))}</td>], "ecole-impaye-total")}</tbody></table></div>
         )}
+        <div className="display text-base mb-2" style={{ color: "#152238" }}>Derniers encaissements</div>
+        {recents.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Aucun encaissement pour le moment.</div> : recents.map((r) => (<div key={r.id} className="flex justify-between text-sm py-1" data-testid="ecole-recent-ligne"><span>{r.number} — {famName(r.familyId)} ({ecDateFr(r.date)})</span><span className="tabular">{fmt(r.amount)}</span></div>))}
       </div>
     );
   };
@@ -584,6 +607,27 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
     showToast(stuName(st.id) + " renvoyé(e) : " + aAnnuler.size + " échéance(s) à venir annulée(s)" + (gardees ? " ; " + gardees + " échéance(s) déjà constatée(s) ou payée(s) restent dues." : "."));
     logAudit("Éducation", V.Eleve + " renvoyé(e)", stuName(st.id) + " — motif : " + motif);
   };
+  const resteDe = (sid) => ecR2(charges.filter((c) => c.studentId === sid && c.status !== "annulée").reduce((t, c) => t + ecReste(c), 0));
+  const resteFam = (fid) => ecR2(charges.filter((c) => c.familyId === fid && c.status !== "annulée").reduce((t, c) => t + ecReste(c), 0));
+  const elevesFiltres = () => students.filter((s) => year && s.yearId === year.id && (!fcl || s.classId === fcl) && (!fq.trim() || ((s.firstName + " " + s.lastName + " " + (s.matricule || "")).toLowerCase().includes(fq.trim().toLowerCase()))));
+  const saveFam = () => {
+    if (!canEdit || !edFam) return;
+    const name = edFam.name.trim().replace(/\s+/g, " ");
+    if (!name) { showToast("Indiquez le nom de " + V.famDet + "."); return; }
+    if (families.some((f) => f.id !== edFam.id && f.name.toLowerCase() === name.toLowerCase())) { showToast("Un autre " + V.famille + " porte déjà ce nom."); return; }
+    setEcole((prev) => (prev || []).map((r) => (r.id === edFam.id ? { ...r, name, phone: edFam.phone.trim(), email: edFam.email.trim() } : r)));
+    setEdFam(null); showToast(V.Famille + " modifié(e)."); logAudit("Éducation", V.Famille + " modifiée", name);
+  };
+  const FamTable = () => (
+    <div className="ec-wrap mb-5"><table className="ec-table" data-testid="ecole-familles-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">{V.Famille}</th><th>Téléphone</th><th>E-mail</th><th className="text-right">{V.Eleves}</th><th className="text-right">Reste à payer</th><th></th></tr></thead>
+      <tbody>{families.map((f) => { const n = students.filter((x) => x.familyId === f.id && (!year || x.yearId === year.id) && x.status !== "sorti").length; const edit = edFam && edFam.id === f.id; return (
+        <tr key={f.id} data-testid="ecole-famille-ligne">
+          {edit ? <><td className="py-1.5"><input value={edFam.name} onChange={(e) => setEdFam({ ...edFam, name: e.target.value })} data-testid="ecole-famille-edit-nom" className="border rounded px-1 py-0.5 text-sm w-full" style={ecBorder} /></td><td><input value={edFam.phone} onChange={(e) => setEdFam({ ...edFam, phone: e.target.value })} data-testid="ecole-famille-edit-tel" className="border rounded px-1 py-0.5 text-sm w-full" style={ecBorder} /></td><td><input value={edFam.email} onChange={(e) => setEdFam({ ...edFam, email: e.target.value })} className="border rounded px-1 py-0.5 text-sm w-full" style={ecBorder} /></td></>
+            : <><td className="py-1.5">{f.name}</td><td className="text-xs">{f.phone || "—"}</td><td className="text-xs">{f.email || "—"}</td></>}
+          <td className="text-right tabular">{n}</td><td className="text-right tabular">{fmt(resteFam(f.id))}</td>
+          <td className="text-right whitespace-nowrap">{edit ? <><button onClick={saveFam} className="text-xs underline mr-3" data-testid="ecole-famille-edit-ok">Enregistrer</button><button onClick={() => setEdFam(null)} className="text-xs">Annuler</button></> : <><button onClick={() => setPrintRel({ familyId: f.id })} className="text-xs underline mr-3" data-testid="ecole-releve-voir">Relevé de compte</button>{canEdit && <button onClick={() => setEdFam({ id: f.id, name: f.name, phone: f.phone || "", email: f.email || "" })} className="text-xs underline" data-testid="ecole-famille-modifier">Modifier</button>}</>}</td></tr>); })}
+        {families.length > 0 && totalRow([<td key="a" className="py-1.5" colSpan={3}>Total ({families.length} {V.famille}(s))</td>, <td key="b" className="text-right tabular">{students.filter((x) => (!year || x.yearId === year.id) && x.status !== "sorti").length}</td>, <td key="c" className="text-right tabular" data-testid="ecole-familles-total-reste">{fmt(ecR2(families.reduce((t, f) => t + resteFam(f.id), 0)))}</td>, <td key="d"></td>], "ecole-familles-total")}</tbody></table></div>
+  );
   const Eleves = () => (
     <div>
       <div className="display text-base mb-2" style={{ color: "#152238" }}>{V.Familles}</div>
@@ -591,9 +635,9 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
         <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>{V.FamilleResp}</label><input value={ff.name} onChange={(e) => setFf({ ...ff, name: e.target.value })} data-testid="ecole-famille-nom" className={ecInput} style={ecBorder} /></div>
         <div><label className="text-xs" style={{ color: "#8A8370" }}>Téléphone</label><input type="tel" value={ff.phone} onChange={(e) => setFf({ ...ff, phone: e.target.value })} data-testid="ecole-famille-tel" className={ecInput} style={ecBorder} /></div>
         <div><label className="text-xs" style={{ color: "#8A8370" }}>E-mail</label><input value={ff.email} onChange={(e) => setFf({ ...ff, email: e.target.value })} className={ecInput} style={ecBorder} /></div>
-        <button onClick={addFamily} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ecole-famille-ajouter">Ajouter : {V.famille}</button>
+        <button onClick={addFamily} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ecole-famille-ajouter">Enregistrer {V.famDet}</button>
       </div>)}
-      <div className="text-xs mb-5" style={{ color: "#7A7460" }}>{families.length} {V.famille}(s) : {families.slice(0, 12).map((f) => f.name).join(", ")}{families.length > 12 ? "…" : ""}</div>
+      {FamTable()}
       <div className="display text-base mb-2" style={{ color: "#152238" }}>{V.Eleves}{year ? " — " + year.label : ""}</div>
       {canEdit && (<div className="grid md:grid-cols-5 gap-2 mb-3 items-end">
         <div><label className="text-xs" style={{ color: "#8A8370" }}>Prénom</label><input value={fs.firstName} onChange={(e) => setFs({ ...fs, firstName: e.target.value })} data-testid="ecole-eleve-prenom" className={ecInput} style={ecBorder} /></div>
@@ -601,17 +645,20 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
         <div><label className="text-xs" style={{ color: "#8A8370" }}>{V.Famille}</label><select value={fs.familyId} onChange={(e) => setFs({ ...fs, familyId: e.target.value })} data-testid="ecole-eleve-famille" className={ecInput} style={ecBorder}><option value="">— choisir —</option>{families.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></div>
         <div><label className="text-xs" style={{ color: "#8A8370" }}>{V.Classe}</label><select value={fs.classId} onChange={(e) => setFs({ ...fs, classId: e.target.value })} data-testid="ecole-eleve-classe" className={ecInput} style={ecBorder}><option value="">— choisir —</option>{year && classes.filter((c) => c.yearId === year.id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
         {sup && <div><label className="text-xs" style={{ color: "#8A8370" }}>Crédits ce semestre (facultatif)</label><input type="number" min="0" value={fs.credits || ""} onChange={(e) => setFs({ ...fs, credits: e.target.value })} data-testid="ecole-eleve-credits" className={ecInput + " tabular"} style={ecBorder} /></div>}
-        <button onClick={addStudent} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ecole-eleve-ajouter">Inscrire : {V.eleve}</button>
+        <button onClick={addStudent} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ecole-eleve-ajouter">Inscrire {V.eleveDet} et créer ses échéances</button>
       </div>)}
+      <div className="flex flex-wrap items-end gap-3 mb-2"><div><label className="text-xs" style={{ color: "#8A8370" }}>Chercher (nom ou matricule)</label><input value={fq} onChange={(e) => setFq(e.target.value)} data-testid="ecole-eleve-recherche" className="block border rounded px-2 py-1 text-sm" style={ecBorder} /></div>
+        <div><label className="text-xs" style={{ color: "#8A8370" }}>{V.Classe}</label><select value={fcl} onChange={(e) => setFcl(e.target.value)} data-testid="ecole-eleve-filtre-classe" className="block border rounded px-2 py-1 text-sm" style={ecBorder}><option value="">Toutes</option>{classes.filter((c) => year && c.yearId === year.id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div></div>
       <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Matricule</th><th>{V.Eleve}</th><th>{V.Famille}</th><th>{V.Classe}</th>{sup && <th className="text-right">Crédits</th>}<th className="text-right">Reste à payer</th><th></th></tr></thead>
-        <tbody>{students.filter((s) => year && s.yearId === year.id).map((s) => {
+        <tbody>{elevesFiltres().map((s) => {
           const reste = ecR2(charges.filter((c) => c.studentId === s.id && c.status !== "annulée").reduce((t, c) => t + ecReste(c), 0));
           return (<tr key={s.id} style={{ borderTop: "1px solid #EEE9DA", opacity: s.status === "sorti" ? 0.55 : 1 }} data-testid="ecole-eleve-ligne">
             <td className="py-1.5 tabular text-xs">{s.matricule}</td><td>{(s.firstName + " " + s.lastName).trim()}{s.status === "sorti" ? (s.renvoi ? " (renvoyé le " + ecDateFr(s.renvoi.date) + " — " + s.renvoi.motif + ")" : " (sorti)") : ""}</td><td>{famName(s.familyId)}</td>
             <td>{canEdit ? <select value={s.classId} onChange={(e) => changeClass(s, e.target.value)} className="border rounded px-1 py-0.5 text-xs" style={ecBorder}>{classes.filter((c) => c.yearId === s.yearId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select> : className(s.classId)}</td>
             {sup && <td className="text-right">{canEdit ? <input type="number" min="0" value={s.credits || ""} onChange={(e) => changeCredits(s, e.target.value)} data-testid="ecole-eleve-credits-ligne" className="border rounded px-1 py-0.5 text-xs tabular" style={{ ...ecBorder, width: 64 }} /> : (s.credits || "—")}</td>}
             <td className="text-right tabular">{fmt(reste)}</td><td className="text-right">{canEdit && fees.filter((f) => f.optional && f.yearId === s.yearId && (!f.classIds || f.classIds.length === 0 || f.classIds.includes(s.classId))).map((f) => <label key={f.id} className="text-xs mr-3 whitespace-nowrap"><input type="checkbox" checked={(s.options || []).includes(f.id)} onChange={() => basculerOption(s, f)} data-testid="ecole-eleve-option" /> {f.label}</label>)}{canEdit && <button onClick={() => sortirEleve(s)} className="text-xs underline">{s.status === "sorti" ? "Réintégrer" : "Marquer sorti"}</button>}{canEdit && s.status !== "sorti" && <button onClick={() => { setRenvoiSel(s.id); setRenvoiMotif(""); }} className="text-xs underline ml-3" style={{ color: "#A6432F" }} data-testid="ecole-eleve-renvoyer">Renvoyer</button>}{canEdit && <button onClick={() => delEleve(s)} className="text-xs underline ml-3" style={{ color: "#A6432F" }} data-testid="ecole-eleve-supprimer">Supprimer</button>}</td></tr>);
-        })}</tbody></table></div>
+        })}
+          {totalRow([<td key="a" className="py-1.5" colSpan={sup ? 5 : 4}>Total ({elevesFiltres().length} {V.eleve}(s))</td>, <td key="b" className="text-right tabular" data-testid="ecole-eleves-total-reste">{fmt(ecR2(elevesFiltres().reduce((t, s) => t + resteDe(s.id), 0)))}</td>, <td key="c"></td>], "ecole-eleves-total")}</tbody></table></div>
       {renvoiSel && canEdit && (<div className="ec-card p-3 mt-3 flex flex-wrap items-end gap-3" data-testid="ecole-renvoi-form">
         <div className="flex-1 min-w-[260px]"><label className="text-xs" style={{ color: "#8A8370" }}>Motif du renvoi de {stuName(renvoiSel)} (obligatoire)</label><input value={renvoiMotif} onChange={(e) => setRenvoiMotif(e.target.value)} data-testid="ecole-renvoi-motif" className={ecInput} style={ecBorder} /></div>
         <button onClick={renvoyer} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="ecole-renvoi-valider">Confirmer le renvoi</button>
@@ -641,8 +688,8 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
     if (charges.some((c) => c.feeId === f.id && c.status !== "annulée")) { showToast("Ce frais a déjà été appliqué à des élèves : il ne peut plus être supprimé."); return; }
     setEcole((prev) => (prev || []).filter((r) => r.id !== f.id));
   };
-  const appliquer = () => {
-    if (!canEdit || !year) return;
+  const calcNouvelles = () => {
+    if (!year) return [];
     const existants = new Set(charges.map((c) => c.id));
     const nouvelles = [];
     fees.filter((f) => f.yearId === year.id).forEach((f) => {
@@ -650,6 +697,11 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
         cpe(f, s).forEach((c) => { if (!existants.has(c.id)) nouvelles.push(c); });
       });
     });
+    return nouvelles;
+  };
+  const appliquer = () => {
+    if (!canEdit || !year) return;
+    const nouvelles = calcNouvelles();
     const avecRemises = ecAppliquerRemisesAuxNouvelles(nouvelles, ecRows(ecole, "discount"));
     nouvelles.splice(0, nouvelles.length, ...avecRemises);
     if (!nouvelles.length) { showToast("Rien à ajouter : tous les frais sont déjà appliqués à tous les élèves concernés."); return; }
@@ -680,7 +732,8 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
         <tbody>{year && fees.filter((f) => f.yearId === year.id).map((f) => (
           <tr key={f.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-frais-ligne"><td className="py-1.5">{f.label}{f.tcaRate > 0 ? " (TCA " + f.tcaRate + " %)" : ""}{f.optional ? " (facultatif)" : ""}{f.semesterLabel ? " — " + f.semesterLabel : ""}</td><td className="text-right tabular">{fmt(f.amount)}{f.perCredit ? " / crédit" : ""}</td><td className="text-right">{f.nb}</td><td>{ecDateFr(f.firstDue)}</td>
             <td className="text-xs">{(f.classIds || []).length ? f.classIds.map(className).join(", ") : "Toutes"}</td><td className="text-right">{canEdit && <button onClick={() => delFee(f)} className="text-xs" style={{ color: "#A6432F" }}>Supprimer</button>}</td></tr>))}</tbody></table></div>
-      {canEdit && year && <button onClick={appliquer} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="ecole-appliquer">Appliquer les frais : {V.Eleves.toLowerCase()}</button>}
+      {canEdit && year && (() => { const n = calcNouvelles(); const nbE = new Set(n.map((c) => c.studentId)).size; return (<div className="ec-card p-3 mt-3" data-testid="ecole-appliquer-bloc"><div className="text-sm mb-2" data-testid="ecole-appliquer-info">{n.length > 0 ? <><b>{n.length}</b> échéance(s) restent à créer pour <b>{nbE}</b> {V.eleve}(s). Cliquez sur le bouton pour les créer : sans cela, rien n'apparaît dans « Échéances » ni dans les impayés.</> : fees.some((f) => f.yearId === year.id) ? "Toutes les échéances sont déjà créées pour les " + V.Eleves.toLowerCase() + " concernés." : "Ajoutez d'abord au moins un frais ci-dessus."}</div>
+        <button onClick={appliquer} disabled={!n.length} className="px-3 py-2 rounded text-sm" style={{ ...ecBtnGold, opacity: n.length ? 1 : 0.5 }} data-testid="ecole-appliquer">Appliquer les frais : créer les échéances</button></div>); })()}
     </div>
   );
 
@@ -701,7 +754,10 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
     showToast(r.count + " échéance(s) constatée(s) en comptabilité."); logAudit("Écoles", "Échéances constatées", r.count + " — " + fmt(r.total));
   };
   const Echeances = () => {
-    const list = yCharges.slice().sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)) || String(a.id).localeCompare(String(b.id)));
+    const etatDe = (c) => (ecReste(c) <= 0 ? "soldee" : c.dueDate <= today ? "echue" : "avenir");
+    const q = fEch.q.trim().toLowerCase();
+    const list = yCharges.filter((c) => (!fEch.etat || etatDe(c) === fEch.etat) && (!fEch.classId || (students.find((x) => x.id === c.studentId) || {}).classId === fEch.classId) && (!fEch.du || c.dueDate >= fEch.du) && (!fEch.au || c.dueDate <= fEch.au) && (!q || (stuName(c.studentId) + " " + famName(c.familyId) + " " + c.label).toLowerCase().includes(q)))
+      .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)) || String(a.id).localeCompare(String(b.id)));
     return (
       <div>
         <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -709,12 +765,21 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
           {canEdit && <button onClick={constater} disabled={!aConstater.length} className="px-3 py-1.5 rounded text-sm" style={{ ...ecBtnGold, opacity: aConstater.length ? 1 : 0.5 }} data-testid="ecole-constater">Constater les échéances échues</button>}
         </div>
         <div className="text-xs mb-3" style={{ color: "#7A7460" }}>Constater, c'est inscrire en comptabilité les frais devenus exigibles (Familles / Produit). Une avance déjà reçue est alors transformée en produit.</div>
-        <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Échéance</th><th>Élève</th><th>Frais</th><th className="text-right">Montant</th><th className="text-right">Payé</th><th>État</th></tr></thead>
+        <div className="ec-card p-3 mb-3"><div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>État</label><select value={fEch.etat} onChange={(e) => setFEch({ ...fEch, etat: e.target.value })} data-testid="ecole-ech-etat" className={ecInput} style={ecBorder}><option value="">Toutes</option><option value="echue">Échues et impayées</option><option value="avenir">À venir</option><option value="soldee">Soldées</option></select></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>{V.Classe}</label><select value={fEch.classId} onChange={(e) => setFEch({ ...fEch, classId: e.target.value })} className={ecInput} style={ecBorder}><option value="">Toutes</option>{classes.filter((c) => year && c.yearId === year.id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Échéance du</label><input type="date" value={fEch.du} onChange={(e) => setFEch({ ...fEch, du: e.target.value })} className={ecInput} style={ecBorder} /></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>au</label><input type="date" value={fEch.au} onChange={(e) => setFEch({ ...fEch, au: e.target.value })} className={ecInput} style={ecBorder} /></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Chercher</label><input value={fEch.q} onChange={(e) => setFEch({ ...fEch, q: e.target.value })} data-testid="ecole-ech-recherche" className={ecInput} style={ecBorder} /></div>
+        </div></div>
+        <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Échéance</th><th>{V.Eleve}</th><th>Frais</th><th className="text-right">Montant</th><th className="text-right">Payé</th><th className="text-right">Reste</th><th>État</th></tr></thead>
           <tbody>{list.map((c) => {
             const reste = ecReste(c);
             const etat = reste <= 0 ? "Soldée" : c.dueDate <= today ? (c.paid > 0 ? "Partiellement payée — échue" : "Échue, impayée") : (c.advance > 0 ? "Avance reçue" : "À venir");
-            return (<tr key={c.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-echeance-ligne"><td className="py-1.5">{ecDateFr(c.dueDate)}</td><td>{stuName(c.studentId)}</td><td>{c.label}</td><td className="text-right tabular">{fmt(c.amount)}</td><td className="text-right tabular">{fmt(c.paid || 0)}</td><td>{ecPastille(etat, reste <= 0 ? "ok" : c.dueDate <= today ? "alerte" : c.advance > 0 ? "info" : "neutre")}{c.recognized ? <span className="text-xs ml-2" style={{ color: "#8A8370" }}>constatée</span> : null}</td></tr>);
-          })}</tbody></table></div>
+            return (<tr key={c.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-echeance-ligne"><td className="py-1.5">{ecDateFr(c.dueDate)}</td><td>{stuName(c.studentId)}</td><td>{c.label}</td><td className="text-right tabular">{fmt(c.amount)}</td><td className="text-right tabular">{fmt(c.paid || 0)}</td><td className="text-right tabular">{fmt(reste)}</td><td>{ecPastille(etat, reste <= 0 ? "ok" : c.dueDate <= today ? "alerte" : c.advance > 0 ? "info" : "neutre")}{c.recognized ? <span className="text-xs ml-2" style={{ color: "#8A8370" }}>constatée</span> : null}</td></tr>);
+          })}
+            {list.length > 0 && totalRow([<td key="a" className="py-1.5" colSpan={3}>Total ({list.length} échéance(s))</td>, <td key="b" className="text-right tabular" data-testid="ecole-ech-total-montant">{fmt(ecR2(list.reduce((t, c) => t + c.amount, 0)))}</td>, <td key="c" className="text-right tabular" data-testid="ecole-ech-total-paye">{fmt(ecR2(list.reduce((t, c) => t + (c.paid || 0), 0)))}</td>, <td key="d" className="text-right tabular" data-testid="ecole-ech-total-reste">{fmt(ecR2(list.reduce((t, c) => t + ecReste(c), 0)))}</td>, <td key="e"></td>], "ecole-ech-total")}</tbody></table></div>
+        {list.length === 0 && <div className="text-sm mt-2" style={{ color: "#8A8370" }}>Aucune échéance pour ces filtres.{yCharges.length === 0 ? " Pour en créer : onglet « Frais » → « Appliquer les frais »." : ""}</div>}
       </div>
     );
   };
@@ -794,13 +859,17 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
     }));
     showToast("Reçu " + r.number + " annulé."); logAudit("Écoles", "Reçu annulé", r.number);
   };
-  const Recus = () => (
+  const Recus = () => {
+    const liste = receipts.filter((r) => (!fRec.du || r.date >= fRec.du) && (!fRec.au || r.date <= fRec.au) && (!fRec.familyId || r.familyId === fRec.familyId) && (!fRec.mode || (r.mode === "banque" ? "banque" : "caisse") === fRec.mode) && (!fRec.etat || (fRec.etat === "annule" ? r.status === "annulé" : r.status !== "annulé"))).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    const valides = liste.filter((r) => r.status !== "annulé");
+    const somme = (f) => ecR2(valides.filter(f).reduce((t, r) => t + r.amount, 0));
+    return (
     <div>
       {canCash && (<div className="ec-card p-4 mb-5">
         <div className="display text-base mb-2" style={{ color: "#152238" }}>Nouvel encaissement</div>
         <div className="grid md:grid-cols-6 gap-2 items-end">
-          <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Famille</label><select value={fp.familyId} onChange={(e) => setFp({ ...fp, familyId: e.target.value, studentId: "" })} data-testid="ecole-paie-famille" className={ecInput} style={ecBorder}><option value="">— choisir —</option>{families.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></div>
-          <div><label className="text-xs" style={{ color: "#8A8370" }}>Élève (facultatif)</label><select value={fp.studentId} onChange={(e) => setFp({ ...fp, studentId: e.target.value })} data-testid="ecole-paie-eleve" className={ecInput} style={ecBorder}><option value="">Tous</option>{students.filter((s) => s.familyId === fp.familyId).map((s) => <option key={s.id} value={s.id}>{(s.firstName + " " + s.lastName).trim()}</option>)}</select></div>
+          <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>{V.Famille}</label><select value={fp.familyId} onChange={(e) => setFp({ ...fp, familyId: e.target.value, studentId: "" })} data-testid="ecole-paie-famille" className={ecInput} style={ecBorder}><option value="">— choisir —</option>{families.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>{V.Eleve} (facultatif)</label><select value={fp.studentId} onChange={(e) => setFp({ ...fp, studentId: e.target.value })} data-testid="ecole-paie-eleve" className={ecInput} style={ecBorder}><option value="">Tous</option>{students.filter((s) => s.familyId === fp.familyId).map((s) => <option key={s.id} value={s.id}>{(s.firstName + " " + s.lastName).trim()}</option>)}</select></div>
           <div><label className="text-xs" style={{ color: "#8A8370" }}>Montant reçu</label><input type="number" min="0" value={fp.amount} onChange={(e) => setFp({ ...fp, amount: e.target.value })} data-testid="ecole-paie-montant" className={ecInput + " tabular"} style={ecBorder} /></div>
           <div><label className="text-xs" style={{ color: "#8A8370" }}>Mode</label><select value={fp.mode} onChange={(e) => setFp({ ...fp, mode: e.target.value })} data-testid="ecole-paie-mode" className={ecInput} style={ecBorder}><option value="caisse">Espèces (caisse)</option><option value="banque">Banque</option></select></div>
           <div><label className="text-xs" style={{ color: "#8A8370" }}>Date</label><input type="date" value={fp.date} max={todayStr()} onChange={(e) => setFp({ ...fp, date: e.target.value })} data-testid="ecole-paie-date" className={ecInput} style={ecBorder} /></div>
@@ -811,21 +880,30 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
           <button onClick={encaisser} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="ecole-paie-valider">Encaisser et éditer le reçu</button>
         </div>
       </div>)}
-      <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Reçu</th><th>Date</th><th>Famille</th><th className="text-right">Montant</th><th>État</th><th></th></tr></thead>
-        <tbody>{receipts.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).map((r) => (
-          <tr key={r.id} style={{ borderTop: "1px solid #EEE9DA", opacity: r.status === "annulé" ? 0.55 : 1 }} data-testid="ecole-recu-ligne"><td className="py-1.5 tabular text-xs">{r.number}</td><td>{ecDateFr(r.date)}</td><td>{famName(r.familyId)}</td><td className="text-right tabular">{fmt(r.amount)}</td><td>{r.status === "annulé" ? ecPastille("Annulé", "neutre") : ecPastille("Valide", "ok")}</td>
-            <td className="text-right"><button onClick={() => setPrintRec(r)} className="text-xs underline mr-3" data-testid="ecole-recu-voir">Voir / imprimer</button>{canEdit && r.status !== "annulé" && <button onClick={() => annulerRecu(r)} className="text-xs" style={{ color: "#A6432F" }} data-testid="ecole-recu-annuler">Annuler</button>}</td></tr>))}</tbody></table></div>
+      <div className="ec-card p-3 mb-3"><div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+        <div><label className="text-xs" style={{ color: "#8A8370" }}>Du</label><input type="date" value={fRec.du} onChange={(e) => setFRec({ ...fRec, du: e.target.value })} data-testid="ecole-rec-du" className={ecInput} style={ecBorder} /></div>
+        <div><label className="text-xs" style={{ color: "#8A8370" }}>Au</label><input type="date" value={fRec.au} onChange={(e) => setFRec({ ...fRec, au: e.target.value })} data-testid="ecole-rec-au" className={ecInput} style={ecBorder} /></div>
+        <div><label className="text-xs" style={{ color: "#8A8370" }}>{V.Famille}</label><select value={fRec.familyId} onChange={(e) => setFRec({ ...fRec, familyId: e.target.value })} className={ecInput} style={ecBorder}><option value="">Toutes</option>{families.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></div>
+        <div><label className="text-xs" style={{ color: "#8A8370" }}>Mode</label><select value={fRec.mode} onChange={(e) => setFRec({ ...fRec, mode: e.target.value })} className={ecInput} style={ecBorder}><option value="">Tous</option><option value="caisse">Espèces</option><option value="banque">Banque</option></select></div>
+        <div><label className="text-xs" style={{ color: "#8A8370" }}>État</label><select value={fRec.etat} onChange={(e) => setFRec({ ...fRec, etat: e.target.value })} className={ecInput} style={ecBorder}><option value="">Tous</option><option value="valide">Valides</option><option value="annule">Annulés</option></select></div>
+      </div></div>
+      <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Reçu</th><th>Date</th><th>{V.Famille}</th><th>Mode</th><th className="text-right">Montant</th><th>État</th><th></th></tr></thead>
+        <tbody>{liste.map((r) => (
+          <tr key={r.id} style={{ borderTop: "1px solid #EEE9DA", opacity: r.status === "annulé" ? 0.55 : 1 }} data-testid="ecole-recu-ligne"><td className="py-1.5 tabular text-xs">{r.number}</td><td>{ecDateFr(r.date)}</td><td>{famName(r.familyId)}</td><td className="text-xs">{nomMode(r.mode)}</td><td className="text-right tabular">{fmt(r.amount)}</td><td>{r.status === "annulé" ? ecPastille("Annulé", "neutre") : ecPastille("Valide", "ok")}</td>
+            <td className="text-right whitespace-nowrap"><button onClick={() => setPrintRec(r)} className="text-xs underline mr-3" data-testid="ecole-recu-voir">Voir / imprimer</button>{canEdit && r.status !== "annulé" && <button onClick={() => annulerRecu(r)} className="text-xs" style={{ color: "#A6432F" }} data-testid="ecole-recu-annuler">Annuler</button>}</td></tr>))}
+          {liste.length > 0 && totalRow([<td key="a" className="py-1.5" colSpan={4}>Total ({valides.length} reçu(s) valide(s)) — espèces {fmt(somme((r) => r.mode !== "banque"))} · banque {fmt(somme((r) => r.mode === "banque"))}</td>, <td key="b" className="text-right tabular" data-testid="ecole-rec-total-montant">{fmt(somme(() => true))}</td>, <td key="c" colSpan={2}></td>], "ecole-rec-total")}</tbody></table></div>
       {receipts.length === 0 && <div className="text-sm mt-2" style={{ color: "#8A8370" }}>Aucun encaissement.</div>}
     </div>
-  );
+    );
+  };
 
-  const ticket = settings.receiptFormat === "ticket80" || settings.receiptFormat === "ticket58";
+  const ticket = fmtRecu === "ticket80" || fmtRecu === "ticket58";
   const RecuSheet = ({ r }) => {
     const fam = families.find((f) => f.id === r.familyId) || {};
     const lignes = (r.allocations || []).map((a) => { const c = charges.find((x) => x.id === a.chargeId) || {}; return { label: stuName(c.studentId) + " — " + (c.label || ""), amount: a.amount }; });
     const resteApres = ecR2(charges.filter((c) => c.familyId === r.familyId && c.status !== "annulée").reduce((s, c) => s + ecReste(c), 0));
     return (
-      <div style={{ color: "#152238", background: "#fff", fontFamily: ticket ? "'IBM Plex Mono', monospace" : "'Inter', sans-serif", fontSize: ticket ? 10 : 13, width: ticket ? (settings.receiptFormat === "ticket80" ? "74mm" : "52mm") : "100%", maxWidth: ticket ? "100%" : 794, margin: "0 auto", padding: ticket ? "12px 8px" : "32px 36px", boxSizing: "border-box" }} data-testid="ecole-recu-feuille">
+      <div style={{ color: "#152238", background: "#fff", fontFamily: ticket ? "'IBM Plex Mono', monospace" : "'Inter', sans-serif", fontSize: ticket ? 10 : 13, width: ticket ? (fmtRecu === "ticket80" ? "74mm" : "52mm") : "100%", maxWidth: ticket ? "100%" : 794, margin: "0 auto", padding: ticket ? "12px 8px" : "32px 36px", boxSizing: "border-box" }} data-testid="ecole-recu-feuille">
         <div style={{ textAlign: "center", marginBottom: 12 }}>
           {settings.companyLogo && <img src={settings.companyLogo} alt="" style={{ width: ticket ? 48 : 60, height: ticket ? 48 : 60, objectFit: "contain", margin: "0 auto 6px", display: "block" }} />}
           <div style={{ fontWeight: 700, fontSize: ticket ? 12 : 20 }}>{settings.companyName || V.etabTitre}</div>
@@ -847,9 +925,42 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
     );
   };
 
+  const ReleveSheet = ({ fid }) => {
+    const fam = families.find((f) => f.id === fid) || {};
+    const cs = charges.filter((c) => c.familyId === fid && c.status !== "annulée").sort((a, b) => String(a.studentId).localeCompare(String(b.studentId)) || String(a.yearId).localeCompare(String(b.yearId)) || String(a.dueDate).localeCompare(String(b.dueDate)));
+    const groupes = []; cs.forEach((c) => { const k = c.studentId + "|" + c.yearId; let g = groupes.find((x) => x.k === k); if (!g) { g = { k, sid: c.studentId, yid: c.yearId, rows: [] }; groupes.push(g); } g.rows.push(c); });
+    const rc = receipts.filter((r) => r.familyId === fid && r.status !== "annulé").sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const du = ecR2(cs.reduce((t, c) => t + c.amount, 0)), paye = ecR2(cs.reduce((t, c) => t + (c.paid || 0), 0));
+    const w = ticket ? { fs: 10, pad: "12px 8px" } : { fs: 12.5, pad: "32px 36px" };
+    return (
+      <div style={{ color: "#152238", background: "#fff", fontFamily: ticket ? "'IBM Plex Mono', monospace" : "'Inter', sans-serif", fontSize: w.fs, width: ticket ? (fmtRecu === "ticket80" ? "74mm" : "52mm") : "100%", maxWidth: ticket ? "100%" : 794, margin: "0 auto", padding: w.pad, boxSizing: "border-box" }} data-testid="ecole-releve-feuille">
+        <div style={{ textAlign: "center", marginBottom: 12 }}>
+          {settings.companyLogo && <img src={settings.companyLogo} alt="" style={{ width: ticket ? 48 : 60, height: ticket ? 48 : 60, objectFit: "contain", margin: "0 auto 6px", display: "block" }} />}
+          <div style={{ fontWeight: 700, fontSize: ticket ? 12 : 20 }}>{settings.companyName || V.etabTitre}</div>
+          {settings.companyAddress && <div style={{ fontSize: ticket ? 9 : 12 }}>{settings.companyAddress}</div>}
+          {settings.companyPhone && <div style={{ fontSize: ticket ? 9 : 12 }}>{settings.companyPhone}</div>}
+          {settings.companyNIF && <div style={{ fontSize: ticket ? 9 : 12 }}>NIF : {settings.companyNIF}</div>}
+        </div>
+        <div style={{ fontWeight: 700, fontSize: ticket ? 12 : 18, textAlign: "center", marginBottom: 8 }}>RELEVÉ DE COMPTE</div>
+        <div style={{ marginBottom: 10, lineHeight: 1.6 }}>{V.Famille} : <b>{fam.name}</b>{fam.phone ? " — " + fam.phone : ""}<br />Édité le {ecDateFr(today)}</div>
+        {groupes.map((g) => (<div key={g.k} style={{ marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, borderBottom: "1px solid #152238", paddingBottom: 2, marginBottom: 3 }}>{stuName(g.sid)} — {className((students.find((x) => x.id === g.sid) || {}).classId)}{(years.find((y) => y.id === g.yid) || {}).label ? " — " + years.find((y) => y.id === g.yid).label : ""}</div>
+          {g.rows.map((c) => (<div key={c.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "2px 0" }}><span>{c.label} ({ecDateFr(c.dueDate)})</span><span className="tabular">{fmt(c.amount)} · payé {fmt(c.paid || 0)} · reste {fmt(ecReste(c))}</span></div>))}
+        </div>))}
+        {groupes.length === 0 && <div style={{ marginBottom: 10 }}>Aucun frais enregistré pour {V.famDet}.</div>}
+        {rc.length > 0 && (<div style={{ marginBottom: 10 }}><div style={{ fontWeight: 700, marginBottom: 3 }}>Paiements reçus</div>{rc.map((r) => (<div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><span>{ecDateFr(r.date)} — reçu {r.number} ({nomMode(r.mode)})</span><span className="tabular">{fmt(r.amount)}</span></div>))}</div>)}
+        <div style={{ borderTop: "1px dashed #152238", paddingTop: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Total des frais</span><span className="tabular">{fmt(du)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Total payé</span><span className="tabular">{fmt(paye)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: ticket ? 13 : 16 }}><span>RESTE À PAYER</span><span className="tabular" data-testid="ecole-releve-reste">{fmt(ecR2(du - paye))}</span></div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
-    <div className={"p-4 md:p-8 max-w-6xl" + (printRec ? " no-print" : "")} data-testid="ecoles-module">
+    <div className={"p-4 md:p-8 max-w-6xl" + ((printRec || printRel) ? " no-print" : "")} data-testid="ecoles-module">
       <style>{EC_CSS}</style>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div><div className="display text-2xl" style={{ color: "#152238" }}>Éducation</div><div className="text-xs" style={{ color: "#8A8370" }}>{V.Annees}, {V.Eleves.toLowerCase()}, frais, échéances et reçus{year ? " — année : " + year.label : ""}</div></div>
@@ -870,15 +981,31 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
       {tab === "cours" && sup && Cours()}
       {tab === "relances" && <EcolesRelances ecole={ecole} setEcole={setEcole} year={year} families={families} students={students} charges={charges} canAct={canCash} today={today} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} settings={settings} V={V} kind={kind} />}
       {tab === "remises" && <EcolesRemises ecole={ecole} setEcole={setEcole} year={year} students={students} fees={fees} charges={charges} canEdit={canEdit} accounts={accounts} setAccounts={setAccounts} setEntries={setEntries} settings={settings} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} V={V} />}
-      {tab === "rapports" && <EcolesRapports year={year} classes={classes} students={students} families={families} charges={charges} receipts={receipts} today={today} showToast={showToast} V={V} />}
+      {tab === "rapports" && <EcolesRapports year={year} classes={classes} students={students} families={families} charges={charges} receipts={receipts} fees={fees} today={today} showToast={showToast} V={V} />}
+      {printRel && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto p-3 md:p-8 no-print" style={{ background: "rgba(21,34,56,0.55)" }} onClick={() => { setPrintRel(null); setFmtOvr(null); }} data-testid="ecole-releve-apercu">
+            <div className="w-full" style={{ maxWidth: 860 }} onClick={(e) => e.stopPropagation()}>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="text-sm" style={{ color: "#EFE9DD" }}>Relevé de compte — {famName(printRel.familyId)}</div>
+                <div className="flex gap-2">
+                  <button onClick={() => setFmtOvr(!ticket)} className="px-3 py-1.5 rounded text-sm" style={{ background: "#152238", color: "#EFE9DD" }} data-testid="ecole-releve-format">{ticket ? "Passer en A4" : "Passer en ticket"}</button>
+                  <button onClick={() => { try { window.print(); } catch (e) {} }} className="px-3 py-1.5 rounded text-sm" style={ecBtnGold} data-testid="ecole-releve-imprimer">Imprimer / enregistrer en PDF</button>
+                  <button onClick={() => { setPrintRel(null); setFmtOvr(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "#EFE9DD", color: "#152238" }} data-testid="ecole-releve-fermer">Fermer</button>
+                </div>
+              </div>
+              <div className="rounded shadow-lg overflow-hidden" style={{ background: "#fff" }}>{ReleveSheet({ fid: printRel.familyId })}</div>
+            </div>
+          </div>
+      )}
       {printRec && (
-          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto p-3 md:p-8 no-print" style={{ background: "rgba(21,34,56,0.55)" }} onClick={() => setPrintRec(null)} data-testid="ecole-recu-apercu">
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto p-3 md:p-8 no-print" style={{ background: "rgba(21,34,56,0.55)" }} onClick={() => { setPrintRec(null); setFmtOvr(null); }} data-testid="ecole-recu-apercu">
             <div className="w-full" style={{ maxWidth: 860 }} onClick={(e) => e.stopPropagation()}>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div className="text-sm" style={{ color: "#EFE9DD" }}>Reçu {printRec.number}</div>
                 <div className="flex gap-2">
+                  <button onClick={() => setFmtOvr(!ticket)} className="px-3 py-1.5 rounded text-sm" style={{ background: "#152238", color: "#EFE9DD" }} data-testid="ecole-recu-format">{ticket ? "Passer en A4" : "Passer en ticket"}</button>
                   <button onClick={() => { try { window.print(); } catch (e) {} }} className="px-3 py-1.5 rounded text-sm" style={ecBtnGold} data-testid="ecole-recu-imprimer">Imprimer</button>
-                  <button onClick={() => setPrintRec(null)} className="px-3 py-1.5 rounded text-sm" style={{ background: "#EFE9DD", color: "#152238" }} data-testid="ecole-recu-fermer">Fermer</button>
+                  <button onClick={() => { setPrintRec(null); setFmtOvr(null); }} className="px-3 py-1.5 rounded text-sm" style={{ background: "#EFE9DD", color: "#152238" }} data-testid="ecole-recu-fermer">Fermer</button>
                 </div>
               </div>
               <div className="rounded shadow-lg overflow-hidden" style={{ background: "#fff" }}><RecuSheet r={printRec} /></div>
@@ -886,7 +1013,8 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
           </div>
       )}
     </div>
-    {printRec && <div className={"print-only" + (settings.receiptFormat === "ticket80" ? " ticket-print-80" : settings.receiptFormat === "ticket58" ? " ticket-print-58" : "")}><RecuSheet r={printRec} /></div>}
+    {printRel && !printRec && <div className={"print-only" + (fmtRecu === "ticket80" ? " ticket-print-80" : fmtRecu === "ticket58" ? " ticket-print-58" : "")}>{ReleveSheet({ fid: printRel.familyId })}</div>}
+    {printRec && <div className={"print-only" + (fmtRecu === "ticket80" ? " ticket-print-80" : fmtRecu === "ticket58" ? " ticket-print-58" : "")}><RecuSheet r={printRec} /></div>}
     </>
   );
 }

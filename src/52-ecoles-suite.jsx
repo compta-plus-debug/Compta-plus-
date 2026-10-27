@@ -1,8 +1,9 @@
 // ═══ MODULE ═══
 // @module Ecoles suite
 // @depends EC_VOCAB, Plus, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecId, ecInput, ecPastille, ecR2, ecReste
-//   ecRows, fmt, isLocked, todayStr, uid, useBrouillon, useState
-// @exports EcolesRapports, EcolesRelances, EcolesRemises, ecAppliquerRemisesAuxNouvelles, ecTelecharger
+//   ecRows, ecTelecharger, fmt, isLocked, todayStr, uid, useBrouillon, useState
+// @exports EC_TRANCHES, EcolesRapports, EcolesRelances, EcolesRemises, ecAppliquerRemisesAuxNouvelles
+//   ecJoursEntre
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Écoles — suite : bourses et rabais, impayés et relances, rapports de l'école.
 // Les remises réduisent le montant des échéances de l'élève. Sur une échéance déjà constatée en comptabilité, la réduction est
@@ -146,14 +147,6 @@ function ecImpayes(charges, today) {
   return Object.values(par).map((f) => ({ ...f, jours: ecJoursEntre(f.plusAncien, today) })).sort((a, b) => b.total - a.total);
 }
 
-function ecTelecharger(nom, lignes) {
-  const csv = "﻿" + lignes.map((r) => r.map((v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(";")).join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
 function EcolesRelances({ ecole, setEcole, year, families, students, charges, canAct, today, showToast, logAudit, currentUserEmail, settings, V: Vp, kind: kp }) {
   const V = Vp || EC_VOCAB.ecole, kd = kp || "ecole", cfgId = kd === "ecole" ? "config" : "config-" + kd;
   const reminders = ecRows(ecole, "reminder");
@@ -213,7 +206,7 @@ function EcolesRelances({ ecole, setEcole, year, families, students, charges, ca
 }
 
 // ───────────────────────── Rapports ─────────────────────────
-function EcolesRapports({ year, classes, students, families, charges, receipts, today, showToast, V: Vp }) {
+function EcolesRapports({ year, classes, students, families, charges, receipts, fees, today, showToast, V: Vp }) {
   const V = Vp || EC_VOCAB.ecole;
   const [du, setDu] = useBrouillon("ecole-rapport-journal", { du: today.slice(0, 8) + "01", au: today });
   const yCharges = year ? charges.filter((c) => c.yearId === year.id && c.status !== "annulée") : [];
@@ -233,16 +226,24 @@ function EcolesRapports({ year, classes, students, families, charges, receipts, 
   const totalMode = (m) => ecR2(jr.filter((r) => r.mode === m).reduce((s, r) => s + r.amount, 0));
   const parAuteur = {}; jr.forEach((r) => { const k = r.by || "—"; parAuteur[k] = ecR2((parAuteur[k] || 0) + r.amount); });
   const famName = (id) => (families.find((f) => f.id === id) || {}).name || "—";
+  const parFraisMap = {}; jr.forEach((r) => (r.allocations || []).forEach((al) => { const c = charges.find((x) => x.id === al.chargeId) || {}; const f = (fees || []).find((x) => x.id === c.feeId); const k = f ? f.label : (c.label || "Autre"); parFraisMap[k] = ecR2((parFraisMap[k] || 0) + al.amount); }));
+  const parFrais = Object.keys(parFraisMap).sort().map((k) => [k, parFraisMap[k]]);
   const exporterJournal = () => ecTelecharger("journal-caisse-" + V.slug + "-" + du.du + "_" + du.au + ".csv", [["Reçu", "Date", V.Famille, "Mode", "Montant", "Encaissé par"], ...jr.map((r) => [r.number, ecDateFr(r.date), famName(r.familyId), r.mode === "banque" ? "Banque" : "Espèces", r.amount, r.by || ""])]);
   const exporterClasses = () => ecTelecharger("situation-par-" + V.classe + "-" + today + ".csv", [[V.Classe, V.Eleves, "Frais attendus", "Encaissé", "Impayés échus", "Taux de recouvrement (%)"], ...parClasse.map((c) => [c.nom, c.eleves, c.attendu, c.paye, c.impaye, c.taux == null ? "" : c.taux])]);
   return (
     <div>
       <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Situation par {V.classe}{year ? " — " + year.label : ""}</div><button onClick={exporterClasses} className="text-xs underline" data-testid="ecole-rapport-export-classes">Exporter</button></div>
       <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">{V.Classe}</th><th className="text-right">{V.Eleves}</th><th className="text-right">Frais attendus</th><th className="text-right">Encaissé</th><th className="text-right">Impayés échus</th><th className="text-right">Recouvrement</th></tr></thead>
-        <tbody>{parClasse.map((c) => (<tr key={c.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-classe"><td className="py-1.5">{c.nom}</td><td className="text-right">{c.eleves}</td><td className="text-right tabular">{fmt(c.attendu)}</td><td className="text-right tabular">{fmt(c.paye)}</td><td className="text-right tabular">{fmt(c.impaye)}</td><td className="text-right">{c.taux == null ? "—" : c.taux + " %"}</td></tr>))}</tbody></table></div>
+        <tbody>{parClasse.map((c) => (<tr key={c.id} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-classe"><td className="py-1.5">{c.nom}</td><td className="text-right">{c.eleves}</td><td className="text-right tabular">{fmt(c.attendu)}</td><td className="text-right tabular">{fmt(c.paye)}</td><td className="text-right tabular">{fmt(c.impaye)}</td><td className="text-right">{c.taux == null ? "—" : c.taux + " %"}</td></tr>))}
+          {parClasse.length > 0 && <tr className="font-semibold" style={{ borderTop: "2px solid #152238", background: "#F4F1E6" }} data-testid="ecole-rapport-classe-total"><td className="py-1.5">Total</td><td className="text-right">{parClasse.reduce((s, c) => s + c.eleves, 0)}</td><td className="text-right tabular" data-testid="ecole-rapport-total-attendu">{fmt(ecR2(parClasse.reduce((s, c) => s + c.attendu, 0)))}</td><td className="text-right tabular">{fmt(ecR2(parClasse.reduce((s, c) => s + c.paye, 0)))}</td><td className="text-right tabular">{fmt(ecR2(parClasse.reduce((s, c) => s + c.impaye, 0)))}</td><td></td></tr>}</tbody></table></div>
       <div className="display text-base mb-2" style={{ color: "#152238" }}>Âge des impayés</div>
       <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Ancienneté</th><th className="text-right">{V.Familles}</th><th className="text-right">Montant</th></tr></thead>
-        <tbody>{tranches.map((t) => (<tr key={t.lib} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-tranche"><td className="py-1.5">{t.lib}</td><td className="text-right">{t.nb}</td><td className="text-right tabular">{fmt(t.total)}</td></tr>))}</tbody></table></div>
+        <tbody>{tranches.map((t) => (<tr key={t.lib} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-tranche"><td className="py-1.5">{t.lib}</td><td className="text-right">{t.nb}</td><td className="text-right tabular">{fmt(t.total)}</td></tr>))}
+          <tr className="font-semibold" style={{ borderTop: "2px solid #152238", background: "#F4F1E6" }} data-testid="ecole-rapport-tranche-total"><td className="py-1.5">Total</td><td className="text-right">{new Set(yCharges.filter((c) => c.dueDate <= today && ecReste(c) > 0).map((c) => c.familyId)).size}</td><td className="text-right tabular" data-testid="ecole-rapport-tranche-montant">{fmt(ecR2(tranches.reduce((s, x) => s + x.total, 0)))}</td></tr></tbody></table></div>
+      <div className="display text-base mb-2" style={{ color: "#152238" }}>Encaissé par type de frais (période du journal ci-dessous)</div>
+      <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Frais</th><th className="text-right">Encaissé</th></tr></thead>
+        <tbody>{parFrais.map(([k, v]) => (<tr key={k} style={{ borderTop: "1px solid #EEE9DA" }} data-testid="ecole-rapport-parfrais"><td className="py-1.5">{k}</td><td className="text-right tabular">{fmt(v)}</td></tr>))}
+          {parFrais.length > 0 && <tr className="font-semibold" style={{ borderTop: "2px solid #152238", background: "#F4F1E6" }} data-testid="ecole-rapport-parfrais-total"><td className="py-1.5">Total</td><td className="text-right tabular" data-testid="ecole-rapport-parfrais-montant">{fmt(ecR2(parFrais.reduce((s, x) => s + x[1], 0)))}</td></tr>}</tbody></table></div>
       <div className="flex flex-wrap items-end gap-3 mb-2">
         <div className="display text-base mr-3" style={{ color: "#152238" }}>Journal de caisse</div>
         <div><label className="text-xs" style={{ color: "#8A8370" }}>Du</label><input type="date" value={du.du} onChange={(e) => setDu({ ...du, du: e.target.value })} data-testid="ecole-journal-du" className="block border rounded px-2 py-1 text-sm" style={ecBorder} /></div>

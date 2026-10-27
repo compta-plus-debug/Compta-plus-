@@ -20,7 +20,7 @@ function statMois(n, today) {
 // Somme de valeur(x) pour les éléments dont la date commence par la clé de mois
 const statSomme = (items, dateKey, mois, valeur) => Math.round(items.filter((x) => String(x[dateKey] || "").startsWith(mois)).reduce((s, x) => s + (Number(valeur(x)) || 0), 0) * 100) / 100;
 
-// kpis : [[libellé, texte, testid]] — evolution : { titre, data, series } (clé « mois ») — repartitions : [{ titre, data: [{ name, value }] }]
+// kpis : [[libellé, texte, testid]] — evolution : { titre, data, series } (clé « mois ») — repartitions : [{ titre, data: [{ name, value }], unite: "nombre" (facultatif : effectifs au lieu de montants) }]
 function StatsBloc({ kpis, evolution, repartitions, vide }) {
   return (
     <div data-testid="stats-bloc">
@@ -40,7 +40,7 @@ function StatsBloc({ kpis, evolution, repartitions, vide }) {
           return (
             <div key={i} className="ec-card p-4" data-testid="stats-repartition">
               <div className="display text-base mb-2" style={{ color: "#152238" }}>{r.titre}</div>
-              {data.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Rien à afficher pour le moment.</div> : <SimpleDonutChart data={data} nameKey="name" valueKey="value" />}
+              {data.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Rien à afficher pour le moment.</div> : <SimpleDonutChart data={data} nameKey="name" valueKey="value" unit={r.unite} />}
             </div>
           );
         })}
