@@ -20,7 +20,7 @@ const SECTEURS_CATALOGUE = [
   { id: "ong", label: "ONG, associations, églises", desc: "Fonds affectés, bailleurs, reçus de dons", grille: "B", dispo: false },
   { id: "btp", label: "BTP et construction", desc: "Chantiers, situations de travaux, sous-traitants", grille: "C", dispo: false },
   { id: "immobilier", label: "Immobilier et location", desc: "Biens, baux, loyers, quittances", grille: "C", dispo: false },
-  { id: "restauration", label: "Restauration et hôtellerie", desc: "Tables, menu et coût des plats, commandes et additions, service du personnel (hôtellerie : prochaine version)", grille: "C", dispo: true },
+  { id: "restauration", label: "Restauration et hôtellerie", desc: "Tables, menu et coût des plats, commandes et additions, service du personnel hôtellerie (chambres, planning, réservations, factures de séjour)", grille: "C", dispo: true },
   { id: "transport", label: "Transport et logistique", desc: "Véhicules, carburant, tournées", grille: "C", dispo: false },
   { id: "agriculture", label: "Agriculture et élevage", desc: "Campagnes agricoles, récoltes, intrants", grille: "C", dispo: false },
 ];

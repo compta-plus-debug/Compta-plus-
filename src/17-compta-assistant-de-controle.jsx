@@ -248,7 +248,7 @@ function AssistantPanel({ findings, ignored, entries, accounts, setEntries, setA
   const shown = (showIgnored ? hidden : visible).filter((f) => cat === "tous" || f.category === cat);
   const count = (sev) => visible.filter((f) => f.severity === sev).length;
   const sevStyle = { high: { bg: "#F7E9E3", fg: "#A6432F", label: "Important" }, medium: { bg: "#FBF1DC", fg: "#9A7B1E", label: "À vérifier" }, low: { bg: "#EEF1F7", fg: "#5C6B8C", label: "Conseil" } };
-  const catLabel = { compta: "Comptabilité", sensibles: "Données sensibles", securite: "Sécurité", ecole: "Éducation", impex: "Import-export", sante: "Santé", resto: "Restauration" };
+  const catLabel = { compta: "Comptabilité", sensibles: "Données sensibles", securite: "Sécurité", ecole: "Éducation", impex: "Import-export", sante: "Santé", resto: "Restauration", hotel: "Hôtellerie" };
 
   const apply = (f) => {
     if (!f.fix) return;
@@ -279,7 +279,7 @@ function AssistantPanel({ findings, ignored, entries, accounts, setEntries, setA
         <span data-as="count-medium" className="text-xs px-2 py-1 rounded" style={{ background: sevStyle.medium.bg, color: sevStyle.medium.fg }}>{count("medium")} à vérifier</span>
         <span data-as="count-low" className="text-xs px-2 py-1 rounded" style={{ background: sevStyle.low.bg, color: sevStyle.low.fg }}>{count("low")} conseil(s)</span>
         <span className="flex-1" />
-        {["tous", "compta", "sensibles", "securite", "ecole", "impex", "sante", "resto"].filter((c) => c === "tous" || ["compta", "sensibles", "securite"].includes(c) || (findings || []).some((f) => f.category === c)).map((c) => (
+        {["tous", "compta", "sensibles", "securite", "ecole", "impex", "sante", "resto", "hotel"].filter((c) => c === "tous" || ["compta", "sensibles", "securite"].includes(c) || (findings || []).some((f) => f.category === c)).map((c) => (
           <button key={c} data-as={`cat-${c}`} onClick={() => setCat(c)} className="px-2 py-1 rounded text-xs" style={{ background: cat === c ? "#152238" : "#F3EFE3", color: cat === c ? "#fff" : "#5C6B8C" }}>{c === "tous" ? "Tout" : catLabel[c]}</button>
         ))}
       </div>

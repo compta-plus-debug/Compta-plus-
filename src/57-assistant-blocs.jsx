@@ -8,6 +8,7 @@
 // Aucun de ces points n'a de correction automatique : chacun demande un jugement humain (pièce, accord du client, décision de gestion).
 // Éducation : élève sans frais, impayés anciens. Import-export : marchandise au port, dossier non réglé, taux inhabituel.
 // Restauration : plat sans recette, plat peu rentable, commande restée ouverte, service non reversé.
+// Hôtellerie : client attendu ni arrivé ni annulé, séjour dépassé sans départ.
 // Santé : assureur en retard, lot périmé ou proche de la péremption, honoraires non versés.
 
 const asbR2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -18,7 +19,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, resto, products, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, hotel, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -132,6 +133,17 @@ function asstScanBlocs({ ecole, impex, sante, resto, products, actifs, today }) 
       if (plus && asbDays(plus, today) > 30) push({ key: "resto-service:pool", severity: "medium", category: "resto", title: "Service non reversé au personnel", detail: `${asbG(du)} de service et de pourboires encaissés attendent d'être répartis. Le plus ancien remonte au ${asbFr(plus)} (${asbDays(plus, today)} jours). Cet argent appartient au personnel, pas au restaurant.` });
     }
   }
+  // ───── Hôtellerie ─────
+  if (A.includes("restauration") && (hotel || []).length) {
+    const gens = new Map(asbRows(hotel, "guest").map((g) => [g.id, g.name]));
+    const chs = new Map(asbRows(hotel, "room").map((r) => [r.id, r.number]));
+    asbRows(hotel, "booking").filter((b) => b.status === "reservee" && b.from && b.from < today).slice(0, 25).forEach((b) => {
+      push({ key: "hotel-arrivee:" + b.id, severity: "medium", category: "hotel", title: "Client attendu qui n'est ni arrivé ni annulé", detail: `${gens.get(b.guestId) || "Client"} devait arriver le ${asbFr(b.from)} (chambre ${chs.get(b.roomId) || "?"}, réservation ${b.number}) : la réservation est restée « Réservée », la chambre est bloquée sur le planning.` });
+    });
+    asbRows(hotel, "booking").filter((b) => b.status === "arrivee" && b.to && b.to < today).slice(0, 25).forEach((b) => {
+      push({ key: "hotel-depart:" + b.id, severity: "medium", category: "hotel", title: "Séjour dépassé sans départ enregistré", detail: `${gens.get(b.guestId) || "Client"} (chambre ${chs.get(b.roomId) || "?"}, réservation ${b.number}) devait partir le ${asbFr(b.to)} : aucun départ n'est enregistré, donc aucune facture ni aucune écriture (${asbDays(b.to, today)} jour(s)).` });
+    });
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -214,6 +226,16 @@ function asstHowToBlocs(f) {
       "Cliquez pour verser les honoraires (date, mode de paiement) : l'écriture comptable est passée automatiquement.",
       "Si un versement a déjà été fait hors de l'application, enregistrez-le de la même façon pour que le solde soit juste.",
       "Si la part (%) du praticien est contestée, corrigez-la avant de verser."] },
+    "hotel-arrivee": { why: "Une réservation restée « Réservée » après la date d'arrivée bloque la chambre sur le planning et fausse les arrivées du jour.", steps: [
+      "Ouvrez l'espace Hôtellerie → onglet « Réservations » et ouvrez la réservation indiquée.",
+      "Si le client est arrivé, cliquez sur « Enregistrer l'arrivée » (la chambre doit être marquée « Propre »).",
+      "S'il ne viendra plus, choisissez « Annulation par le client » ou « Client absent », décidez du sort de l'acompte (rembourser ou conserver) puis cliquez sur « Annuler la réservation ».",
+      "Si c'est normal (arrivée tardive confirmée), cliquez sur « Ignorer »."] },
+    "hotel-depart": { why: "Tant que le départ n'est pas enregistré, le séjour n'est ni facturé ni comptabilisé : l'argent encaissé et les ventes ne concordent pas.", steps: [
+      "Ouvrez l'espace Hôtellerie → onglet « Réservations » et ouvrez le séjour indiqué.",
+      "Si le client est parti, vérifiez la date de départ réelle, ajoutez les services oubliés, puis cliquez sur « Enregistrer le départ et facturer ».",
+      "Si le client prolonge son séjour, prévenez la réception : créez une nouvelle réservation pour les nuits suivantes si la chambre est libre.",
+      "Si c'est normal, cliquez sur « Ignorer »."] },
   };
   const g = G[rule];
   return g ? { why: g.why, steps: g.steps } : null;

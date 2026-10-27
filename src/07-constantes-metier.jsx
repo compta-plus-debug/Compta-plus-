@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Constantes metier
-// @depends BadgeDollar, BarChart3, BookOpen, Boxes, ClipboardIcon, Cross, Settings, ShoppingCart, Truck
-//   Users, Utensils, Wallet
+// @depends BadgeDollar, BarChart3, Bed, BookOpen, Boxes, ClipboardIcon, Cross, Settings, ShoppingCart
+//   Truck, Users, Utensils, Wallet
 // @exports ACCOUNTING_ONLY_HIDDEN_GESTION_TABS, ASSET_CATEGORIES, CURRENCIES, CURRENT_CURRENCY
 //   DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS, DEFAULT_SETTINGS, DEFAULT_SUPPLIERS
 //   DEFAULT_USERS, MODULES, ROLE_MODULE_ACCESS, TAX_SYSTEMS, VENDEUR_WRITABLE_CATEGORIES
@@ -18,6 +18,7 @@ const MODULES = [
   { id: "admin", n: 8, label: "Administration", icon: Settings, ready: true },
   { id: "rh", n: 9, label: "Salaires (RH)", icon: BadgeDollar, ready: true },
   { id: "gestion", n: 10, label: "Gestion avancée", icon: ClipboardIcon, ready: true },
+  { id: "hotel", n: 15, label: "Hôtellerie", icon: Bed, ready: true }, // bloc par secteur (secteur « Restauration et hôtellerie ») : visible seulement dans l'espace Hôtellerie
   { id: "resto", n: 14, label: "Restauration", icon: Utensils, ready: true }, // bloc par secteur : visible seulement si le secteur « Restauration et hôtellerie » est actif et l'espace choisi
   { id: "sante", n: 13, label: "Santé", icon: Cross, ready: true }, // bloc par secteur : visible seulement si le secteur « Santé » est actif et l'espace choisi
   { id: "impex", n: 12, label: "Import-export", icon: Truck, ready: true }, // bloc par secteur : visible seulement si le secteur « Import-export » est actif et l'espace choisi
@@ -69,7 +70,7 @@ function allowedModulesFor(role, settings) {
 // d'écrire ces catégories pour un Vendeur, échouerait à chaque fois (normal), et
 // afficherait indéfiniment la bannière d'erreur de synchronisation pour une
 // restriction de sécurité parfaitement normale.
-const VENDEUR_WRITABLE_CATEGORIES = ["products", "invoices", "movements", "entries", "ecole", "sante", "resto"]; // « ecole » : secrétaire-caissier(ère) du bloc Écoles et « sante » : réception ou comptoir du bloc Santé (nécessitent les scripts SQL des v261 et v270)
+const VENDEUR_WRITABLE_CATEGORIES = ["products", "invoices", "movements", "entries", "ecole", "sante", "resto", "hotel"]; // « ecole » : secrétaire-caissier(ère) du bloc Écoles et « sante » : réception ou comptoir du bloc Santé (nécessitent les scripts SQL des v261 et v270)
 
 const DEFAULT_ACCOUNTS = [
   { code: "101", name: "Capital", type: "Capitaux propres" },

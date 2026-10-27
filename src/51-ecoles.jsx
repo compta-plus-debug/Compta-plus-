@@ -117,7 +117,7 @@ const ecPastille = (txt, kind) => {
   return <span style={{ display: "inline-block", padding: "2px 9px", borderRadius: 999, background: c[0], color: c[1], fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>{txt}</span>;
 };
 const EC_CSS = `
-.ec-wrap{background:#fff;border:1px solid #E4DFD1;border-radius:12px;overflow-x:auto;box-shadow:0 1px 3px rgba(21,34,56,.07);margin-bottom:22px}
+.grid>*{min-width:0}.ec-wrap{max-width:100%;-webkit-overflow-scrolling:touch;background:#fff;border:1px solid #E4DFD1;border-radius:12px;overflow-x:auto;box-shadow:0 1px 3px rgba(21,34,56,.07);margin-bottom:22px}
 .ec-table{width:100%;font-size:14px;border-collapse:collapse;min-width:540px}
 .ec-table thead tr{background:#152238}
 .ec-table thead th{color:#EFE9DD !important;font-weight:600;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;padding:11px 12px !important;white-space:nowrap}
