@@ -118,6 +118,13 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
   const rates = { ...IE_TAUX_DEFAUT, ...(cfg.rates || {}) };
   const [impSel, setImpSel] = useState("");
   const [expSel, setExpSel] = useState("");
+  const [imprimer, setImprimer] = useState(null);
+  const [iq, setIq] = useState(""); const [iet, setIet] = useState("");
+  const [eq, setEq] = useState(""); const [eet, setEet] = useState("");
+  const [rd, setRd] = useState(""); const [rf, setRf] = useState("");
+  const uniq = (arr) => Array.from(new Set(arr.map((x) => String(x || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const fournisseurs = uniq(imps.map((d) => d.supplier)), clientsEtr = uniq(exps.map((d) => d.customer)), paysConnus = uniq([...imps, ...exps].map((d) => d.country));
+  const listesNoms = (<><datalist id="ie-dl-fourn">{fournisseurs.map((n) => <option key={n} value={n} />)}</datalist><datalist id="ie-dl-client">{clientsEtr.map((n) => <option key={n} value={n} />)}</datalist><datalist id="ie-dl-pays">{paysConnus.map((n) => <option key={n} value={n} />)}</datalist></>);
   const stockActif = settings.stockValuationMethod === "actif";
   const compteMarch = stockActif ? "370" : "607";
   const compteApproche = stockActif ? "370" : "608";
@@ -271,14 +278,15 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
   const pastEtape = (etapes, s) => { const e = etapes.find((x) => x[0] === s); return e ? e[1] : s; };
   const Importations = () => {
     const d = imps.find((x) => x.id === impSel);
+    const impsF = imps.map((x) => ({ x, c: ieImpCalc(x) })).filter(({ x }) => (!iet || x.status === iet) && (!iq.trim() || [x.number, x.supplier, x.country, x.ref].join(" ").toLowerCase().includes(iq.trim().toLowerCase()))).sort((a, b) => String(b.x.number).localeCompare(String(a.x.number)));
     return (
       <div>
         {canEdit && (
           <div className="ec-card p-4 mb-5">
             <div className="display text-base mb-2" style={{ color: "#152238" }}>Nouveau dossier d'importation</div>
             <div className="grid md:grid-cols-5 gap-2 items-end">
-              <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Fournisseur étranger</label><input value={fi.supplier} onChange={(e) => setFi({ ...fi, supplier: e.target.value })} data-testid="ie-imp-fournisseur" className={ecInput} style={ecBorder} /></div>
-              <div><label className="text-xs" style={{ color: "#8A8370" }}>Pays</label><input value={fi.country} onChange={(e) => setFi({ ...fi, country: e.target.value })} className={ecInput} style={ecBorder} /></div>
+              <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Fournisseur étranger</label><input list="ie-dl-fourn" value={fi.supplier} onChange={(e) => setFi({ ...fi, supplier: e.target.value })} data-testid="ie-imp-fournisseur" className={ecInput} style={ecBorder} /></div>
+              <div><label className="text-xs" style={{ color: "#8A8370" }}>Pays</label><input list="ie-dl-pays" value={fi.country} onChange={(e) => setFi({ ...fi, country: e.target.value })} className={ecInput} style={ecBorder} /></div>
               <div><label className="text-xs" style={{ color: "#8A8370" }}>Taux (gourdes pour 1 dollar)</label><input type="number" min="0" step="0.01" value={fi.rate} onChange={(e) => setFi({ ...fi, rate: e.target.value })} data-testid="ie-imp-taux" className={ecInput + " tabular"} style={ecBorder} /></div>
               <div><label className="text-xs" style={{ color: "#8A8370" }}>Date de la facture</label><input type="date" value={fi.date} max={todayStr()} onChange={(e) => setFi({ ...fi, date: e.target.value })} data-testid="ie-imp-date" className={ecInput} style={ecBorder} /></div>
             </div>
@@ -288,13 +296,19 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
             </div>
           </div>
         )}
+        <div className="flex flex-wrap gap-2 items-end mb-2">
+          <div className="flex-1 min-w-[160px]"><label className="text-xs" style={{ color: "#8A8370" }}>Rechercher (dossier, fournisseur, pays, référence)</label><input value={iq} onChange={(e) => setIq(e.target.value)} data-testid="ie-imp-recherche" className={ecInput} style={ecBorder} /></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Étape</label><select value={iet} onChange={(e) => setIet(e.target.value)} data-testid="ie-imp-filtre-etape" className={ecInput} style={ecBorder}><option value="">Toutes</option>{IE_ETAPES_IMP.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+        </div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr><th className="py-1 text-left">Dossier</th><th className="text-left">Fournisseur</th><th className="text-left">Étape</th><th className="text-right">Facture</th><th className="text-right">Reste dû</th><th className="text-right">Coût de revient</th><th></th></tr></thead>
-          <tbody>{imps.slice().sort((a, b) => String(b.number).localeCompare(String(a.number))).map((x) => { const c = ieImpCalc(x); return (
+          <tbody>{impsF.map(({ x, c }) => (
             <tr key={x.id} data-testid="ie-imp-ligne" style={{ background: x.id === impSel ? "#E6F1EE" : undefined }}><td className="tabular text-xs">{x.number}</td><td>{x.supplier}{x.country ? <span className="text-xs" style={{ color: "#8A8370" }}> — {x.country}</span> : null}</td>
               <td>{ecPastille(pastEtape(IE_ETAPES_IMP, x.status), x.status === "livre" ? "ok" : x.status === "port" ? "attente" : "neutre")}</td>
               <td className="text-right tabular">{ieUsd(c.totalUSD)}</td><td className="text-right tabular">{x.invoiceEntryId ? ieUsd(c.resteUSD) : "—"}</td><td className="text-right tabular">{fmt(c.coutRevient)}</td>
-              <td className="text-right"><button onClick={() => setImpSel(x.id === impSel ? "" : x.id)} className="text-xs underline" data-testid="ie-imp-ouvrir">{x.id === impSel ? "Fermer" : "Ouvrir"}</button></td></tr>); })}</tbody></table></div>
-        {imps.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>Aucun dossier d'importation.</div>}
+              <td className="text-right"><button onClick={() => setImpSel(x.id === impSel ? "" : x.id)} className="text-xs underline" data-testid="ie-imp-ouvrir">{x.id === impSel ? "Fermer" : "Ouvrir"}</button></td></tr>))}</tbody>
+          {impsF.length > 0 && <tfoot><tr data-testid="ie-imp-total-ligne" style={{ fontWeight: 600, borderTop: "2px solid #152238" }}><td colSpan={3}>Total ({impsF.length} dossier{impsF.length > 1 ? "s" : ""})</td><td className="text-right tabular" data-testid="ie-imp-tot-facture">{ieUsd(ieR2(impsF.reduce((t, r) => t + r.c.totalUSD, 0)))}</td><td className="text-right tabular" data-testid="ie-imp-tot-reste">{ieUsd(ieR2(impsF.filter((r) => r.x.invoiceEntryId).reduce((t, r) => t + r.c.resteUSD, 0)))}</td><td className="text-right tabular" data-testid="ie-imp-tot-revient">{fmt(ieR2(impsF.reduce((t, r) => t + r.c.coutRevient, 0)))}</td><td></td></tr></tfoot>}
+        </table></div>
+        {impsF.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>{imps.length === 0 ? "Aucun dossier d'importation." : "Aucun dossier ne correspond à ces filtres."}</div>}
         {d && ImpDetail(d)}
       </div>
     );
@@ -373,6 +387,7 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
         <div className="flex flex-wrap gap-3 items-center">
           {canEdit && figee && !d.receivedToStock && <button onClick={() => recevoirEnStock(d)} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="ie-imp-stock">Recevoir en stock au coût de revient</button>}
           {d.receivedToStock && <span className="text-xs" style={{ color: "#0F6B5C" }} data-testid="ie-imp-recu-stock">✓ Reçu en stock le {ecDateFr(d.receivedAt)}</span>}
+          <button onClick={() => setImprimer({ kind: "imp", id: d.id })} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ie-imp-imprimer">Imprimer la fiche de coût de revient</button>
           {canEdit && !figee && <button onClick={() => supprimerImp(d)} className="text-xs underline" style={{ color: "#A6432F" }}>Supprimer ce dossier</button>}
         </div>
       </div>
@@ -503,14 +518,15 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
   };
   const Exportations = () => {
     const d = exps.find((x) => x.id === expSel);
+    const expsF = exps.map((x) => { const c = ieExpCalc(x); return { x, c, reste: ieR2(c.totalUSD * (1 + (Number(x.tcaRate) || 0) / 100) - c.receivedUSD) }; }).filter(({ x }) => (!eet || x.status === eet) && (!eq.trim() || [x.number, x.customer, x.country, x.ref].join(" ").toLowerCase().includes(eq.trim().toLowerCase()))).sort((a, b) => String(b.x.number).localeCompare(String(a.x.number)));
     return (
       <div>
         {canEdit && (
           <div className="ec-card p-4 mb-5">
             <div className="display text-base mb-2" style={{ color: "#152238" }}>Nouveau dossier d'exportation</div>
             <div className="grid md:grid-cols-5 gap-2 items-end">
-              <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Client étranger</label><input value={fe.customer} onChange={(e) => setFe({ ...fe, customer: e.target.value })} data-testid="ie-exp-client" className={ecInput} style={ecBorder} /></div>
-              <div><label className="text-xs" style={{ color: "#8A8370" }}>Pays</label><input value={fe.country} onChange={(e) => setFe({ ...fe, country: e.target.value })} className={ecInput} style={ecBorder} /></div>
+              <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Client étranger</label><input list="ie-dl-client" value={fe.customer} onChange={(e) => setFe({ ...fe, customer: e.target.value })} data-testid="ie-exp-client" className={ecInput} style={ecBorder} /></div>
+              <div><label className="text-xs" style={{ color: "#8A8370" }}>Pays</label><input list="ie-dl-pays" value={fe.country} onChange={(e) => setFe({ ...fe, country: e.target.value })} className={ecInput} style={ecBorder} /></div>
               <div><label className="text-xs" style={{ color: "#8A8370" }}>Taux (gourdes pour 1 dollar)</label><input type="number" min="0" step="0.01" value={fe.rate} onChange={(e) => setFe({ ...fe, rate: e.target.value })} data-testid="ie-exp-taux" className={ecInput + " tabular"} style={ecBorder} /></div>
               <div><label className="text-xs" style={{ color: "#8A8370" }}>Date de la facture</label><input type="date" value={fe.date} max={todayStr()} onChange={(e) => setFe({ ...fe, date: e.target.value })} data-testid="ie-exp-date" className={ecInput} style={ecBorder} /></div>
             </div>
@@ -522,13 +538,19 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
             <div className="text-xs mt-2" style={{ color: "#7A7460" }}>Par défaut 0 % : à confirmer avec votre expert-comptable (traitement de la TCA à l'exportation). Le taux par défaut se règle dans l'onglet Réglages.</div>
           </div>
         )}
+        <div className="flex flex-wrap gap-2 items-end mb-2">
+          <div className="flex-1 min-w-[160px]"><label className="text-xs" style={{ color: "#8A8370" }}>Rechercher (dossier, client, pays, référence)</label><input value={eq} onChange={(e) => setEq(e.target.value)} data-testid="ie-exp-recherche" className={ecInput} style={ecBorder} /></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Étape</label><select value={eet} onChange={(e) => setEet(e.target.value)} data-testid="ie-exp-filtre-etape" className={ecInput} style={ecBorder}><option value="">Toutes</option>{IE_ETAPES_EXP.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+        </div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr><th className="text-left">Dossier</th><th className="text-left">Client</th><th className="text-left">Étape</th><th className="text-right">Facture</th><th className="text-right">Reste à recevoir</th><th className="text-right">Marge</th><th></th></tr></thead>
-          <tbody>{exps.slice().sort((a, b) => String(b.number).localeCompare(String(a.number))).map((x) => { const c = ieExpCalc(x); const reste = ieR2(c.totalUSD * (1 + (Number(x.tcaRate) || 0) / 100) - c.receivedUSD); return (
+          <tbody>{expsF.map(({ x, c, reste }) => (
             <tr key={x.id} data-testid="ie-exp-ligne" style={{ background: x.id === expSel ? "#E6F1EE" : undefined }}><td className="tabular text-xs">{x.number}</td><td>{x.customer}{x.country ? <span className="text-xs" style={{ color: "#8A8370" }}> — {x.country}</span> : null}</td>
               <td>{ecPastille(pastEtape(IE_ETAPES_EXP, x.status), x.status === "solde" ? "ok" : x.status === "expedie" ? "info" : "neutre")}</td>
               <td className="text-right tabular">{ieUsd(c.totalUSD)}</td><td className="text-right tabular">{x.invoiceEntryId ? ieUsd(reste) : "—"}</td><td className="text-right tabular">{fmt(c.marge)}</td>
-              <td className="text-right"><button onClick={() => setExpSel(x.id === expSel ? "" : x.id)} className="text-xs underline" data-testid="ie-exp-ouvrir">{x.id === expSel ? "Fermer" : "Ouvrir"}</button></td></tr>); })}</tbody></table></div>
-        {exps.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>Aucun dossier d'exportation.</div>}
+              <td className="text-right"><button onClick={() => setExpSel(x.id === expSel ? "" : x.id)} className="text-xs underline" data-testid="ie-exp-ouvrir">{x.id === expSel ? "Fermer" : "Ouvrir"}</button></td></tr>))}</tbody>
+          {expsF.length > 0 && <tfoot><tr data-testid="ie-exp-total-ligne" style={{ fontWeight: 600, borderTop: "2px solid #152238" }}><td colSpan={3}>Total ({expsF.length} dossier{expsF.length > 1 ? "s" : ""})</td><td className="text-right tabular" data-testid="ie-exp-tot-facture">{ieUsd(ieR2(expsF.reduce((t, r) => t + r.c.totalUSD, 0)))}</td><td className="text-right tabular" data-testid="ie-exp-tot-reste">{ieUsd(ieR2(expsF.filter((r) => r.x.invoiceEntryId).reduce((t, r) => t + r.reste, 0)))}</td><td className="text-right tabular" data-testid="ie-exp-tot-marge">{fmt(ieR2(expsF.reduce((t, r) => t + r.c.marge, 0)))}</td><td></td></tr></tfoot>}
+        </table></div>
+        {expsF.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>{exps.length === 0 ? "Aucun dossier d'exportation." : "Aucun dossier ne correspond à ces filtres."}</div>}
         {d && ExpDetail(d)}
       </div>
     );
@@ -593,54 +615,197 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
         <div className="flex flex-wrap gap-3 items-center">
           {canEdit && figee && !d.stockOut && <button onClick={() => sortirDuStock(d)} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="ie-exp-stock">Sortir les marchandises du stock</button>}
           {d.stockOut && <span className="text-xs" style={{ color: "#0F6B5C" }} data-testid="ie-exp-sorti">✓ Sorties du stock le {ecDateFr(d.stockOutAt)}</span>}
+          <button onClick={() => setImprimer({ kind: "exp", id: d.id })} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ie-exp-imprimer">Imprimer la facture d'exportation</button>
           {canEdit && !figee && <button onClick={() => supprimerExp(d)} className="text-xs underline" style={{ color: "#A6432F" }}>Supprimer ce dossier</button>}
         </div>
       </div>
     );
   };
 
-  // ───────── Vue d'ensemble ─────────
+  // ───────── Documents imprimables (A4) ─────────
+  const sheetStyle = { padding: 28, fontSize: 12, color: "#111", background: "#fff", lineHeight: 1.4 };
+  const thS = { textAlign: "left", borderBottom: "1px solid #152238", padding: "4px 6px" };
+  const thR = { ...thS, textAlign: "right" };
+  const tdS = { padding: "3px 6px", borderBottom: "1px solid #ddd" };
+  const tdR = { ...tdS, textAlign: "right" };
+  const entete = () => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, borderBottom: "2px solid #152238", paddingBottom: 8, marginBottom: 12 }}>
+      <div>{settings.companyLogo ? <img src={settings.companyLogo} alt="" style={{ maxHeight: 50, marginBottom: 4 }} /> : null}
+        <div style={{ fontWeight: 700, fontSize: 16 }}>{settings.companyName || "Mon entreprise"}</div>
+        <div style={{ fontSize: 11 }}>{settings.companyAddress}{settings.companyPhone ? " · " + settings.companyPhone : ""}{settings.companyNIF ? " · NIF " + settings.companyNIF : ""}</div></div>
+      <div style={{ fontSize: 11, textAlign: "right" }}>Édité le {ecDateFr(today)}</div>
+    </div>
+  );
+  const FicheImp = (d) => {
+    const c = ieImpCalc(d);
+    const charges = (d.charges || []).filter((x) => x.status !== "annulé");
+    const genre = (k) => (IE_FRAIS.find((x) => x[0] === k) || [])[2] || "cout";
+    return (
+      <div style={sheetStyle} data-testid="ie-fiche">
+        {entete()}
+        <div style={{ fontSize: 16, fontWeight: 700 }}>Fiche de coût de revient — {d.number}</div>
+        <div style={{ marginBottom: 10 }}>Fournisseur : <b>{d.supplier}</b>{d.country ? " (" + d.country + ")" : ""}{d.ref ? " · Réf. " + d.ref : ""} · Facture du {ecDateFr(d.date)} · Taux {d.rate} G pour 1 USD · Étape : {pastEtape(IE_ETAPES_IMP, d.status)}</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}><thead><tr><th style={thS}>Article</th><th style={thR}>Quantité</th><th style={thR}>Prix unitaire (USD)</th><th style={thR}>Valeur (G)</th><th style={thR}>Coût de revient unitaire (G)</th><th style={thR}>Coût de revient total (G)</th></tr></thead>
+          <tbody>{c.lineCosts.map((l) => (<tr key={l.id}><td style={tdS}>{l.desc}</td><td style={tdR}>{l.qty}</td><td style={tdR}>{ieUsd(l.unitUSD)}</td><td style={tdR}>{fmt(l.lineHTG)}</td><td style={tdR}>{fmt(l.unitCost)}</td><td style={tdR}>{fmt(l.total)}</td></tr>))}</tbody>
+          <tfoot><tr style={{ fontWeight: 700 }}><td style={tdS}>Total</td><td style={tdR}></td><td style={tdR}>{ieUsd(c.goodsUSD)}</td><td style={tdR}>{fmt(c.goodsHTG)}</td><td style={tdR}></td><td style={tdR}>{fmt(ieR2(c.lineCosts.reduce((t, l) => t + l.total, 0)))}</td></tr></tfoot></table>
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}><thead><tr><th style={thS}>Détail du coût</th><th style={thS}>Compté dans le coût ?</th><th style={thR}>Montant (G)</th></tr></thead>
+          <tbody>
+            <tr><td style={tdS}>Marchandise ({ieUsd(c.goodsUSD)})</td><td style={tdS}>Oui</td><td style={tdR}>{fmt(c.goodsHTG)}</td></tr>
+            {c.fiHTG > 0 && <tr><td style={tdS}>Fret et assurance ({ieUsd(c.fiUSD)})</td><td style={tdS}>Oui</td><td style={tdR}>{fmt(c.fiHTG)}</td></tr>}
+            {charges.map((x) => (<tr key={x.id}><td style={tdS}>{x.label} ({ecDateFr(x.date)})</td><td style={tdS}>{genre(x.kind) === "cout" ? "Oui" : genre(x.kind) === "tca" ? "Non (TCA récupérable)" : "Non (acompte d'impôt)"}</td><td style={tdR}>{fmt(x.amount)}</td></tr>))}
+          </tbody>
+          <tfoot><tr style={{ fontWeight: 700 }}><td style={tdS} colSpan={2}>Coût de revient total (coefficient {(c.coef || 0).toFixed(3)})</td><td style={tdR}>{fmt(c.coutRevient)}</td></tr></tfoot></table>
+        <div>Facture du fournisseur : <b>{ieUsd(c.totalUSD)}</b> · Réglé : {ieUsd(c.paidUSD)} · Reste dû : <b>{d.invoiceEntryId ? ieUsd(c.resteUSD) : "facture pas encore comptabilisée"}</b></div>
+        <div style={{ fontSize: 10, marginTop: 10, color: "#555" }}>Les montants de droits et taxes sont ceux saisis d'après la quittance de douane.</div>
+      </div>
+    );
+  };
+  const FactureExp = (d) => {
+    const c = ieExpCalc(d);
+    const tcaUSD = ieR2(c.totalUSD * (Number(d.tcaRate) || 0) / 100);
+    const totUSD = ieR2(c.totalUSD + tcaUSD);
+    const recu = ieR2(c.receivedUSD);
+    return (
+      <div style={sheetStyle} data-testid="ie-facture-exp">
+        {entete()}
+        <div style={{ fontSize: 16, fontWeight: 700 }}>Facture d'exportation — {d.number}</div>
+        <div style={{ marginBottom: 10 }}>Client : <b>{d.customer}</b>{d.country ? " (" + d.country + ")" : ""}{d.ref ? " · Réf. " + d.ref : ""} · Date : {ecDateFr(d.date)} · Taux : {d.rate} G pour 1 USD</div>
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 12 }}><thead><tr><th style={thS}>Désignation</th><th style={thR}>Quantité</th><th style={thR}>Prix unitaire (USD)</th><th style={thR}>Montant (USD)</th></tr></thead>
+          <tbody>{(d.lines || []).map((l) => (<tr key={l.id}><td style={tdS}>{l.desc}</td><td style={tdR}>{l.qty}</td><td style={tdR}>{ieUsd(l.unitUSD)}</td><td style={tdR}>{ieUsd(ieR2(l.qty * l.unitUSD))}</td></tr>))}</tbody>
+          <tfoot>
+            <tr><td style={tdS} colSpan={3}>Total hors taxe</td><td style={tdR}>{ieUsd(c.totalUSD)}</td></tr>
+            {tcaUSD > 0 && <tr><td style={tdS} colSpan={3}>TCA ({d.tcaRate} %)</td><td style={tdR}>{ieUsd(tcaUSD)}</td></tr>}
+            <tr style={{ fontWeight: 700 }}><td style={tdS} colSpan={3}>Total à payer</td><td style={tdR}>{ieUsd(totUSD)}</td></tr>
+            {recu > 0 && <tr><td style={tdS} colSpan={3}>Déjà reçu</td><td style={tdR}>{ieUsd(recu)}</td></tr>}
+            {recu > 0 && <tr style={{ fontWeight: 700 }}><td style={tdS} colSpan={3}>Reste à payer</td><td style={tdR}>{ieUsd(ieR2(totUSD - recu))}</td></tr>}
+          </tfoot></table>
+        <div style={{ fontSize: 11 }}>Équivalent comptable au taux du dossier : {fmt(c.totalHTG)}.</div>
+      </div>
+    );
+  };
+
+  // ───────── Tableau de bord ─────────
   const Apercu = () => {
     const impCalc = imps.map((d) => ({ d, c: ieImpCalc(d) }));
-    const expCalc = exps.map((d) => ({ d, c: ieExpCalc(d) }));
+    const expCalc = exps.map((d) => ({ d, c: ieExpCalc(d), reste: ieR2(ieExpCalc(d).totalUSD * (1 + (Number(d.tcaRate) || 0) / 100) - ieExpCalc(d).receivedUSD) }));
     const impOuverts = imps.filter((d) => d.status !== "livre").length;
     const dettesUSD = ieR2(impCalc.filter((x) => x.d.invoiceEntryId).reduce((s, x) => s + x.c.resteUSD, 0));
-    const creancesUSD = ieR2(expCalc.filter((x) => x.d.invoiceEntryId).reduce((s, x) => s + ieR2(x.c.totalUSD * (1 + (Number(x.d.tcaRate) || 0) / 100) - x.c.receivedUSD), 0));
+    const creancesUSD = ieR2(expCalc.filter((x) => x.d.invoiceEntryId).reduce((s, x) => s + x.reste, 0));
     const enRetard = imps.filter((d) => d.status === "port" && d.portDate && ieJours(d.portDate, today) > 7);
+    const mk = today.slice(0, 7);
+    const impMois = ieR2(impCalc.filter((x) => String(x.d.date).slice(0, 7) === mk).reduce((s, x) => s + x.c.totalUSD, 0));
+    const expMois = ieR2(expCalc.filter((x) => String(x.d.date).slice(0, 7) === mk).reduce((s, x) => s + x.c.totalUSD, 0));
+    const margeTot = ieR2(expCalc.reduce((s, x) => s + x.c.marge, 0));
+    const afaire = [];
+    impCalc.forEach(({ d, c }) => {
+      if (!d.invoiceEntryId) afaire.push({ k: "imp", d, nom: d.supplier, txt: "Comptabiliser la facture du fournisseur" });
+      else {
+        if (c.resteUSD > 0.004) afaire.push({ k: "imp", d, nom: d.supplier, txt: "Régler le fournisseur : reste " + ieUsd(c.resteUSD) });
+        if (!d.receivedToStock && c.lineCosts.some((l) => l.productId)) afaire.push({ k: "imp", d, nom: d.supplier, txt: "Recevoir en stock au coût de revient" });
+      }
+      if (d.status === "port" && d.portDate && ieJours(d.portDate, today) > 7) afaire.push({ k: "imp", d, nom: d.supplier, txt: "Au port depuis " + ieJours(d.portDate, today) + " jours : dédouaner" });
+    });
+    expCalc.forEach(({ d, reste }) => {
+      if (!d.invoiceEntryId) afaire.push({ k: "exp", d, nom: d.customer, txt: "Comptabiliser la facture d'exportation" });
+      else {
+        if (reste > 0.004) afaire.push({ k: "exp", d, nom: d.customer, txt: "Client à relancer : reste " + ieUsd(reste) });
+        if (!d.stockOut && (d.lines || []).some((l) => l.productId)) afaire.push({ k: "exp", d, nom: d.customer, txt: "Sortir les marchandises du stock" });
+      }
+    });
+    const arrivees = imps.filter((d) => d.status !== "livre" && d.etaDate && d.etaDate >= today && ieJours(today, d.etaDate) <= 30).sort((a, b) => String(a.etaDate).localeCompare(String(b.etaDate)));
+    const etapes = [
+      ["Réglages", "Dans l'onglet Réglages, vérifiez les taux de droits et de taxes (ils servent seulement aux estimations)."],
+      ["Dossier", "Créez un dossier d'importation (fournisseur, taux du dollar du jour) ou d'exportation (client)."],
+      ["Articles et facture", "Ajoutez les articles puis comptabilisez la facture : le montant en dollars est converti en gourdes au taux du dossier."],
+      ["Frais et droits", "Importation : saisissez fret, assurance, droits et taxes tels qu'ils figurent sur la quittance de douane. Exportation : frais de transport et documents."],
+      ["Règlements", "Enregistrez chaque paiement ou encaissement en dollars avec le taux du jour : l'écart de change est calculé tout seul."],
+      ["Stock", "Importation : recevez en stock au coût de revient réel. Exportation : sortez les marchandises du stock."],
+      ["Documents", "Imprimez la fiche de coût de revient (importation) ou la facture d'exportation depuis le dossier."],
+    ];
     return (
       <div>
+        <div className="ec-card p-4 mb-5" data-testid="ie-guide">
+          <div className="display text-base mb-2" style={{ color: "#152238" }}>Comment ça marche, en 7 étapes</div>
+          <ol className="text-sm" style={{ color: "#152238", paddingLeft: 18, listStyle: "decimal" }}>{etapes.map(([t, d], i) => (<li key={i} data-testid="ie-etape" className="mb-1"><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></li>))}</ol>
+        </div>
         {imps.length + exps.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="ie-vide">Pour commencer : ouvrez l'onglet <b>Importations</b> ou <b>Exportations</b> et créez votre premier dossier. Vérifiez d'abord vos taux dans l'onglet <b>Réglages</b>.</div>}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           {[["Importations en cours", String(impOuverts), "ie-kpi-imp-ouverts"], ["Dû aux fournisseurs", ieUsd(dettesUSD), "ie-kpi-dettes"], ["Exportations", String(exps.length), "ie-kpi-exp"], ["À recevoir des clients", ieUsd(creancesUSD), "ie-kpi-creances"]].map(([l, v, t]) => (
             <div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          {[["Importé ce mois", ieUsd(impMois), "ie-kpi-imp-mois"], ["Exporté ce mois", ieUsd(expMois), "ie-kpi-exp-mois"], ["Marge des exportations", fmt(margeTot), "ie-kpi-marge"], ["Choses à faire", String(afaire.length), "ie-kpi-afaire"]].map(([l, v, t]) => (
+            <div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
+        </div>
+        <div className="display text-base mb-2" style={{ color: "#152238" }}>À faire</div>
+        {afaire.length === 0 ? <div className="text-sm mb-5" style={{ color: "#8A8370" }}>Rien en attente.</div> : (
+          <div className="ec-wrap mb-5"><table className="ec-table"><thead><tr><th className="text-left">Dossier</th><th className="text-left">Partenaire</th><th className="text-left">À faire</th><th></th></tr></thead>
+            <tbody>{afaire.slice(0, 15).map((x, i) => (<tr key={i} data-testid="ie-afaire-ligne"><td className="tabular text-xs">{x.d.number}</td><td>{x.nom}</td><td>{x.txt}</td><td className="text-right"><button className="text-xs underline" data-testid="ie-afaire-ouvrir" onClick={() => { if (x.k === "imp") { setTab("imports"); setImpSel(x.d.id); } else { setTab("exports"); setExpSel(x.d.id); } }}>Ouvrir</button></td></tr>))}</tbody></table></div>
+        )}
+        <div className="display text-base mb-2" style={{ color: "#152238" }}>Arrivées prévues dans les 30 jours</div>
+        {arrivees.length === 0 ? <div className="text-sm mb-5" style={{ color: "#8A8370" }}>Aucune arrivée prévue (renseignez « Arrivée prévue » dans le dossier).</div> : (
+          <div className="ec-wrap mb-5"><table className="ec-table"><thead><tr><th className="text-left">Dossier</th><th className="text-left">Fournisseur</th><th className="text-left">Arrivée prévue</th><th className="text-right">Dans</th></tr></thead>
+            <tbody>{arrivees.map((d) => (<tr key={d.id} data-testid="ie-arrivee-ligne"><td className="tabular text-xs">{d.number}</td><td>{d.supplier}</td><td>{ecDateFr(d.etaDate)}</td><td className="text-right">{ieJours(today, d.etaDate)} j</td></tr>))}</tbody></table></div>
+        )}
         <div className="display text-base mb-2" style={{ color: "#152238" }}>Marchandises au port depuis plus de 7 jours</div>
         {enRetard.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Aucune : rien n'attend au port.</div> : (
           <div className="ec-wrap"><table className="ec-table"><thead><tr><th className="text-left">Dossier</th><th className="text-left">Fournisseur</th><th className="text-right">Jours au port</th></tr></thead>
             <tbody>{enRetard.map((d) => (<tr key={d.id} data-testid="ie-retard-ligne"><td className="tabular text-xs">{d.number}</td><td>{d.supplier}</td><td className="text-right">{ecPastille(ieJours(d.portDate, today) + " jours", ieJours(d.portDate, today) > 17 ? "alerte" : "attente")}</td></tr>))}</tbody></table></div>
         )}
-        <div className="text-xs" style={{ color: "#7A7460" }}>Les frais de magasinage et les surestaries courent tant que la marchandise n'est pas dédouanée : voyez avec votre transitaire.</div>
+        <div className="text-xs mt-2" style={{ color: "#7A7460" }}>Les frais de magasinage et les surestaries courent tant que la marchandise n'est pas dédouanée : voyez avec votre transitaire.</div>
       </div>
     );
   };
 
   // ───────── Rapports ─────────
   const Rapports = () => {
+    const dansP = (d) => (!rd || d.date >= rd) && (!rf || d.date <= rf);
+    const impsP = imps.filter(dansP), expsP = exps.filter(dansP);
     const parType = {};
-    imps.forEach((d) => (d.charges || []).filter((x) => x.status !== "annulé").forEach((x) => { const k = (IE_FRAIS.find((f) => f[0] === x.kind) || [0, x.label])[1]; parType[k] = ieR2((parType[k] || 0) + x.amount); }));
-    const exporterImp = () => ecTelecharger("importations-" + today + ".csv", [["Dossier", "Fournisseur", "Étape", "Facture USD", "Taux", "Marchandise G", "Fret et assurance G", "Autres frais d'approche G", "Coût de revient G", "TCA récupérable G", "Reste dû USD"], ...imps.map((d) => { const c = ieImpCalc(d); return [d.number, d.supplier, pastEtape(IE_ETAPES_IMP, d.status), c.totalUSD, d.rate, c.goodsHTG, c.fiHTG, c.chargesCout, c.coutRevient, c.chargesTca, d.invoiceEntryId ? c.resteUSD : ""]; })]);
-    const exporterExp = () => ecTelecharger("exportations-" + today + ".csv", [["Dossier", "Client", "Étape", "Facture USD", "Taux", "Chiffre d'affaires G", "Coût des marchandises G", "Frais G", "Marge G", "Reste à recevoir USD"], ...exps.map((d) => { const c = ieExpCalc(d); return [d.number, d.customer, pastEtape(IE_ETAPES_EXP, d.status), c.totalUSD, d.rate, c.ht, c.cogs, c.costs, c.marge, d.invoiceEntryId ? ieR2(c.totalUSD * (1 + (Number(d.tcaRate) || 0) / 100) - c.receivedUSD) : ""]; })]);
+    impsP.forEach((d) => (d.charges || []).filter((x) => x.status !== "annulé").forEach((x) => { const k = (IE_FRAIS.find((f) => f[0] === x.kind) || [0, x.label])[1]; parType[k] = ieR2((parType[k] || 0) + x.amount); }));
+    const totType = ieR2(Object.keys(parType).reduce((t, k) => t + parType[k], 0));
+    const impC = impsP.map((d) => ({ d, c: ieImpCalc(d) })), expC = expsP.map((d) => { const c = ieExpCalc(d); return { d, c, reste: ieR2(c.totalUSD * (1 + (Number(d.tcaRate) || 0) / 100) - c.receivedUSD) }; });
+    const S = (arr, f) => ieR2(arr.reduce((t, x) => t + f(x), 0));
+    const parFourn = {}; impC.forEach(({ d, c }) => { const k = d.supplier || "—"; const o = parFourn[k] || { n: 0, usd: 0, reste: 0 }; o.n += 1; o.usd = ieR2(o.usd + c.totalUSD); if (d.invoiceEntryId) o.reste = ieR2(o.reste + c.resteUSD); parFourn[k] = o; });
+    const parCli = {}; expC.forEach(({ d, c, reste }) => { const k = d.customer || "—"; const o = parCli[k] || { n: 0, usd: 0, reste: 0 }; o.n += 1; o.usd = ieR2(o.usd + c.totalUSD); if (d.invoiceEntryId) o.reste = ieR2(o.reste + reste); parCli[k] = o; });
+    const ecartImp = S(impsP.flatMap((d) => (d.payments || []).filter((p) => p.status !== "annulé")), (p) => p.ecart || 0);
+    const ecartExp = S(expsP.flatMap((d) => (d.receipts || []).filter((r) => r.status !== "annulé")), (r) => r.ecart || 0);
+    const ecartNet = ieR2(ecartExp - ecartImp);
+    const exporterImp = () => ecTelecharger("importations-" + today + ".csv", [["Dossier", "Fournisseur", "Étape", "Facture USD", "Taux", "Marchandise G", "Fret et assurance G", "Autres frais d'approche G", "Coût de revient G", "TCA récupérable G", "Reste dû USD"], ...impC.map(({ d, c }) => [d.number, d.supplier, pastEtape(IE_ETAPES_IMP, d.status), c.totalUSD, d.rate, c.goodsHTG, c.fiHTG, c.chargesCout, c.coutRevient, c.chargesTca, d.invoiceEntryId ? c.resteUSD : ""]), ["Total", "", "", S(impC, (x) => x.c.totalUSD), "", S(impC, (x) => x.c.goodsHTG), S(impC, (x) => x.c.fiHTG), S(impC, (x) => x.c.chargesCout), S(impC, (x) => x.c.coutRevient), S(impC, (x) => x.c.chargesTca), S(impC.filter((x) => x.d.invoiceEntryId), (x) => x.c.resteUSD)]]);
+    const exporterExp = () => ecTelecharger("exportations-" + today + ".csv", [["Dossier", "Client", "Étape", "Facture USD", "Taux", "Chiffre d'affaires G", "Coût des marchandises G", "Frais G", "Marge G", "Reste à recevoir USD"], ...expC.map(({ d, c, reste }) => [d.number, d.customer, pastEtape(IE_ETAPES_EXP, d.status), c.totalUSD, d.rate, c.ht, c.cogs, c.costs, c.marge, d.invoiceEntryId ? reste : ""]), ["Total", "", "", S(expC, (x) => x.c.totalUSD), "", S(expC, (x) => x.c.ht), S(expC, (x) => x.c.cogs), S(expC, (x) => x.c.costs), S(expC, (x) => x.c.marge), S(expC.filter((x) => x.d.invoiceEntryId), (x) => x.reste)]]);
+    const tf = { fontWeight: 600, borderTop: "2px solid #152238" };
     return (
       <div>
+        <div className="flex flex-wrap gap-2 items-end mb-4">
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Du</label><input type="date" value={rd} onChange={(e) => setRd(e.target.value)} data-testid="ie-rapport-du" className={ecInput} style={ecBorder} /></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Au</label><input type="date" value={rf} onChange={(e) => setRf(e.target.value)} data-testid="ie-rapport-au" className={ecInput} style={ecBorder} /></div>
+          {(rd || rf) && <button className="text-xs underline" onClick={() => { setRd(""); setRf(""); }}>Tout afficher</button>}
+          <div className="text-xs" style={{ color: "#7A7460" }}>Le filtre porte sur la date de la facture du dossier.</div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          {[["Dossiers d'importation", String(impsP.length), "ie-rap-n-imp"], ["Dossiers d'exportation", String(expsP.length), "ie-rap-n-exp"], ["Écart de change net", (ecartNet > 0 ? "gain " : ecartNet < 0 ? "perte " : "") + fmt(Math.abs(ecartNet)), "ie-rap-ecart"], ["Marge des exportations", fmt(S(expC, (x) => x.c.marge)), "ie-rap-marge"]].map(([l, v, t]) => (
+            <div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="text-sm font-semibold tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
+        </div>
         <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Coût de revient par importation</div><button onClick={exporterImp} className="text-xs underline" data-testid="ie-rapport-export-imp">Exporter</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr><th className="text-left">Dossier</th><th className="text-left">Fournisseur</th><th className="text-right">Marchandise</th><th className="text-right">Frais d'approche</th><th className="text-right">Coût de revient</th><th className="text-right">Coefficient</th></tr></thead>
-          <tbody>{imps.map((d) => { const c = ieImpCalc(d); return (<tr key={d.id} data-testid="ie-rapport-imp"><td className="tabular text-xs">{d.number}</td><td>{d.supplier}</td><td className="text-right tabular">{fmt(c.goodsHTG)}</td><td className="text-right tabular">{fmt(c.approche)}</td><td className="text-right tabular">{fmt(c.coutRevient)}</td><td className="text-right tabular">{c.coef ? c.coef.toFixed(3) : "—"}</td></tr>); })}</tbody></table></div>
-        <div className="display text-base mb-2" style={{ color: "#152238" }}>Frais d'approche par nature</div>
+          <tbody>{impC.map(({ d, c }) => (<tr key={d.id} data-testid="ie-rapport-imp"><td className="tabular text-xs">{d.number}</td><td>{d.supplier}</td><td className="text-right tabular">{fmt(c.goodsHTG)}</td><td className="text-right tabular">{fmt(c.approche)}</td><td className="text-right tabular">{fmt(c.coutRevient)}</td><td className="text-right tabular">{c.coef ? c.coef.toFixed(3) : "—"}</td></tr>))}</tbody>
+          {impC.length > 0 && <tfoot><tr style={tf} data-testid="ie-rapport-imp-total"><td colSpan={2}>Total</td><td className="text-right tabular">{fmt(S(impC, (x) => x.c.goodsHTG))}</td><td className="text-right tabular">{fmt(S(impC, (x) => x.c.approche))}</td><td className="text-right tabular" data-testid="ie-rapport-imp-tot-revient">{fmt(S(impC, (x) => x.c.coutRevient))}</td><td></td></tr></tfoot>}</table></div>
+        <div className="display text-base mb-2 mt-5" style={{ color: "#152238" }}>Frais d'approche par nature</div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr><th className="text-left">Nature</th><th className="text-right">Montant</th></tr></thead>
-          <tbody>{Object.keys(parType).map((k) => (<tr key={k} data-testid="ie-rapport-type"><td>{k}</td><td className="text-right tabular">{fmt(parType[k])}</td></tr>))}</tbody></table></div>
-        <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Marge par exportation</div><button onClick={exporterExp} className="text-xs underline" data-testid="ie-rapport-export-exp">Exporter</button></div>
+          <tbody>{Object.keys(parType).map((k) => (<tr key={k} data-testid="ie-rapport-type"><td>{k}</td><td className="text-right tabular">{fmt(parType[k])}</td></tr>))}</tbody>
+          {Object.keys(parType).length > 0 && <tfoot><tr style={tf} data-testid="ie-rapport-type-total"><td>Total</td><td className="text-right tabular">{fmt(totType)}</td></tr></tfoot>}</table></div>
+        <div className="display text-base mb-2 mt-5" style={{ color: "#152238" }}>Dû par fournisseur</div>
+        <div className="ec-wrap"><table className="ec-table"><thead><tr><th className="text-left">Fournisseur</th><th className="text-right">Dossiers</th><th className="text-right">Facturé</th><th className="text-right">Reste dû</th></tr></thead>
+          <tbody>{Object.keys(parFourn).map((k) => (<tr key={k} data-testid="ie-rapport-fourn"><td>{k}</td><td className="text-right tabular">{parFourn[k].n}</td><td className="text-right tabular">{ieUsd(parFourn[k].usd)}</td><td className="text-right tabular">{ieUsd(parFourn[k].reste)}</td></tr>))}</tbody>
+          {Object.keys(parFourn).length > 0 && <tfoot><tr style={tf} data-testid="ie-rapport-fourn-total"><td>Total</td><td className="text-right tabular">{impC.length}</td><td className="text-right tabular">{ieUsd(S(Object.values(parFourn), (o) => o.usd))}</td><td className="text-right tabular" data-testid="ie-rapport-fourn-tot-reste">{ieUsd(S(Object.values(parFourn), (o) => o.reste))}</td></tr></tfoot>}</table></div>
+        <div className="flex items-center justify-between mb-2 mt-5"><div className="display text-base" style={{ color: "#152238" }}>Marge par exportation</div><button onClick={exporterExp} className="text-xs underline" data-testid="ie-rapport-export-exp">Exporter</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr><th className="text-left">Dossier</th><th className="text-left">Client</th><th className="text-right">Chiffre d'affaires</th><th className="text-right">Coût des marchandises</th><th className="text-right">Frais</th><th className="text-right">Marge</th></tr></thead>
-          <tbody>{exps.map((d) => { const c = ieExpCalc(d); return (<tr key={d.id} data-testid="ie-rapport-exp"><td className="tabular text-xs">{d.number}</td><td>{d.customer}</td><td className="text-right tabular">{fmt(c.ht)}</td><td className="text-right tabular">{fmt(c.cogs)}</td><td className="text-right tabular">{fmt(c.costs)}</td><td className="text-right tabular">{fmt(c.marge)}</td></tr>); })}</tbody></table></div>
+          <tbody>{expC.map(({ d, c }) => (<tr key={d.id} data-testid="ie-rapport-exp"><td className="tabular text-xs">{d.number}</td><td>{d.customer}</td><td className="text-right tabular">{fmt(c.ht)}</td><td className="text-right tabular">{fmt(c.cogs)}</td><td className="text-right tabular">{fmt(c.costs)}</td><td className="text-right tabular">{fmt(c.marge)}</td></tr>))}</tbody>
+          {expC.length > 0 && <tfoot><tr style={tf} data-testid="ie-rapport-exp-total"><td colSpan={2}>Total</td><td className="text-right tabular">{fmt(S(expC, (x) => x.c.ht))}</td><td className="text-right tabular">{fmt(S(expC, (x) => x.c.cogs))}</td><td className="text-right tabular">{fmt(S(expC, (x) => x.c.costs))}</td><td className="text-right tabular" data-testid="ie-rapport-exp-tot-marge">{fmt(S(expC, (x) => x.c.marge))}</td></tr></tfoot>}</table></div>
+        <div className="display text-base mb-2 mt-5" style={{ color: "#152238" }}>À recevoir par client</div>
+        <div className="ec-wrap"><table className="ec-table"><thead><tr><th className="text-left">Client</th><th className="text-right">Dossiers</th><th className="text-right">Facturé</th><th className="text-right">Reste à recevoir</th></tr></thead>
+          <tbody>{Object.keys(parCli).map((k) => (<tr key={k} data-testid="ie-rapport-client"><td>{k}</td><td className="text-right tabular">{parCli[k].n}</td><td className="text-right tabular">{ieUsd(parCli[k].usd)}</td><td className="text-right tabular">{ieUsd(parCli[k].reste)}</td></tr>))}</tbody>
+          {Object.keys(parCli).length > 0 && <tfoot><tr style={tf} data-testid="ie-rapport-client-total"><td>Total</td><td className="text-right tabular">{expC.length}</td><td className="text-right tabular">{ieUsd(S(Object.values(parCli), (o) => o.usd))}</td><td className="text-right tabular" data-testid="ie-rapport-client-tot-reste">{ieUsd(S(Object.values(parCli), (o) => o.reste))}</td></tr></tfoot>}</table></div>
       </div>
     );
   };
@@ -656,11 +821,14 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
     const parType = {};
     imps.forEach((d) => (d.charges || []).filter((x) => x.status !== "annulé").forEach((x) => { const k = (IE_FRAIS.find((f) => f[0] === x.kind) || [0, x.label])[1]; parType[k] = ieR2((parType[k] || 0) + x.amount); }));
     const parClient = {}; expCalc.forEach((x) => { const k = x.d.customer || "—"; parClient[k] = ieR2((parClient[k] || 0) + x.c.ht); });
+    const parFourn = {}; impCalc.forEach((x) => { const k = x.d.supplier || "—"; parFourn[k] = ieR2((parFourn[k] || 0) + x.c.totalHTG); });
+    const parPays = {}; imps.forEach((d) => { const k = d.country || "Non précisé"; parPays[k] = (parPays[k] || 0) + 1; });
+    const parEtape = {}; imps.forEach((d) => { const k = pastEtape(IE_ETAPES_IMP, d.status); parEtape[k] = (parEtape[k] || 0) + 1; });
     return <StatsBloc
       vide={imps.length + exps.length === 0 ? "Aucun dossier pour le moment : les statistiques apparaîtront avec vos premières importations et exportations." : ""}
       kpis={[["Importations", String(imps.length), "ie-stat-imports"], ["Valeur importée", ieUsd(ieR2(impCalc.reduce((s, x) => s + x.c.totalUSD, 0))), "ie-stat-valeur-imp"], ["Chiffre d'affaires export", fmt(caExport), "ie-stat-ca-export"], ["Marge des exportations", fmt(margeTotale), "ie-stat-marge"]]}
       evolution={{ titre: "Importations et exportations (en dollars) — 6 derniers mois", data, series: [{ key: "imports", name: "Importations", color: "#3F4F73" }, { key: "exports", name: "Exportations", color: "#0F6B5C" }] }}
-      repartitions={[{ titre: "Frais d'approche par nature", data: Object.keys(parType).map((k) => ({ name: k, value: parType[k] })) }, { titre: "Chiffre d'affaires export par client", data: Object.keys(parClient).map((k) => ({ name: k, value: parClient[k] })) }]} />;
+      repartitions={[{ titre: "Frais d'approche par nature", data: Object.keys(parType).map((k) => ({ name: k, value: parType[k] })) }, { titre: "Chiffre d'affaires export par client", data: Object.keys(parClient).map((k) => ({ name: k, value: parClient[k] })) }, { titre: "Valeur importée par fournisseur", data: Object.keys(parFourn).map((k) => ({ name: k, value: parFourn[k] })) }, { titre: "Importations par pays d'origine", unite: "nombre", data: Object.keys(parPays).map((k) => ({ name: k, value: parPays[k] })) }, { titre: "Importations par étape", unite: "nombre", data: Object.keys(parEtape).map((k) => ({ name: k, value: parEtape[k] })) }]} />;
   };
 
   // ───────── Réglages ─────────
@@ -687,9 +855,12 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
     );
   };
 
-  const tabs = [["apercu", "Vue d'ensemble"], ["imports", "Importations"], ["exports", "Exportations"], ["rapports", "Rapports"], ["stats", "Statistiques"], ["reglages", "Réglages"]];
+  const imprimerDoc = imprimer ? (() => { const dd = (imprimer.kind === "imp" ? imps : exps).find((x) => x.id === imprimer.id); return dd ? { titre: (imprimer.kind === "imp" ? "Fiche de coût de revient " : "Facture d'exportation ") + dd.number, node: imprimer.kind === "imp" ? FicheImp(dd) : FactureExp(dd) } : null; })() : null;
+  const tabs = [["apercu", "Tableau de bord"], ["imports", "Importations"], ["exports", "Exportations"], ["rapports", "Rapports"], ["stats", "Statistiques"], ["reglages", "Réglages"]];
   return (
-    <div className="p-4 md:p-8 max-w-6xl" data-testid="importexport-module">
+    <>
+    {listesNoms}
+    <div className={"p-4 md:p-8 max-w-6xl" + (imprimer ? " no-print" : "")} data-testid="importexport-module">
       <style>{EC_CSS + '[data-testid="importexport-module"] .display.text-base{border-left:3px solid #C9A24B;padding-left:10px;margin-bottom:12px}[data-testid="importexport-module"] input,[data-testid="importexport-module"] select,[data-testid="importexport-module"] textarea{background:#fff}'}</style>
       <div className="mb-4"><div className="display text-2xl" style={{ color: "#152238" }}>Import-export</div><div className="text-xs" style={{ color: "#8A8370" }}>Dossiers d'importation (coût de revient réel) et d'exportation — comptabilité toujours en gourdes</div></div>
       {!canEdit && <div className="text-xs mb-3 p-2 rounded" style={{ background: "#F4F1E6", color: "#5B563F" }}>Consultation seule : votre rôle ne permet pas de modifier les dossiers.</div>}
@@ -703,5 +874,18 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
       {tab === "stats" && Stats()}
       {tab === "reglages" && Reglages()}
     </div>
+    {imprimerDoc && (
+      <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto p-3 md:p-8 no-print" style={{ background: "rgba(21,34,56,0.55)" }} onClick={() => setImprimer(null)} data-testid="ie-apercu">
+        <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 820 }}>
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap"><div className="text-sm" style={{ color: "#EFE9DD" }}>{imprimerDoc.titre}</div>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => { try { window.print(); } catch (e) {} }} className="px-3 py-1.5 rounded text-sm" style={ecBtnGold} data-testid="ie-imprimer-ok">Imprimer / enregistrer en PDF</button>
+              <button onClick={() => setImprimer(null)} className="px-3 py-1.5 rounded text-sm" style={ecBtn} data-testid="ie-apercu-fermer">Fermer</button></div></div>
+          <div className="rounded shadow-lg overflow-hidden" style={{ background: "#fff" }}>{imprimerDoc.node}</div>
+        </div>
+      </div>
+    )}
+    {imprimerDoc && <div className="print-only">{imprimerDoc.node}</div>}
+    </>
   );
 }
