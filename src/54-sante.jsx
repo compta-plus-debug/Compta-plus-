@@ -1,7 +1,8 @@
 // ═══ MODULE ═══
 // @module Sante
-// @depends EC_CSS, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille, ecTelecharger
-//   fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon, useState
+// @depends EC_CSS, Plus, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
+//   ecTelecharger, fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon
+//   useState
 // @exports SanteModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Santé : cabinets et cliniques, pharmacies, laboratoires et imagerie, hôpitaux.
@@ -365,12 +366,22 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
     setAj({ amount: "", motif: "" }); showToast(kind2 === "rejet" ? "Rejet constaté (perte)." : "Part reportée sur le " + V.patient + ".");
   };
   const [imprimer, setImprimer] = useState(null);
+  const [tk, setTk] = useState(false);
+  const [fq, setFq] = useState(""); const [fet, setFet] = useState(""); const [fd1, setFd1] = useState(""); const [fd2, setFd2] = useState("");
+  const [pq, setPq] = useState("");
+  const [rd, setRd] = useState(""); const [rf, setRf] = useState("");
+  const etatFact = (x) => { if (x.status === "annulee") return "annulee"; const s0 = saSoldes(x); return s0.restePatient <= 0.004 && s0.resteAssureur <= 0.004 ? "soldee" : "encaisser"; };
+  const resteDe = (id) => saR2(invoices.filter((i) => i.patientId === id && i.status !== "annulee").reduce((t, i) => t + saSoldes(i).restePatient, 0));
+  const patientsF = patients.filter((x) => !pq.trim() || [x.name, x.number, x.phone, x.policy].join(" ").toLowerCase().includes(pq.trim().toLowerCase()));
+  const uniq = (arr) => Array.from(new Set(arr.map((x) => String(x || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const honoDu = (x) => saR2(invoices.filter((i) => i.practitionerId === x.id && i.status !== "annulee").reduce((t, i) => t + (i.honoraires || 0), 0) - payouts.filter((y) => y.practitionerId === x.id && y.status !== "annulé").reduce((t, y) => t + y.amount, 0));
+  const listesNoms = (<><datalist id="sa-dl-service">{uniq(stays.map((x) => x.service)).map((n) => <option key={n} value={n} />)}</datalist><datalist id="sa-dl-spec">{uniq(practs.map((x) => x.specialty)).map((n) => <option key={n} value={n} />)}</datalist></>);
 
   const FactureSheet = ({ inv }) => {
     const p = patients.find((x) => x.id === inv.patientId) || {};
     const s = saSoldes(inv);
     return (
-      <div style={{ color: "#152238", background: "#fff", fontFamily: "'Inter', sans-serif", fontSize: 13, width: "100%", maxWidth: 794, margin: "0 auto", padding: "32px 36px", boxSizing: "border-box" }} data-testid="sante-facture-feuille">
+      <div style={{ color: "#152238", background: "#fff", fontFamily: "'Inter', sans-serif", fontSize: tk ? 11 : 13, width: "100%", maxWidth: tk ? 300 : 794, margin: "0 auto", padding: tk ? "12px 10px" : "32px 36px", boxSizing: "border-box" }} data-testid="sante-facture-feuille">
         <div style={{ textAlign: "center", marginBottom: 12 }}>
           {settings.companyLogo && <img src={settings.companyLogo} alt="" style={{ width: 60, height: 60, objectFit: "contain", margin: "0 auto 6px", display: "block" }} />}
           <div style={{ fontWeight: 700, fontSize: 20 }}>{settings.companyName || V.etab}</div>
@@ -394,6 +405,8 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
 
   const Facturation = () => {
     const inv = invoices.find((x) => x.id === sel);
+    const invF = invoices.filter((x) => (!fet || etatFact(x) === fet) && (!fd1 || x.date >= fd1) && (!fd2 || x.date <= fd2) && (!fq.trim() || [x.number, nomPatient(x.patientId)].join(" ").toLowerCase().includes(fq.trim().toLowerCase()))).sort((a, b) => String(b.number).localeCompare(String(a.number)));
+    const invFA = invF.filter((x) => x.status !== "annulee");
     return (
       <div>
         {canFront && (
@@ -418,12 +431,20 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
             </div>
           </div>
         )}
+        <div className="flex flex-wrap gap-2 items-end mb-2">
+          <div className="flex-1 min-w-[150px]"><label className="text-xs" style={{ color: "#8A8370" }}>Rechercher (n°, {V.patient})</label><input value={fq} onChange={(e) => setFq(e.target.value)} data-testid="sante-fact-recherche" className={ecInput} style={ecBorder} /></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>État</label><select value={fet} onChange={(e) => setFet(e.target.value)} data-testid="sante-fact-filtre-etat" className={ecInput} style={ecBorder}><option value="">Tous</option><option value="encaisser">À encaisser</option><option value="soldee">Soldée</option><option value="annulee">Annulée</option></select></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Du</label><input type="date" value={fd1} onChange={(e) => setFd1(e.target.value)} data-testid="sante-fact-du" className={ecInput} style={ecBorder} /></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Au</label><input type="date" value={fd2} onChange={(e) => setFd2(e.target.value)} data-testid="sante-fact-au" className={ecInput} style={ecBorder} /></div>
+        </div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">N°</th><th>Date</th><th>{V.Patient}</th><th className="text-right">Total</th><th className="text-right">Reste patient</th><th className="text-right">Reste assureur</th><th>État</th><th></th></tr></thead>
-          <tbody>{invoices.slice().sort((a, b) => String(b.number).localeCompare(String(a.number))).map((x) => { const s = saSoldes(x); return (
+          <tbody>{invF.map((x) => { const s = saSoldes(x); return (
             <tr key={x.id} data-testid="sante-facture-ligne" style={{ background: x.id === sel ? "#E6F1EE" : undefined, opacity: x.status === "annulee" ? 0.55 : 1 }}><td className="py-1.5 tabular text-xs">{x.number}</td><td>{ecDateFr(x.date)}</td><td>{nomPatient(x.patientId)}</td><td className="text-right tabular">{fmt(x.total)}</td><td className="text-right tabular">{x.status === "annulee" ? "—" : fmt(s.restePatient)}</td><td className="text-right tabular">{x.status === "annulee" || !x.insurerId ? "—" : fmt(s.resteAssureur)}</td>
               <td>{x.status === "annulee" ? ecPastille("Annulée", "neutre") : s.restePatient <= 0.004 && s.resteAssureur <= 0.004 ? ecPastille("Soldée", "ok") : ecPastille("À encaisser", "attente")}</td>
-              <td className="text-right whitespace-nowrap"><button onClick={() => setSel(x.id === sel ? "" : x.id)} className="text-xs underline mr-3" data-testid="sante-facture-ouvrir">{x.id === sel ? "Fermer" : "Ouvrir"}</button><button onClick={() => setImprimer(x)} className="text-xs underline" data-testid="sante-facture-imprimer">Imprimer</button></td></tr>); })}</tbody></table></div>
-        {invoices.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>Aucune facture.</div>}
+              <td className="text-right whitespace-nowrap"><button onClick={() => setSel(x.id === sel ? "" : x.id)} className="text-xs underline mr-3" data-testid="sante-facture-ouvrir">{x.id === sel ? "Fermer" : "Ouvrir"}</button><button onClick={() => setImprimer(x)} className="text-xs underline" data-testid="sante-facture-imprimer">Imprimer</button></td></tr>); })}</tbody>
+          {invF.length > 0 && <tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }} data-testid="sante-fact-total-ligne"><td colSpan={3}>Total ({invFA.length} facture{invFA.length > 1 ? "s" : ""}, hors annulées)</td><td className="text-right tabular" data-testid="sante-fact-tot-total">{fmt(saR2(invFA.reduce((t, x) => t + x.total, 0)))}</td><td className="text-right tabular" data-testid="sante-fact-tot-patient">{fmt(saR2(invFA.reduce((t, x) => t + saSoldes(x).restePatient, 0)))}</td><td className="text-right tabular" data-testid="sante-fact-tot-assureur">{fmt(saR2(invFA.reduce((t, x) => t + saSoldes(x).resteAssureur, 0)))}</td><td colSpan={2}></td></tr></tfoot>}
+        </table></div>
+        {invF.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>{invoices.length === 0 ? "Aucune facture." : "Aucune facture ne correspond à ces filtres."}</div>}
         {inv && FactureDetail(inv)}
       </div>
     );
@@ -479,16 +500,19 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
         <div><label className="text-xs" style={{ color: "#8A8370" }}>N° de police</label><input value={fp.policy} onChange={(e) => setFp({ ...fp, policy: e.target.value })} className={ecInput} style={ecBorder} /></div>
       </div><button onClick={addPatient} className="mt-2 px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="sante-patient-ajouter">Ajouter</button>
       <div className="text-xs mt-2" style={{ color: "#7A7460" }}>Données administratives seulement : n'enregistrez ici ni diagnostic, ni ordonnance, ni résultat d'examen.</div></div>)}
+      <div className="mb-2"><label className="text-xs" style={{ color: "#8A8370" }}>Rechercher (nom, n°, téléphone, police)</label><input value={pq} onChange={(e) => setPq(e.target.value)} data-testid="sante-patient-recherche" className={ecInput} style={{ ...ecBorder, maxWidth: 360 }} /></div>
       <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">N°</th><th>{V.Patient}</th><th>Téléphone</th><th>Assureur</th><th className="text-right">Reste à payer</th><th></th></tr></thead>
-        <tbody>{patients.map((p) => { const reste = saR2(invoices.filter((i) => i.patientId === p.id && i.status !== "annulee").reduce((s, i) => s + saSoldes(i).restePatient, 0)); return (
+        <tbody>{patientsF.map((p) => { const reste = resteDe(p.id); return (
           <tr key={p.id} data-testid="sante-patient-ligne">{edP && edP.id === p.id ? (<>
             <td className="py-1.5 tabular text-xs">{p.number}</td>
             <td><input value={edP.name} onChange={(e) => setEdP({ ...edP, name: e.target.value })} data-testid="sante-patient-edit-nom" className="border rounded px-1 py-0.5 text-xs" style={ecBorder} /><div className="mt-1"><input value={edP.policy} onChange={(e) => setEdP({ ...edP, policy: e.target.value })} placeholder="N° de police" data-testid="sante-patient-edit-police" className="border rounded px-1 py-0.5 text-xs" style={ecBorder} /></div></td>
             <td><input value={edP.phone} onChange={(e) => setEdP({ ...edP, phone: e.target.value })} data-testid="sante-patient-edit-tel" className="border rounded px-1 py-0.5 text-xs" style={ecBorder} /></td>
             <td><select value={edP.insurerId} onChange={(e) => setEdP({ ...edP, insurerId: e.target.value })} className="border rounded px-1 py-0.5 text-xs" style={ecBorder}><option value="">Aucun</option>{insurers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></td>
             <td></td><td className="text-right whitespace-nowrap"><button onClick={modifierPatient} className="text-xs underline mr-3" data-testid="sante-patient-edit-ok">Enregistrer</button><button onClick={() => setEdP(null)} className="text-xs">Annuler</button></td></>) : (<>
-            <td className="py-1.5 tabular text-xs">{p.number}</td><td>{p.name}</td><td>{p.phone || "—"}</td><td>{p.insurerId ? nomAssureur(p.insurerId) : "—"}</td><td className="text-right tabular">{fmt(reste)}</td><td className="text-right whitespace-nowrap">{canFront && <button onClick={() => setEdP({ id: p.id, name: p.name, phone: p.phone || "", insurerId: p.insurerId || "", policy: p.policy || "" })} className="text-xs underline mr-3" data-testid="sante-patient-modifier">Modifier</button>}{canEdit && <button onClick={() => delPatient(p)} className="text-xs" style={{ color: "#A6432F" }} data-testid="sante-patient-supprimer">Supprimer</button>}</td></>)}</tr>); })}</tbody></table></div>
-      {patients.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>Aucun {V.patient}.</div>}
+            <td className="py-1.5 tabular text-xs">{p.number}</td><td>{p.name}</td><td>{p.phone || "—"}</td><td>{p.insurerId ? nomAssureur(p.insurerId) : "—"}</td><td className="text-right tabular">{fmt(reste)}</td><td className="text-right whitespace-nowrap">{canFront && <button onClick={() => setEdP({ id: p.id, name: p.name, phone: p.phone || "", insurerId: p.insurerId || "", policy: p.policy || "" })} className="text-xs underline mr-3" data-testid="sante-patient-modifier">Modifier</button>}{canEdit && <button onClick={() => delPatient(p)} className="text-xs" style={{ color: "#A6432F" }} data-testid="sante-patient-supprimer">Supprimer</button>}</td></>)}</tr>); })}</tbody>
+        {patientsF.length > 0 && <tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }} data-testid="sante-patient-total-ligne"><td colSpan={4}>Total ({patientsF.length})</td><td className="text-right tabular" data-testid="sante-patient-tot-reste">{fmt(saR2(patientsF.reduce((t, x) => t + resteDe(x.id), 0)))}</td><td></td></tr></tfoot>}
+      </table></div>
+      {patientsF.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>{patients.length === 0 ? "Aucun " + V.patient + "." : "Aucun résultat."}</div>}
     </div>
   );
   const Catalogue = () => (
@@ -526,7 +550,7 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
     <div>
       {canEdit && (<div className="ec-card p-4 mb-5"><div className="grid md:grid-cols-4 gap-2 items-end">
         <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Nom</label><input value={fr.name} onChange={(e) => setFr({ ...fr, name: e.target.value })} data-testid="sante-prat-nom" className={ecInput} style={ecBorder} /></div>
-        <div><label className="text-xs" style={{ color: "#8A8370" }}>Spécialité</label><input value={fr.specialty} onChange={(e) => setFr({ ...fr, specialty: e.target.value })} className={ecInput} style={ecBorder} /></div>
+        <div><label className="text-xs" style={{ color: "#8A8370" }}>Spécialité</label><input list="sa-dl-spec" value={fr.specialty} onChange={(e) => setFr({ ...fr, specialty: e.target.value })} className={ecInput} style={ecBorder} /></div>
         <div><label className="text-xs" style={{ color: "#8A8370" }}>Part reversée (%)</label><input type="number" min="0" max="100" value={fr.share} onChange={(e) => setFr({ ...fr, share: e.target.value })} data-testid="sante-prat-part" className={ecInput + " tabular"} style={ecBorder} /></div>
       </div><button onClick={addPract} className="mt-2 px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="sante-prat-ajouter">Ajouter</button>
       <div className="text-xs mt-2" style={{ color: "#7A7460" }}>La part reversée s'applique au montant des consultations, soins, examens et séjours de chaque facture où le {V.praticien} est indiqué (pas aux produits).</div></div>)}
@@ -552,7 +576,9 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
       </div><button onClick={addInsurer} className="mt-2 px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="sante-assureur-ajouter">Ajouter</button></div>)}
       <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Assureur</th><th>Contact</th><th className="text-right">Part</th><th className="text-right">Facturé</th><th className="text-right">Reçu</th><th className="text-right">Rejeté</th><th className="text-right">Reste à recevoir</th><th></th></tr></thead>
         <tbody>{insurers.map((x) => { const mine = invoices.filter((i) => i.insurerId === x.id && i.status !== "annulee"); const sol = mine.map(saSoldes); const fact = saR2(mine.reduce((s, i) => s + i.insurerAmount, 0)); return (
-          <tr key={x.id} data-testid="sante-assureur-ligne"><td className="py-1.5">{x.name}</td><td className="text-xs">{[x.phone, x.email].filter(Boolean).join(" · ") || "—"}</td><td className="text-right tabular">{x.defaultPct} %</td><td className="text-right tabular">{fmt(fact)}</td><td className="text-right tabular">{fmt(saR2(sol.reduce((s, y) => s + y.recu, 0)))}</td><td className="text-right tabular">{fmt(saR2(sol.reduce((s, y) => s + y.rejet + y.report, 0)))}</td><td className="text-right tabular" data-testid="sante-assureur-reste">{fmt(saR2(sol.reduce((s, y) => s + y.resteAssureur, 0)))}</td><td className="text-right">{canEdit && <button onClick={() => delInsurer(x)} className="text-xs" style={{ color: "#A6432F" }}>Supprimer</button>}</td></tr>); })}</tbody></table></div>
+          <tr key={x.id} data-testid="sante-assureur-ligne"><td className="py-1.5">{x.name}</td><td className="text-xs">{[x.phone, x.email].filter(Boolean).join(" · ") || "—"}</td><td className="text-right tabular">{x.defaultPct} %</td><td className="text-right tabular">{fmt(fact)}</td><td className="text-right tabular">{fmt(saR2(sol.reduce((s, y) => s + y.recu, 0)))}</td><td className="text-right tabular">{fmt(saR2(sol.reduce((s, y) => s + y.rejet + y.report, 0)))}</td><td className="text-right tabular" data-testid="sante-assureur-reste">{fmt(saR2(sol.reduce((s, y) => s + y.resteAssureur, 0)))}</td><td className="text-right">{canEdit && <button onClick={() => delInsurer(x)} className="text-xs" style={{ color: "#A6432F" }}>Supprimer</button>}</td></tr>); })}</tbody>
+        {insurers.length > 0 && (() => { const tot = (f) => saR2(insurers.reduce((t, x) => t + f(invoices.filter((i) => i.insurerId === x.id && i.status !== "annulee")), 0)); return (<tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }} data-testid="sante-assureur-total-ligne"><td colSpan={3}>Total</td><td className="text-right tabular">{fmt(tot((m) => m.reduce((t, i) => t + i.insurerAmount, 0)))}</td><td className="text-right tabular">{fmt(tot((m) => m.reduce((t, i) => t + saSoldes(i).recu, 0)))}</td><td className="text-right tabular">{fmt(tot((m) => m.reduce((t, i) => t + saSoldes(i).rejet, 0)))}</td><td className="text-right tabular" data-testid="sante-assureur-tot-reste">{fmt(tot((m) => m.reduce((t, i) => t + saSoldes(i).resteAssureur, 0)))}</td><td></td></tr></tfoot>); })()}
+      </table></div>
       {insurers.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>Aucun assureur : sans assureur, le {V.patient} paie la totalité.</div>}
     </div>
   );
@@ -588,7 +614,7 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
     <div>
       {canFront && (<div className="ec-card p-4 mb-5"><div className="display text-base mb-2" style={{ color: "#152238" }}>Nouvelle admission</div><div className="grid md:grid-cols-5 gap-2 items-end">
         <div><label className="text-xs" style={{ color: "#8A8370" }}>{V.Patient}</label><select value={fsj.patientId} onChange={(e) => setFsj({ ...fsj, patientId: e.target.value })} data-testid="sante-sejour-patient" className={ecInput} style={ecBorder}><option value="">— choisir —</option>{patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-        <div><label className="text-xs" style={{ color: "#8A8370" }}>Service</label><input value={fsj.service} onChange={(e) => setFsj({ ...fsj, service: e.target.value })} data-testid="sante-sejour-service" className={ecInput} style={ecBorder} /></div>
+        <div><label className="text-xs" style={{ color: "#8A8370" }}>Service</label><input list="sa-dl-service" value={fsj.service} onChange={(e) => setFsj({ ...fsj, service: e.target.value })} data-testid="sante-sejour-service" className={ecInput} style={ecBorder} /></div>
         <div><label className="text-xs" style={{ color: "#8A8370" }}>Admission</label><input type="date" value={fsj.admitDate} max={todayStr()} onChange={(e) => setFsj({ ...fsj, admitDate: e.target.value })} className={ecInput} style={ecBorder} /></div>
         <div><label className="text-xs" style={{ color: "#8A8370" }}>Tarif par jour</label><input type="number" min="0" value={fsj.rate} onChange={(e) => setFsj({ ...fsj, rate: e.target.value })} data-testid="sante-sejour-tarif" className={ecInput + " tabular"} style={ecBorder} /></div>
         <button onClick={admettre} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="sante-sejour-admettre">Admettre</button>
@@ -634,7 +660,7 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
     </div>
   );
 
-  // ───────── Vue d'ensemble et rapports ─────────
+  // ───────── Tableau de bord, rapports et statistiques ─────────
   const Apercu = () => {
     const actives = invoices.filter((i) => i.status !== "annulee");
     const sols = actives.map(saSoldes);
@@ -642,9 +668,33 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
     const dusAss = saR2(sols.reduce((s, x) => s + x.resteAssureur, 0));
     const mois = today.slice(0, 7);
     const caMois = saR2(actives.filter((i) => String(i.date).startsWith(mois)).reduce((s, i) => s + i.total, 0));
-    const kpis = [[V.Patients, String(patients.length), "sante-kpi-patients"], ["Facturé ce mois", fmt(caMois), "sante-kpi-mois"], ["À recevoir des " + V.Patients.toLowerCase(), fmt(dusPat), "sante-kpi-patients-dus"], ["À recevoir des assureurs", fmt(dusAss), "sante-kpi-assureurs-dus"]];
+    const encMois = saR2(actives.flatMap((i) => [...(i.payments || []), ...(i.claims || [])]).filter((x) => x.status !== "annulé" && String(x.date).startsWith(mois)).reduce((s, x) => s + x.amount, 0));
+    const ouvertes = actives.filter((i) => etatFact(i) === "encaisser");
+    const honoTot = saR2(practs.reduce((s, x) => s + Math.max(0, honoDu(x)), 0));
+    const afaire = [];
+    ouvertes.forEach((i) => {
+      const so = saSoldes(i), age = saJours(i.date, today);
+      if (so.restePatient > 0.004 && age > 30) afaire.push({ tab: "factures", sel: i.id, nom: nomPatient(i.patientId), txt: "Facture " + i.number + " : " + V.patient + " à relancer (" + age + " jours), reste " + fmt(so.restePatient) });
+      if (so.resteAssureur > 0.004 && age > 30) afaire.push({ tab: "factures", sel: i.id, nom: nomAssureur(i.insurerId), txt: "Facture " + i.number + " : assureur à relancer (" + age + " jours), reste " + fmt(so.resteAssureur) });
+    });
+    practs.forEach((x) => { const d = honoDu(x); if (d > 0.004) afaire.push({ tab: "praticiens", nom: x.name, txt: "Honoraires à verser : " + fmt(d) }); });
+    if (kind === "pharmacie") lots.filter((l) => lotEtat(l) !== "ok").forEach((l) => afaire.push({ tab: "lots", nom: l.name, txt: (lotEtat(l) === "perime" ? "Lot " + l.lot + " périmé depuis le " : "Lot " + l.lot + " expire le ") + ecDateFr(l.expiry) }));
+    if (kind === "hopital") stays.filter((st) => !st.invoiceId).forEach((st) => afaire.push({ tab: "sejours", nom: nomPatient(st.patientId), txt: "Séjour en cours depuis " + saJours(st.admitDate, today) + " jour(s) : facturer à la sortie" }));
+    const kpis = [[V.Patients, String(patients.length), "sante-kpi-patients"], ["Facturé ce mois", fmt(caMois), "sante-kpi-mois"], ["Encaissé ce mois", fmt(encMois), "sante-kpi-encaisse-mois"], ["Factures à encaisser", String(ouvertes.length), "sante-kpi-ouvertes"], ["À recevoir des " + V.Patients.toLowerCase(), fmt(dusPat), "sante-kpi-patients-dus"], ["À recevoir des assureurs", fmt(dusAss), "sante-kpi-assureurs-dus"], ["Honoraires à verser", fmt(honoTot), "sante-kpi-hono"], ["Choses à faire", String(afaire.length), "sante-kpi-afaire"]];
     if (kind === "pharmacie") kpis.push(["Lots périmés ou proches", String(lots.filter((l) => lotEtat(l) !== "ok").length), "sante-kpi-lots"]);
     if (kind === "hopital") kpis.push(["Séjours en cours", String(stays.filter((s) => !s.invoiceId).length), "sante-kpi-sejours"]);
+    const aEncaisse = actives.some((i) => (i.payments || []).concat(i.claims || []).some((x) => x.status !== "annulé"));
+    const etapes = [
+      ["Type d'établissement", "Choisissez ci-dessus votre type d'établissement : chaque type a ses propres données et ses propres mots.", "etab", !!etabRec],
+      ["Assureurs", "Ajoutez les assureurs avec la part qu'ils paient par défaut (facultatif : sans assureur, le " + V.patient + " paie tout).", "assureurs", insurers.length > 0],
+      [V.Praticiens, "Ajoutez vos " + V.Praticiens.toLowerCase() + " et la part reversée sur leurs actes (0 si aucune).", "praticiens", practs.length > 0],
+      ["Tarifs", "Remplissez le catalogue : " + V.Actes.toLowerCase() + " et leurs prix. Rien n'est préréglé.", "actes", acts.length > 0],
+      [V.Patients, "Créez les fiches (administratif seulement : jamais de diagnostic ni de résultat).", "patients", patients.length > 0],
+      ["Première facture", "Choisissez le " + V.patient + " et les lignes du catalogue : la part de l'assureur est calculée toute seule.", "factures", invoices.length > 0],
+      ["Encaissement", "Enregistrez le paiement du " + V.patient + " puis le remboursement de l'assureur : la comptabilité se fait automatiquement.", "factures", aEncaisse],
+    ];
+    const toutFait = etapes.every((e) => e[3]);
+    const dernieres = invoices.slice().sort((a, b) => String(b.number).localeCompare(String(a.number))).slice(0, 5);
     return (
       <div>
         {canEdit && (<div className="ec-card p-4 mb-5" data-testid="sante-etab">
@@ -654,28 +704,66 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
             <span className="text-xs" style={{ color: "#7A7460" }}>Chaque type a ses propres données (patients, catalogue, factures, assureurs, praticiens) et ses propres mots. Aucune donnée médicale n'est enregistrée : administratif et comptabilité seulement.</span>
           </div>
         </div>)}
-        {patients.length + invoices.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="sante-vide">Pour commencer : ajoutez vos <b>assureurs</b> et vos <b>{V.praticiens ? V.praticiens : V.Praticiens.toLowerCase()}</b>, remplissez le <b>catalogue</b> (tarifs), puis créez vos <b>{V.Patients.toLowerCase()}</b> et votre première facture.</div>}
+        {!toutFait && (<div className="ec-card p-4 mb-5" data-testid="sante-guide">
+          <div className="display text-base mb-2" style={{ color: "#152238" }}>Pour démarrer, en 7 étapes</div>
+          <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="sante-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && tb !== "etab" && <button className="text-xs underline" data-testid="sante-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
+        </div>)}
+        {patients.length + invoices.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="sante-vide">Pour commencer : ajoutez vos <b>assureurs</b> et vos <b>{V.Praticiens.toLowerCase()}</b>, remplissez le <b>catalogue</b> (tarifs), puis créez vos <b>{V.Patients.toLowerCase()}</b> et votre première facture.</div>}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>
+        <div className="display text-base mb-2" style={{ color: "#152238" }}>À faire</div>
+        {afaire.length === 0 ? <div className="text-sm mb-5" style={{ color: "#8A8370" }}>Rien en attente.</div> : (
+          <div className="ec-wrap mb-5"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Concerné</th><th>À faire</th><th></th></tr></thead>
+            <tbody>{afaire.slice(0, 15).map((x, i) => (<tr key={i} data-testid="sante-afaire-ligne"><td className="py-1.5">{x.nom}</td><td>{x.txt}</td><td className="text-right"><button className="text-xs underline" data-testid="sante-afaire-ouvrir" onClick={() => { setTab(x.tab); if (x.sel) setSel(x.sel); }}>Ouvrir</button></td></tr>))}</tbody></table></div>
+        )}
+        <div className="display text-base mb-2" style={{ color: "#152238" }}>Dernières factures</div>
+        {dernieres.length === 0 ? <div className="text-sm" style={{ color: "#8A8370" }}>Aucune facture.</div> : (
+          <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">N°</th><th>Date</th><th>{V.Patient}</th><th className="text-right">Total</th><th>État</th></tr></thead>
+            <tbody>{dernieres.map((x) => (<tr key={x.id} data-testid="sante-derniere-ligne"><td className="py-1.5 tabular text-xs">{x.number}</td><td>{ecDateFr(x.date)}</td><td>{nomPatient(x.patientId)}</td><td className="text-right tabular">{fmt(x.total)}</td><td>{etatFact(x) === "annulee" ? ecPastille("Annulée", "neutre") : etatFact(x) === "soldee" ? ecPastille("Soldée", "ok") : ecPastille("À encaisser", "attente")}</td></tr>))}</tbody></table></div>
+        )}
       </div>
     );
   };
   const Rapports = () => {
-    const actives = invoices.filter((i) => i.status !== "annulee");
+    const dansP = (d) => (!rd || d >= rd) && (!rf || d <= rf);
+    const actives = invoices.filter((i) => i.status !== "annulee" && dansP(i.date));
     const parCat = {};
     actives.forEach((i) => (i.lines || []).forEach((l) => { const k = (SA_CATS.find((c) => c[0] === l.cat) || [0, l.cat])[1]; parCat[k] = saR2((parCat[k] || 0) + l.qty * l.unit); }));
-    const encaiss = actives.flatMap((i) => (i.payments || []).filter((p) => p.status !== "annulé").map((p) => ({ ...p, number: i.number, patient: nomPatient(i.patientId) }))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const exporterFact = () => ecTelecharger("factures-" + V.slug + "-" + today + ".csv", [["N°", "Date", V.Patient, "Total", "Part assureur", "Part " + V.patient, "Reste " + V.patient, "Reste assureur", "État"], ...invoices.map((i) => { const s = saSoldes(i); return [i.number, ecDateFr(i.date), nomPatient(i.patientId), i.total, i.insurerAmount, i.patientAmount, i.status === "annulee" ? "" : s.restePatient, i.status === "annulee" ? "" : s.resteAssureur, i.status === "annulee" ? "Annulée" : "Émise"]; })]);
-    const exporterEnc = () => ecTelecharger("encaissements-" + V.slug + "-" + today + ".csv", [["Date", "Facture", V.Patient, "Mode", "Montant"], ...encaiss.map((p) => [ecDateFr(p.date), p.number, p.patient, p.mode === "banque" ? "Banque" : "Espèces", p.amount])]);
+    const totCat = saR2(Object.keys(parCat).reduce((t, k) => t + parCat[k], 0));
+    const encaiss = invoices.filter((i) => i.status !== "annulee").flatMap((i) => (i.payments || []).filter((p) => p.status !== "annulé" && dansP(p.date)).map((p) => ({ ...p, number: i.number, patient: nomPatient(i.patientId) }))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const parPrat = {};
+    actives.forEach((i) => { const k = i.practitionerId ? nomPrat(i.practitionerId) : "Sans " + V.praticien; const o = parPrat[k] || { n: 0, fact: 0, hono: 0 }; o.n += 1; o.fact = saR2(o.fact + i.total); o.hono = saR2(o.hono + (i.honoraires || 0)); parPrat[k] = o; });
+    const parAss = {};
+    actives.filter((i) => i.insurerId).forEach((i) => { const k = nomAssureur(i.insurerId); const so = saSoldes(i); const age = saJours(i.date, today); const o = parAss[k] || { b0: 0, b1: 0, b2: 0 }; if (so.resteAssureur > 0.004) { if (age <= 30) o.b0 = saR2(o.b0 + so.resteAssureur); else if (age <= 60) o.b1 = saR2(o.b1 + so.resteAssureur); else o.b2 = saR2(o.b2 + so.resteAssureur); } parAss[k] = o; });
+    const S = (arr, f) => saR2(arr.reduce((t, x) => t + f(x), 0));
+    const tf = { fontWeight: 600, borderTop: "2px solid #152238" };
+    const exporterFact = () => ecTelecharger("factures-" + V.slug + "-" + today + ".csv", [["N°", "Date", V.Patient, "Total", "Part assureur", "Part " + V.patient, "Reste " + V.patient, "Reste assureur", "État"], ...invoices.filter((i) => dansP(i.date)).map((i) => { const s0 = saSoldes(i); return [i.number, ecDateFr(i.date), nomPatient(i.patientId), i.total, i.insurerAmount, i.patientAmount, i.status === "annulee" ? "" : s0.restePatient, i.status === "annulee" ? "" : s0.resteAssureur, i.status === "annulee" ? "Annulée" : "Émise"]; }), ["Total", "", "", S(actives, (i) => i.total), S(actives, (i) => i.insurerAmount), S(actives, (i) => i.patientAmount), S(actives, (i) => saSoldes(i).restePatient), S(actives, (i) => saSoldes(i).resteAssureur), ""]]);
+    const exporterEnc = () => ecTelecharger("encaissements-" + V.slug + "-" + today + ".csv", [["Date", "Facture", V.Patient, "Mode", "Montant"], ...encaiss.map((p) => [ecDateFr(p.date), p.number, p.patient, p.mode === "banque" ? "Banque" : "Espèces", p.amount]), ["Total", "", "", "", S(encaiss, (p) => p.amount)]]);
     return (
       <div>
+        <div className="flex flex-wrap gap-2 items-end mb-4">
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Du</label><input type="date" value={rd} onChange={(e) => setRd(e.target.value)} data-testid="sante-rapport-du" className={ecInput} style={ecBorder} /></div>
+          <div><label className="text-xs" style={{ color: "#8A8370" }}>Au</label><input type="date" value={rf} onChange={(e) => setRf(e.target.value)} data-testid="sante-rapport-au" className={ecInput} style={ecBorder} /></div>
+          {(rd || rf) && <button className="text-xs underline" onClick={() => { setRd(""); setRf(""); }}>Tout afficher</button>}
+          <div className="text-xs" style={{ color: "#7A7460" }}>Le filtre porte sur la date des factures et des encaissements.</div>
+        </div>
         <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Chiffre d'affaires par catégorie</div><button onClick={exporterFact} className="text-xs underline" data-testid="sante-rapport-export-factures">Exporter les factures</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Catégorie</th><th className="text-right">Facturé</th></tr></thead>
-          <tbody>{Object.keys(parCat).map((k) => (<tr key={k} data-testid="sante-rapport-cat"><td className="py-1.5">{k}</td><td className="text-right tabular">{fmt(parCat[k])}</td></tr>))}</tbody></table></div>
-        <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Journal des encaissements</div><button onClick={exporterEnc} className="text-xs underline" data-testid="sante-rapport-export-enc">Exporter</button></div>
+          <tbody>{Object.keys(parCat).map((k) => (<tr key={k} data-testid="sante-rapport-cat"><td className="py-1.5">{k}</td><td className="text-right tabular">{fmt(parCat[k])}</td></tr>))}</tbody>
+          {Object.keys(parCat).length > 0 && <tfoot><tr style={tf} data-testid="sante-rapport-cat-total"><td>Total</td><td className="text-right tabular" data-testid="sante-rapport-cat-tot">{fmt(totCat)}</td></tr></tfoot>}</table></div>
+        <div className="display text-base mb-2 mt-5" style={{ color: "#152238" }}>Facturé par {V.praticien}</div>
+        <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">{V.Praticien}</th><th className="text-right">Factures</th><th className="text-right">Facturé</th><th className="text-right">Honoraires générés</th></tr></thead>
+          <tbody>{Object.keys(parPrat).map((k) => (<tr key={k} data-testid="sante-rapport-prat"><td className="py-1.5">{k}</td><td className="text-right tabular">{parPrat[k].n}</td><td className="text-right tabular">{fmt(parPrat[k].fact)}</td><td className="text-right tabular">{fmt(parPrat[k].hono)}</td></tr>))}</tbody>
+          {Object.keys(parPrat).length > 0 && <tfoot><tr style={tf} data-testid="sante-rapport-prat-total"><td>Total</td><td className="text-right tabular">{actives.length}</td><td className="text-right tabular" data-testid="sante-rapport-prat-tot">{fmt(S(Object.values(parPrat), (o) => o.fact))}</td><td className="text-right tabular">{fmt(S(Object.values(parPrat), (o) => o.hono))}</td></tr></tfoot>}</table></div>
+        <div className="display text-base mb-2 mt-5" style={{ color: "#152238" }}>À recevoir des assureurs, par ancienneté</div>
+        <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Assureur</th><th className="text-right">0 à 30 jours</th><th className="text-right">31 à 60 jours</th><th className="text-right">Plus de 60 jours</th><th className="text-right">Total</th></tr></thead>
+          <tbody>{Object.keys(parAss).map((k) => (<tr key={k} data-testid="sante-rapport-ass"><td className="py-1.5">{k}</td><td className="text-right tabular">{fmt(parAss[k].b0)}</td><td className="text-right tabular">{fmt(parAss[k].b1)}</td><td className="text-right tabular">{fmt(parAss[k].b2)}</td><td className="text-right tabular">{fmt(saR2(parAss[k].b0 + parAss[k].b1 + parAss[k].b2))}</td></tr>))}</tbody>
+          {Object.keys(parAss).length > 0 && <tfoot><tr style={tf} data-testid="sante-rapport-ass-total"><td>Total</td><td className="text-right tabular">{fmt(S(Object.values(parAss), (o) => o.b0))}</td><td className="text-right tabular">{fmt(S(Object.values(parAss), (o) => o.b1))}</td><td className="text-right tabular">{fmt(S(Object.values(parAss), (o) => o.b2))}</td><td className="text-right tabular" data-testid="sante-rapport-ass-tot">{fmt(S(Object.values(parAss), (o) => o.b0 + o.b1 + o.b2))}</td></tr></tfoot>}</table></div>
+        <div className="flex items-center justify-between mb-2 mt-5"><div className="display text-base" style={{ color: "#152238" }}>Journal des encaissements</div><button onClick={exporterEnc} className="text-xs underline" data-testid="sante-rapport-export-enc">Exporter</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Date</th><th>Facture</th><th>{V.Patient}</th><th>Mode</th><th className="text-right">Montant</th></tr></thead>
-          <tbody>{encaiss.map((p) => (<tr key={p.id} data-testid="sante-rapport-enc"><td className="py-1.5">{ecDateFr(p.date)}</td><td className="tabular text-xs">{p.number}</td><td>{p.patient}</td><td>{p.mode === "banque" ? "Banque" : "Espèces"}</td><td className="text-right tabular">{fmt(p.amount)}</td></tr>))}</tbody></table></div>
+          <tbody>{encaiss.map((p) => (<tr key={p.id} data-testid="sante-rapport-enc"><td className="py-1.5">{ecDateFr(p.date)}</td><td className="tabular text-xs">{p.number}</td><td>{p.patient}</td><td>{p.mode === "banque" ? "Banque" : "Espèces"}</td><td className="text-right tabular">{fmt(p.amount)}</td></tr>))}</tbody>
+          {encaiss.length > 0 && <tfoot><tr style={tf} data-testid="sante-rapport-enc-total"><td colSpan={4}>Total ({encaiss.length})</td><td className="text-right tabular" data-testid="sante-rapport-enc-tot">{fmt(S(encaiss, (p) => p.amount))}</td></tr></tfoot>}</table></div>
       </div>
     );
   };
@@ -691,15 +779,19 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
     const parCat = {}; actives.forEach((i) => (i.lines || []).forEach((l) => { const k = (SA_CATS.find((c) => c[0] === l.cat) || [0, l.cat])[1]; parCat[k] = saR2((parCat[k] || 0) + l.qty * l.unit); }));
     const parPayeur = { [V.Patients]: saR2(actives.reduce((s, i) => s + i.patientAmount, 0)) };
     actives.filter((i) => i.insurerId).forEach((i) => { const k = nomAssureur(i.insurerId); parPayeur[k] = saR2((parPayeur[k] || 0) + i.insurerAmount); });
+    const parPrat = {}; actives.forEach((i) => { const k = i.practitionerId ? nomPrat(i.practitionerId) : "Sans " + V.praticien; parPrat[k] = saR2((parPrat[k] || 0) + i.total); });
+    const parAssPat = {}; patients.forEach((x) => { const k = x.insurerId ? nomAssureur(x.insurerId) : "Sans assureur"; parAssPat[k] = (parAssPat[k] || 0) + 1; });
+    const parMode = {}; actives.forEach((i) => (i.payments || []).filter((x) => x.status !== "annulé").forEach((x) => { const k = x.mode === "banque" ? "Banque" : "Espèces"; parMode[k] = saR2((parMode[k] || 0) + x.amount); }));
     return <StatsBloc
       vide={invoices.length === 0 ? "Aucune facture pour le moment : les statistiques apparaîtront avec vos premières factures." : ""}
       kpis={[[V.Patients, String(patients.length), "sante-stat-patients"], ["Facturé", fmt(factureT), "sante-stat-facture"], ["Encaissé (patients et assureurs)", fmt(encaisseT), "sante-stat-encaisse"], ["Taux d'encaissement", (factureT > 0 ? Math.round(encaisseT / factureT * 100) : 0) + " %", "sante-stat-taux"]]}
       evolution={{ titre: "Facturé et encaissé — 6 derniers mois", data, series: [{ key: "facture", name: "Facturé", color: "#9A7B1E" }, { key: "encaisse", name: "Encaissé", color: "#0F6B5C" }] }}
-      repartitions={[{ titre: "Chiffre d'affaires par catégorie", data: Object.keys(parCat).map((k) => ({ name: k, value: parCat[k] })) }, { titre: "Qui paie : " + V.patient + " et assureurs", data: Object.keys(parPayeur).map((k) => ({ name: k, value: parPayeur[k] })) }]} />;
+      repartitions={[{ titre: "Chiffre d'affaires par catégorie", data: Object.keys(parCat).map((k) => ({ name: k, value: parCat[k] })) }, { titre: "Qui paie : " + V.patient + " et assureurs", data: Object.keys(parPayeur).map((k) => ({ name: k, value: parPayeur[k] })) }, { titre: "Facturé par " + V.praticien, data: Object.keys(parPrat).map((k) => ({ name: k, value: parPrat[k] })) }, { titre: V.Patients + " par assureur", unite: "nombre", data: Object.keys(parAssPat).map((k) => ({ name: k, value: parAssPat[k] })) }, { titre: "Encaissements des " + V.Patients.toLowerCase() + " par mode", data: Object.keys(parMode).map((k) => ({ name: k, value: parMode[k] })) }]} />;
   };
-  const tabs = [["apercu", "Vue d'ensemble"], ["patients", V.Patients], ["actes", V.Actes], ["factures", V.Factures], ...(isVendeur ? [] : [["assureurs", "Assureurs"], ["praticiens", V.Praticiens]]), ...(kind === "hopital" ? [["sejours", "Séjours"]] : []), ...(kind === "pharmacie" ? [["lots", "Lots et péremptions"]] : []), ...(isVendeur ? [] : [["rapports", "Rapports"], ["stats", "Statistiques"]])];
+  const tabs = [["apercu", "Tableau de bord"], ["patients", V.Patients], ["actes", V.Actes], ["factures", V.Factures], ...(isVendeur ? [] : [["assureurs", "Assureurs"], ["praticiens", V.Praticiens]]), ...(kind === "hopital" ? [["sejours", "Séjours"]] : []), ...(kind === "pharmacie" ? [["lots", "Lots et péremptions"]] : []), ...(isVendeur ? [] : [["rapports", "Rapports"], ["stats", "Statistiques"]])];
   return (
     <>
+      {listesNoms}
       <div className={"p-4 md:p-8 max-w-6xl" + (imprimer ? " no-print" : "")} data-testid="sante-module">
         <style>{EC_CSS + '[data-testid="sante-module"] .display.text-base{border-left:3px solid #C9A24B;padding-left:10px;margin-bottom:12px}[data-testid="sante-module"] input,[data-testid="sante-module"] select,[data-testid="sante-module"] textarea{background:#fff}'}</style>
         <div className="mb-4"><div className="display text-2xl" style={{ color: "#152238" }}>Santé</div><div className="text-xs" style={{ color: "#8A8370" }}>{V.etab} — {V.Patients.toLowerCase()}, tarifs, facturation, assureurs et honoraires</div></div>
@@ -721,14 +813,14 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
       </div>
       {imprimer && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto p-3 md:p-8 no-print" style={{ background: "rgba(21,34,56,0.55)" }} onClick={() => setImprimer(null)} data-testid="sante-facture-apercu">
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 820 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: tk ? 340 : 820 }}>
             <div className="flex items-center justify-between mb-2"><div className="text-sm" style={{ color: "#EFE9DD" }}>{V.Facture} {imprimer.number}</div>
-              <div className="flex gap-2"><button onClick={() => { try { window.print(); } catch (e) {} }} className="px-3 py-1.5 rounded text-sm" style={ecBtnGold} data-testid="sante-facture-imprimer-ok">Imprimer</button><button onClick={() => setImprimer(null)} className="px-3 py-1.5 rounded text-sm" style={ecBtn}>Fermer</button></div></div>
+              <div className="flex gap-2 flex-wrap"><button onClick={() => setTk(!tk)} className="px-3 py-1.5 rounded text-sm" style={ecBtn} data-testid="sante-facture-format">{tk ? "Passer en A4" : "Passer en ticket"}</button><button onClick={() => { try { window.print(); } catch (e) {} }} className="px-3 py-1.5 rounded text-sm" style={ecBtnGold} data-testid="sante-facture-imprimer-ok">Imprimer</button><button onClick={() => setImprimer(null)} className="px-3 py-1.5 rounded text-sm" style={ecBtn}>Fermer</button></div></div>
             <div className="rounded shadow-lg overflow-hidden" style={{ background: "#fff" }}><FactureSheet inv={imprimer} /></div>
           </div>
         </div>
       )}
-      {imprimer && <div className="print-only"><FactureSheet inv={imprimer} /></div>}
+      {imprimer && <div className={"print-only" + (tk ? " ticket-print-80" : "")}><FactureSheet inv={imprimer} /></div>}
     </>
   );
 }

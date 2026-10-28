@@ -240,8 +240,8 @@ function EcolesModule({ ecole: ecoleTout, setEcole: setEcoleBrut, entries, setEn
     const recents = recOk.slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 5);
     return (
       <div>
-        {!fini && (<div className="p-4 rounded text-sm mb-5" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="ecole-vide">
-          <div className="font-semibold mb-2">Pour démarrer, dans cet ordre (chaque étape cochée est faite) :</div>
+        {!fini && (<div className="ec-card p-4 mb-5 text-sm" style={{ color: "#152238" }} data-testid="ecole-vide">
+          <div className="display text-base mb-2" style={{ color: "#152238" }}>Pour démarrer, dans cet ordre (chaque étape cochée est faite)</div>
           {etapes.map(([l, fait, onglet, nomOnglet], i) => (<div key={i} className="flex flex-wrap items-center gap-2 py-0.5" data-testid="ecole-etape"><span style={{ width: 20, color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : "○"}</span><span style={{ textDecoration: fait ? "line-through" : "none", opacity: fait ? 0.6 : 1 }}>{i + 1}. {l}</span>{!fait && <button onClick={() => setTab(onglet)} className="text-xs underline" data-testid="ecole-etape-ouvrir">Ouvrir « {nomOnglet} »</button>}</div>))}
         </div>)}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
