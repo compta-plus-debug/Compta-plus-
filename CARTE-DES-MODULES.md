@@ -57,7 +57,7 @@ Générée automatiquement. Pour chaque bloc : combien de lignes, de quels autre
 | 50-secteurs-et-blocs | 305 | 06-icones-et-graphiques, 08-composants-et-utilitaires, 01-garde-environnement-et-supabase, 00-config | 12-application-principale, 42-centre-de-gestion, 56-facturation-abonnements |
 | 51-ecoles | 1013 | 60-ecoles-socle, 52-ecoles-suite, 55-statistiques, 01-garde-environnement-et-supabase, 10-formatage-impression-et-pdf, 08-composants-et-utilitaires, 07-constantes-metier, 00-config | 12-application-principale, 52-ecoles-suite |
 | 52-ecoles-suite | 253 | 51-ecoles, 06-icones-et-graphiques, 60-ecoles-socle, 10-formatage-impression-et-pdf, 07-constantes-metier, 08-composants-et-utilitaires, 00-config | 51-ecoles |
-| 53-import-export | 702 | 60-ecoles-socle, 55-statistiques, 10-formatage-impression-et-pdf, 08-composants-et-utilitaires, 07-constantes-metier, 00-config | 12-application-principale |
+| 53-import-export | 886 | 60-ecoles-socle, 55-statistiques, 10-formatage-impression-et-pdf, 08-composants-et-utilitaires, 07-constantes-metier, 00-config | 12-application-principale |
 | 54-sante | 729 | 60-ecoles-socle, 55-statistiques, 10-formatage-impression-et-pdf, 08-composants-et-utilitaires, 07-constantes-metier, 00-config | 12-application-principale |
 | 55-statistiques | 46 | 06-icones-et-graphiques | 51-ecoles, 53-import-export, 54-sante, 58-restauration, 59-hotellerie |
 | 56-facturation-abonnements | 640 | 08-composants-et-utilitaires, 50-secteurs-et-blocs, 09-assistance-et-anomalies, 01-garde-environnement-et-supabase, 00-config | 12-application-principale, 43-super-admin |
