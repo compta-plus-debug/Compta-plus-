@@ -19,7 +19,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, resto, hotel, products, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -146,6 +146,20 @@ function asstScanBlocs({ ecole, impex, sante, resto, hotel, products, actifs, to
       push({ key: "hotel-depart:" + b.id, severity: "medium", category: "hotel", title: "Séjour dépassé sans départ enregistré", detail: `${gens.get(b.guestId) || "Client"} (chambre ${chs.get(b.roomId) || "?"}, réservation ${b.number}) devait partir le ${asbFr(b.to)} : aucun départ n'est enregistré, donc aucune facture ni aucune écriture (${asbDays(b.to, today)} jour(s)).` });
     });
   }
+  if (A.includes("transport") && (transport || []).length) {
+    asbRows(transport, "vehicle").filter((v) => v.active !== false).forEach((v) => (v.docs || []).filter((d) => d.date && d.date < today).slice(0, 10).forEach((d) => {
+      push({ key: "transport-echeance:" + v.id + ":" + d.id, severity: "high", category: "transport", title: "Document de véhicule échu", detail: `${v.plate} : « ${d.label} » est échu depuis le ${asbFr(d.date)} (${asbDays(d.date, today)} jour(s)). Le véhicule roule peut-être sans document valable.` });
+    }));
+    asbRows(transport, "driver").filter((d) => d.active !== false && d.licenseExpiry && d.licenseExpiry < today).slice(0, 25).forEach((d) => {
+      push({ key: "transport-permis:" + d.id, severity: "high", category: "transport", title: "Permis de conduire échu", detail: `${d.name} : permis échu depuis le ${asbFr(d.licenseExpiry)} (${asbDays(d.licenseExpiry, today)} jour(s)).` });
+    });
+    const cls = new Map(asbRows(transport, "client").map((c) => [c.id, c.name]));
+    asbRows(transport, "invoice").filter((i) => i.status !== "annulee").forEach((i) => {
+      const reste = Math.round(((i.total || 0) - (i.payments || []).filter((p) => p.status !== "annulé").reduce((s, p) => s + p.amount, 0)) * 100) / 100;
+      const j = asbDays(i.date, today);
+      if (reste > 0.004 && j > 30) push({ key: "transport-impaye:" + i.id, severity: j > 60 ? "high" : "medium", category: "transport", title: "Facture de transport impayée", detail: `${cls.get(i.clientId) || "Client"} : la facture ${i.number} du ${asbFr(i.date)} n'est pas soldée (reste ${asbG(reste)}, ${j} jours).` });
+    });
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -238,6 +252,20 @@ function asstHowToBlocs(f) {
       "Si le client est arrivé, cliquez sur « Enregistrer l'arrivée » (la chambre doit être marquée « Propre »).",
       "S'il ne viendra plus, choisissez « Annulation par le client » ou « Client absent », décidez du sort de l'acompte (rembourser ou conserver) puis cliquez sur « Annuler la réservation ».",
       "Si c'est normal (arrivée tardive confirmée), cliquez sur « Ignorer »."] },
+    "transport-echeance": { why: "Un véhicule dont un document est échu (assurance, contrôle technique, vignette…) expose l'entreprise à des amendes et à un refus de prise en charge en cas d'accident.", steps: [
+      "Ouvrez l'espace Transport → onglet « Véhicules » et ouvrez le véhicule indiqué.",
+      "Renouvelez le document auprès de l'organisme concerné.",
+      "Dans la liste des échéances, retirez l'ancienne ligne puis ajoutez la nouvelle date d'échéance.",
+      "Si le véhicule est à l'arrêt, décochez « En service » : l'alerte disparaît."] },
+    "transport-permis": { why: "Faire conduire un chauffeur dont le permis est échu est un risque légal et d'assurance.", steps: [
+      "Ouvrez l'espace Transport → onglet « Chauffeurs ».",
+      "Si le permis a été renouvelé, saisissez la nouvelle date de validité.",
+      "Sinon, décochez « Actif » tant que le permis n'est pas renouvelé : le chauffeur n'apparaît plus dans les voyages."] },
+    "transport-impaye": { why: "Une facture de transport impayée depuis plus de 30 jours immobilise votre trésorerie : plus on attend, plus le recouvrement est difficile.", steps: [
+      "Ouvrez l'espace Transport → onglet « Factures » et ouvrez la facture indiquée.",
+      "Contactez le client avec le numéro de facture et le reste à payer.",
+      "Dès qu'il paie, enregistrez l'encaissement (date, mode) : la comptabilité se met à jour toute seule.",
+      "Consultez Rapports → « Clients » pour voir les retards par ancienneté."] },
     "hotel-depart": { why: "Tant que le départ n'est pas enregistré, le séjour n'est ni facturé ni comptabilisé : l'argent encaissé et les ventes ne concordent pas.", steps: [
       "Ouvrez l'espace Hôtellerie → onglet « Réservations » et ouvrez le séjour indiqué.",
       "Si le client est parti, vérifiez la date de départ réelle, ajoutez les services oubliés, puis cliquez sur « Enregistrer le départ et facturer ».",

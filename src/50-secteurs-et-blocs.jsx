@@ -21,7 +21,7 @@ const SECTEURS_CATALOGUE = [
   { id: "btp", label: "BTP et construction", desc: "Chantiers, situations de travaux, sous-traitants", grille: "C", dispo: false },
   { id: "immobilier", label: "Immobilier et location", desc: "Biens, baux, loyers, quittances", grille: "C", dispo: false },
   { id: "restauration", label: "Restauration et hôtellerie", desc: "Tables, menu et coût des plats, commandes et additions, service du personnel hôtellerie (chambres, planning, réservations, factures de séjour)", grille: "C", dispo: true },
-  { id: "transport", label: "Transport et logistique", desc: "Véhicules, carburant, tournées", grille: "C", dispo: false },
+  { id: "transport", label: "Transport et logistique", desc: "Véhicules et échéances, chauffeurs, voyages et bordereaux, factures, dépenses par véhicule, rentabilité", grille: "C", dispo: true },
   { id: "agriculture", label: "Agriculture et élevage", desc: "Campagnes agricoles, récoltes, intrants", grille: "C", dispo: false },
 ];
 const secteurLabel = (id) => { const s = SECTEURS_CATALOGUE.find((x) => x.id === id); return s ? s.label : id; };
