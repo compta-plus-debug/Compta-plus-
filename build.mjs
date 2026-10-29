@@ -53,7 +53,7 @@ source = appliquerCible(source);
 const CHUNKS_ON = (process.env.CHUNKS || "on") !== "off";
 const CHUNK_DEFS = {   // identifiant -> numéros des blocs (fichiers NN-….jsx)
   admin: ["39"], superadmin: ["43"], centre: ["42"], paie: ["27"], gestion: ["31", "32", "33", "34"],
-  compta: ["14", "18", "19", "47"], groupe: ["37"], stock: ["25"], creances: ["26"], caisse: ["21"], sante: ["54"], impex: ["53"], resto: ["58"], hotel: ["59"], ecole: ["51", "52"],
+  compta: ["14", "18", "19", "47"], groupe: ["37"], stock: ["25"], creances: ["26"], caisse: ["21"], sante: ["54"], impex: ["53"], resto: ["58"], hotel: ["59"], transport: ["61"], ecole: ["51", "52"],
 };
 const version0 = (source.match(/const APP_VERSION = "(20\d{6}-\d{3})"/) || [])[1];
 const chunkFiles = {};   // identifiant -> code compilé
