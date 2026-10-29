@@ -10,7 +10,7 @@
 function AdminModule({
   settings, setSettings, users, setUsers, currentUserEmail, companyId,
   accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, auditLog,
-  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex, sante, setSante, resto, setResto, hotel, setHotel, transport, setTransport,
+  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex, sante, setSante, resto, setResto, hotel, setHotel, transport, setTransport, immo, setImmo,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
   setEmployees, setPayslips, setSalaryAdvances, setSalesStations, setAssets, setAccruals, setDeferrals, setRiskProvisions, setEntryTemplates, setPendingApprovals,
   showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged, ecoleLabels,
@@ -421,7 +421,7 @@ function AdminModule({
   };
 
   const [lastExportAt, setLastExportAt] = useState(() => { try { return localStorage.getItem("compta-plus-last-export"); } catch (e) { return null; } });
-  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante, resto, hotel, transport });
+  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante, resto, hotel, transport, immo });
   const buildBackupNow = (label) => bkBuildFile(buildExportData(), companyId || myCompanyId, label);
   const exportData = () => {
     bkDownload(buildBackupNow("Export manuel"), `sauvegarde-${settings.companyName || "erp"}-${todayStr()}.json`);
@@ -490,6 +490,7 @@ function AdminModule({
     resto: { kind: "array", requiredKeys: ["id", "type"] },
     hotel: { kind: "array", requiredKeys: ["id", "type"] },
     transport: { kind: "array", requiredKeys: ["id", "type"] },
+    immo: { kind: "array", requiredKeys: ["id", "type"] },
     payslips: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["netAmount", "grossAmount"], dateKeys: ["date"] },
     salaryAdvances: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["amount", "repaidAmount"], dateKeys: ["date"] },
   };
@@ -685,6 +686,7 @@ function AdminModule({
     if (data.resto && typeof setResto === "function") setResto(data.resto);
     if (data.hotel && typeof setHotel === "function") setHotel(data.hotel);
     if (data.transport && typeof setTransport === "function") setTransport(data.transport);
+    if (data.immo && typeof setImmo === "function") setImmo(data.immo);
     if (data.payslips) setPayslips(data.payslips);
     if (data.salaryAdvances) setSalaryAdvances(data.salaryAdvances);
   };
@@ -773,7 +775,7 @@ function AdminModule({
     // Filet de sécurité : copie complète de l'état AVANT toute suppression.
     try { rpSave(companyId || myCompanyId, buildBackupNow("Avant réinitialisation"), "Avant réinitialisation", true).then(() => setRpRefresh((n) => n + 1)); } catch (e) { /* sans stockage local : la réinitialisation se fait quand même */ }
     if (sel.compta) {
-      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]); if (typeof setSante === "function") setSante([]); if (typeof setResto === "function") setResto([]); if (typeof setHotel === "function") setHotel([]); if (typeof setTransport === "function") setTransport([]);
+      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]); if (typeof setSante === "function") setSante([]); if (typeof setResto === "function") setResto([]); if (typeof setHotel === "function") setHotel([]); if (typeof setTransport === "function") setTransport([]); if (typeof setImmo === "function") setImmo([]);
       setPayslips([]); setSalaryAdvances([]);
       setAssets([]); setAccruals([]); setDeferrals([]); setRiskProvisions([]); setLoans([]);
     }
@@ -1400,7 +1402,7 @@ function AdminModule({
             )}
           </div>
           <PartialResetPanel
-            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length + (sante || []).length + (resto || []).length + (hotel || []).length + (transport || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
+            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length + (sante || []).length + (resto || []).length + (hotel || []).length + (transport || []).length + (immo || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
             isPrimaryAdmin={isPrimaryAdmin} settings={settings} setSettings={setSettings}
             exportData={exportData} showToast={showToast} logAudit={logAudit}
             apply={applyReset}

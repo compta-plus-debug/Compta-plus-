@@ -19,7 +19,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, products, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -160,6 +160,21 @@ function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, products,
       if (reste > 0.004 && j > 30) push({ key: "transport-impaye:" + i.id, severity: j > 60 ? "high" : "medium", category: "transport", title: "Facture de transport impayée", detail: `${cls.get(i.clientId) || "Client"} : la facture ${i.number} du ${asbFr(i.date)} n'est pas soldée (reste ${asbG(reste)}, ${j} jours).` });
     });
   }
+  if (A.includes("immobilier") && (immo || []).length) {
+    const locs = new Map(asbRows(immo, "tenant").map((c) => [c.id, c.name]));
+    const biens = new Map(asbRows(immo, "property").map((c) => [c.id, c.name]));
+    asbRows(immo, "rent").filter((r) => r.status !== "annulee").forEach((r) => {
+      const reste = Math.round(((r.total || 0) - (r.payments || []).filter((p) => p.status !== "annulé").reduce((s, p) => s + p.amount, 0)) * 100) / 100;
+      const j = asbDays(r.dueDate, today);
+      if (reste > 0.004 && j > 30) push({ key: "immo-impaye:" + r.id, severity: j > 60 ? "high" : "medium", category: "immo", title: "Loyer impayé", detail: `${locs.get(r.tenantId) || "Locataire"} (${biens.get(r.propertyId) || "bien"}) : le loyer ${r.number} est en retard de ${j} jour(s) ; reste ${reste.toFixed(2)} gourdes.` });
+    });
+    asbRows(immo, "lease").filter((b) => b.status !== "termine" && b.end && b.end < today).slice(0, 25).forEach((b) => {
+      push({ key: "immo-bail-echu:" + b.id, severity: "medium", category: "immo", title: "Bail arrivé à échéance", detail: `${b.number} (${biens.get(b.propertyId) || "bien"}, ${locs.get(b.tenantId) || "locataire"}) : la date de fin prévue (${asbFr(b.end)}) est dépassée et le bail est toujours en cours.` });
+    });
+    asbRows(immo, "lease").filter((b) => b.status === "termine" && b.depositStatus === "recu").slice(0, 25).forEach((b) => {
+      push({ key: "immo-depot:" + b.id, severity: "medium", category: "immo", title: "Dépôt de garantie à restituer", detail: `${b.number} (${locs.get(b.tenantId) || "locataire"}) : le bail est terminé mais le dépôt de garantie n'a pas été restitué.` });
+    });
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -252,6 +267,19 @@ function asstHowToBlocs(f) {
       "Si le client est arrivé, cliquez sur « Enregistrer l'arrivée » (la chambre doit être marquée « Propre »).",
       "S'il ne viendra plus, choisissez « Annulation par le client » ou « Client absent », décidez du sort de l'acompte (rembourser ou conserver) puis cliquez sur « Annuler la réservation ».",
       "Si c'est normal (arrivée tardive confirmée), cliquez sur « Ignorer »."] },
+    "immo-impaye": { why: "Un loyer impayé depuis plus de 30 jours fragilise votre trésorerie ; plus on attend, plus le recouvrement est difficile.", steps: [
+      "Ouvrez l'espace Immobilier → onglet « Loyers » et ouvrez le loyer indiqué.",
+      "Contactez le locataire avec le numéro du loyer et le reste à payer.",
+      "Dès qu'il paie, enregistrez l'encaissement (date, mode) puis imprimez la quittance.",
+      "Rapports → « Loyers impayés par locataire » donne les retards par ancienneté."] },
+    "immo-bail-echu": { why: "Un bail dont la date de fin est dépassée continue de produire des loyers sans cadre clair : renouvellement ou départ à confirmer.", steps: [
+      "Ouvrez l'espace Immobilier → onglet « Baux » et ouvrez le bail indiqué.",
+      "Si le locataire reste, prolongez la date de fin prévue (nouveau contrat signé).",
+      "S'il part, cliquez sur « Mettre fin à ce bail » : le bien redevient libre."] },
+    "immo-depot": { why: "Un dépôt de garantie non restitué après le départ du locataire est une dette envers lui, à régler dans les délais prévus au contrat.", steps: [
+      "Ouvrez l'espace Immobilier → onglet « Baux » et ouvrez le bail terminé.",
+      "Vérifiez l'état des lieux de sortie et les loyers restants dus.",
+      "Saisissez le montant rendu (si une retenue est justifiée) puis cliquez sur « Restituer le dépôt »."] },
     "transport-echeance": { why: "Un véhicule dont un document est échu (assurance, contrôle technique, vignette…) expose l'entreprise à des amendes et à un refus de prise en charge en cas d'accident.", steps: [
       "Ouvrez l'espace Transport → onglet « Véhicules » et ouvrez le véhicule indiqué.",
       "Renouvelez le document auprès de l'organisme concerné.",

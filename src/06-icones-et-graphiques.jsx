@@ -2,11 +2,11 @@
 // @module Icones et graphiques
 // @depends fmt
 // @exports ArrowDownCircle, ArrowUpCircle, BadgeDollar, BarChart3, Bed, BluetoothIcon, BookOpen, Boxes
-//   CheckCircle2, ChevronRight, Circle, ClipboardIcon, CreditCard, Cross, Download, Eye, EyeOff
-//   FileDown, History, Icon, ImageIcon, LayoutDashboard, Lock, Menu, MessageCircle, Minus, Pencil
-//   Plus, Printer, Receipt, RotateCcw, ScanLine, Send, Settings, ShoppingCart, SimpleDonutChart
-//   SimpleGroupedBarChart, SimpleGrowthBarChart, SimpleLineChart, Smartphone, Trash2, Truck, Users
-//   Utensils, Wallet, X
+//   Building, CheckCircle2, ChevronRight, Circle, ClipboardIcon, CreditCard, Cross, Download, Eye
+//   EyeOff, FileDown, History, Icon, ImageIcon, LayoutDashboard, Lock, Menu, MessageCircle, Minus
+//   Pencil, Plus, Printer, Receipt, RotateCcw, ScanLine, Send, Settings, ShoppingCart
+//   SimpleDonutChart, SimpleGroupedBarChart, SimpleGrowthBarChart, SimpleLineChart, Smartphone
+//   Trash2, Truck, Users, Utensils, Wallet, X
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Icônes (SVG minimalistes, remplacent lucide-react pour un usage sans build) ---
 const Icon = ({ children, size = 16, style, className }) => (
@@ -41,6 +41,7 @@ const ShoppingCart = (p) => <Icon {...p}><circle cx="9" cy="21" r="1" /><circle 
 const Bed = (p) => <Icon {...p}><path d="M3 18V7" /><path d="M3 14h18v4" /><path d="M21 14v-2a3 3 0 0 0-3-3h-7v5" /><circle cx="7" cy="11" r="1.6" /></Icon>;
 const Utensils = (p) => <Icon {...p}><path d="M4 3v7a2 2 0 0 0 2 2v9" /><path d="M8 3v7" /><path d="M12 3v7a2 2 0 0 1-2 2" /><path d="M18 21V3c-2 1-3 4-3 8h3" /></Icon>;
 const Cross = (p) => <Icon {...p}><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" /></Icon>;
+const Building = (p) => <Icon {...p}><rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="22" x2="9" y2="17" /><line x1="15" y1="22" x2="15" y2="17" /><line x1="8" y1="6" x2="8.01" y2="6" /><line x1="12" y1="6" x2="12.01" y2="6" /><line x1="16" y1="6" x2="16.01" y2="6" /><line x1="8" y1="10" x2="8.01" y2="10" /><line x1="12" y1="10" x2="12.01" y2="10" /><line x1="16" y1="10" x2="16.01" y2="10" /><line x1="8" y1="14" x2="8.01" y2="14" /><line x1="12" y1="14" x2="12.01" y2="14" /><line x1="16" y1="14" x2="16.01" y2="14" /></Icon>;
 const Truck = (p) => <Icon {...p}><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></Icon>;
 const History = (p) => <Icon {...p}><path d="M3 3v5h5" /><path d="M3.05 13a9 9 0 1 0 2.13-7.36L3 8" /><polyline points="12 7 12 12 16 14" /></Icon>;
 const Smartphone = (p) => <Icon {...p}><rect x="5" y="2" width="14" height="20" rx="2" /><line x1="12" y1="18" x2="12.01" y2="18" /></Icon>;
