@@ -18,7 +18,7 @@ const SECTEURS_CATALOGUE = [
   { id: "industrie", label: "Industries artisanales", desc: "Fiches de fabrication, coût de revient, matières premières", grille: "A", dispo: false },
   { id: "sante", label: "Santé (cabinets, cliniques, hôpitaux)", desc: "Facturation par acte, assureurs, pharmacie", grille: "B", dispo: true },
   { id: "ong", label: "ONG, associations, églises", desc: "Fonds affectés, bailleurs, reçus de dons", grille: "B", dispo: false },
-  { id: "btp", label: "BTP et construction", desc: "Chantiers, situations de travaux, sous-traitants", grille: "C", dispo: false },
+  { id: "btp", label: "BTP et construction", desc: "Chantiers et bordereaux de prix, devis, avances, situations de travaux avec retenue de garantie, dépenses et sous-traitants, rentabilité par chantier", grille: "C", dispo: true },
   { id: "immobilier", label: "Immobilier et location", desc: "Biens, locataires, baux et dépôts de garantie, loyers mensuels, avis d'échéance et quittances, dépenses par bien, impayés, rentabilité", grille: "C", dispo: true },
   { id: "restauration", label: "Restauration et hôtellerie", desc: "Tables, menu et coût des plats, commandes et additions, service du personnel hôtellerie (chambres, planning, réservations, factures de séjour)", grille: "C", dispo: true },
   { id: "transport", label: "Transport et logistique", desc: "Véhicules et échéances, chauffeurs, voyages et bordereaux, factures, dépenses par véhicule, rentabilité", grille: "C", dispo: true },

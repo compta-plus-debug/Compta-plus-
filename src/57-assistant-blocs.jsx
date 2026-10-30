@@ -19,7 +19,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, products, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -175,6 +175,22 @@ function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, pro
       push({ key: "immo-depot:" + b.id, severity: "medium", category: "immo", title: "Dépôt de garantie à restituer", detail: `${b.number} (${locs.get(b.tenantId) || "locataire"}) : le bail est terminé mais le dépôt de garantie n'a pas été restitué.` });
     });
   }
+  if (A.includes("btp") && (btp || []).length) {
+    const cli = new Map(asbRows(btp, "client").map((c) => [c.id, c.name]));
+    const chs = new Map(asbRows(btp, "site").map((c) => [c.id, c.name]));
+    asbRows(btp, "sit").filter((x) => x.status !== "annulee").forEach((x) => {
+      const reste = Math.round(((x.net || 0) - (x.payments || []).filter((p) => p.status !== "annulé").reduce((s, p) => s + p.amount, 0)) * 100) / 100;
+      const j = asbDays(x.date, today);
+      if (reste > 0.004 && j > 30) push({ key: "btp-impaye:" + x.id, severity: j > 60 ? "high" : "medium", category: "btp", title: "Situation de travaux impayée", detail: `${cli.get(x.clientId) || "Client"} : la situation ${x.number} (${chs.get(x.siteId) || "chantier"}) est impayée depuis ${j} jour(s) ; reste ${reste.toFixed(2)} gourdes.` });
+    });
+    asbRows(btp, "site").filter((s) => s.budget > 0).forEach((s) => {
+      const dep = asbRows(btp, "dep").filter((d) => d.siteId === s.id && d.status !== "annulé").reduce((t, d) => t + d.amount, 0);
+      if (dep > s.budget) push({ key: "btp-budget:" + s.id, severity: "medium", category: "btp", title: "Budget de chantier dépassé", detail: `${s.name} : dépenses de ${dep.toFixed(2)} gourdes pour un budget de ${Number(s.budget).toFixed(2)}.` });
+    });
+    asbRows(btp, "site").filter((s) => (s.status === "encours" || s.status === "preparation") && s.end && s.end < today).slice(0, 25).forEach((s) => {
+      push({ key: "btp-retard:" + s.id, severity: "medium", category: "btp", title: "Chantier en retard sur la date de fin prévue", detail: `${s.name} : la fin prévue (${asbFr(s.end)}) est dépassée de ${asbDays(s.end, today)} jour(s) et le chantier n'est pas terminé.` });
+    });
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -280,6 +296,19 @@ function asstHowToBlocs(f) {
       "Ouvrez l'espace Immobilier → onglet « Baux » et ouvrez le bail terminé.",
       "Vérifiez l'état des lieux de sortie et les loyers restants dus.",
       "Saisissez le montant rendu (si une retenue est justifiée) puis cliquez sur « Restituer le dépôt »."] },
+    "btp-impaye": { why: "Une situation de travaux impayée depuis plus de 30 jours pèse sur votre trésorerie alors que vos dépenses de chantier, elles, sont déjà payées.", steps: [
+      "Ouvrez l'espace BTP → onglet « Situations » et ouvrez la situation indiquée.",
+      "Relancez le client avec le numéro de la situation et le net à payer.",
+      "Dès qu'il paie, enregistrez l'encaissement (date, mode).",
+      "Si le chantier avance sans paiement, envisagez de suspendre le chantier (onglet Chantiers → état « Suspendu») selon votre contrat."] },
+    "btp-budget": { why: "Quand les dépenses dépassent le budget prévu, la marge du chantier fond : mieux vaut le savoir avant la prochaine situation.", steps: [
+      "Ouvrez l'espace BTP → onglet « Rapports » → « Rentabilité par chantier » pour voir la marge.",
+      "Vérifiez les dépenses du chantier (onglet Dépenses, filtre par chantier) : doublons, erreurs de chantier ?",
+      "Si le dépassement est réel, discutez d'un avenant avec le client (travaux supplémentaires) ou ajustez le budget dans la fiche du chantier."] },
+    "btp-retard": { why: "Un chantier dont la date de fin prévue est dépassée peut entraîner des pénalités de retard et immobilise vos équipes.", steps: [
+      "Ouvrez l'espace BTP → onglet « Chantiers » et ouvrez le chantier indiqué.",
+      "Si les travaux sont finis, passez l'état à « Terminé » ; la retenue de garantie pourra alors être réclamée.",
+      "Sinon, mettez à jour la date de fin prévue (après accord du client)."] },
     "transport-echeance": { why: "Un véhicule dont un document est échu (assurance, contrôle technique, vignette…) expose l'entreprise à des amendes et à un refus de prise en charge en cas d'accident.", steps: [
       "Ouvrez l'espace Transport → onglet « Véhicules » et ouvrez le véhicule indiqué.",
       "Renouvelez le document auprès de l'organisme concerné.",
