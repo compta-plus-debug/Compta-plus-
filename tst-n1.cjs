@@ -59,7 +59,7 @@ const menu=async(P,label)=>{await P.getByText(label,{exact:true}).first().click(
     const P=A.p;
     await P.waitForTimeout(9000);
     const n=await P.evaluate(()=>Object.keys(window.__cpc||{}).length);
-    ok('préchargement : les 18 fichiers sont arrivés',n===18,{n,reqs});
+    ok('préchargement : les 19 fichiers sont arrivés',n===19,{n,reqs});
     await A.ctx.setOffline(true);
     await menu(P,'Stock et inventaire');
     ok('hors ligne : l\'écran Stock s\'ouvre quand même',(await P.locator('[data-testid="chunk-error"]').count())===0&&(await P.locator('[data-testid="chunk-loading"]').count())===0);
