@@ -4,7 +4,7 @@
 //   EC_JOURNAL_COLS, FileDown, GroupedTabNav, Printer, RetenuesPrestationsPanel, SimpleDonutChart
 //   SimpleLineChart, VersementsAnnuelsPanel, computeBalances, downloadEtatsFinanciersPDF
 //   downloadTablePDF, ecBalanceRows, ecCsv, ecDownloadCsv, ecJournalRows, fmt, loansTotals
-//   monthLabel, todayStr, useBackNav, useMemo, useState
+//   monthLabel, rangModule, todayStr, useBackNav, useMemo, useState
 // @exports BilanClasseView, RapportsModule, bilanClasse
 // ═══ FIN DE L'EN-TÊTE ═══
 function buildLedger(entries, accountCode, from, to) {
@@ -424,7 +424,7 @@ function RapportsModule({ payslips, employees, suppliers, accounts, balances, in
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <header className="mb-6 no-print">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 7</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("rapports")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Rapports et analyse</div>
         <p className="text-sm mt-1" style={{ color: "#7A7460" }}>États calculés en continu à partir du journal comptable et des ventes.</p>
       </header>

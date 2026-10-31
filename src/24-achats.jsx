@@ -4,8 +4,8 @@
 //   PendingRecommendationsBanner, Plus, RecordedStamp, RotateCcw, TAX_SYSTEMS, Trash2, X
 //   _membership, cleanSuggestionLabel, detectAmountAnomaly, detectDuplicateAnomaly
 //   detectRareAccountAnomaly, fmt, isFutureDate, isLocked, makeChequeRecord, normalizeClientName
-//   simpleEntry, suggestAccountFromHistory, todayStr, uid, useAssistedAnomalyGate, useBackNav
-//   useBrouillon, useEffect, useState
+//   rangModule, simpleEntry, suggestAccountFromHistory, todayStr, uid, useAssistedAnomalyGate
+//   useBackNav, useBrouillon, useEffect, useMemo, useState
 // @exports AchatModule, ProductHistoryModal
 // ═══ FIN DE L'EN-TÊTE ═══
 // Modal d'historique produit — réutilisé depuis Vente (POS/Catalogue) et Achat et
@@ -47,8 +47,39 @@ function ProductHistoryModal({ productId, products, movements, onClose }) {
   );
 }
 
-function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppliers, setSuppliers, purchases, setPurchases, products, setProducts, movements, setMovements, settings, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation }) {
+// Achats et dépenses saisis dans les modules de métier (BTP, Industries artisanales) : lus ici en consultation seulement,
+// pour que le total dû à chaque fournisseur soit complet. Le règlement se fait toujours dans le module du métier.
+function achatsDesMetiers(btp, indus, transport, immo) {
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const reste = (d) => (d.status === "annulé" || d.mode !== "apayer" ? 0 : r2(d.amount - (d.settlements || []).filter((x) => x.status !== "annulé").reduce((t, x) => t + x.amount, 0)));
+  const etat = (d) => (d.status === "annulé" ? "annulé" : d.mode === "apayer" && reste(d) > 0.004 ? "à payer" : "payé");
+  const sites = (btp || []).filter((r) => r && r.type === "site"), mats = (indus || []).filter((r) => r && r.type === "mat");
+  const out = [];
+  (btp || []).filter((r) => r && r.type === "dep" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "BTP", id: d.id, date: d.date, supplier: d.supplier.trim(), label: ((sites.find((x) => x.id === d.siteId) || {}).name ? (sites.find((x) => x.id === d.siteId).name + " — ") : "") + (d.label || ""), amount: d.amount, reste: reste(d), etat: etat(d) }));
+  (indus || []).filter((r) => r && r.type === "achat" && (r.supplier || "").trim()).forEach((a) => out.push({ src: "Industries", id: a.id, date: a.date, supplier: a.supplier.trim(), label: "Matière : " + ((mats.find((x) => x.id === a.matId) || {}).name || ""), amount: a.amount, reste: reste(a), etat: etat(a) }));
+  (indus || []).filter((r) => r && r.type === "dep" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Industries", id: d.id, date: d.date, supplier: d.supplier.trim(), label: d.label || "", amount: d.amount, reste: reste(d), etat: etat(d) }));
+  const vehs = (transport || []).filter((r) => r && r.type === "vehicle"), biens = (immo || []).filter((r) => r && r.type === "property");
+  (transport || []).filter((r) => r && r.type === "expense" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Transport", id: d.id, date: d.date, supplier: d.supplier.trim(), label: ((vehs.find((x) => x.id === d.vehicleId) || {}).plate ? (vehs.find((x) => x.id === d.vehicleId).plate + " — ") : "") + (d.label || ""), amount: d.amount, reste: reste(d), etat: etat(d) }));
+  (immo || []).filter((r) => r && r.type === "expense" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Immobilier", id: d.id, date: d.date, supplier: d.supplier.trim(), label: ((biens.find((x) => x.id === d.propertyId) || {}).name ? (biens.find((x) => x.id === d.propertyId).name + " — ") : "") + (d.label || ""), amount: d.amount, reste: reste(d), etat: etat(d) }));
+  return out.sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+// Quels métiers montrer selon l'espace de travail ouvert : chacun voit ses propres achats ; l'espace Commerce les voit tous ;
+// les autres espaces (restauration, santé, éducation…) n'en ont pas.
+const achatsMetiersVisibles = (espace) => (espace === "btp" ? ["BTP"] : espace === "indus" ? ["Industries"] : espace === "transport" ? ["Transport"] : espace === "immo" ? ["Immobilier"] : espace === "commerce" || !espace ? ["BTP", "Industries", "Transport", "Immobilier"] : []);
+
+function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppliers, setSuppliers, purchases, setPurchases, products, setProducts, movements, setMovements, settings, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation, btp, indus, transport, immo, espace }) {
   const anomalyGate = useAssistedAnomalyGate();
+  const metiersTous = useMemo(() => achatsDesMetiers(btp, indus, transport, immo), [btp, indus, transport, immo]);
+  const metiers = useMemo(() => metiersTous.filter((m) => achatsMetiersVisibles(espace).includes(m.src)), [metiersTous, espace]);
+  const resteMetier = (nom) => Math.round(metiers.filter((m) => normalizeClientName(m.supplier) === normalizeClientName(nom)).reduce((t, m) => t + m.reste, 0) * 100) / 100;
+  // Les fournisseurs vus dans les modules de métier rejoignent la liste commune (une seule fois, sans doublon).
+  useEffect(() => {
+    if (!setSuppliers || role === "Lecture seule" || role === "Vendeur") return;
+    const connus = new Set((suppliers || []).map((x) => normalizeClientName(x.name)));
+    const nouveaux = [];
+    metiersTous.forEach((m) => { const k = normalizeClientName(m.supplier); if (k && !connus.has(k)) { connus.add(k); nouveaux.push({ id: uid(), name: m.supplier, contact: "", nif: "", source: m.src, createdAt: new Date().toISOString() }); } });
+    if (nouveaux.length > 0) setSuppliers((prev) => [...prev, ...nouveaux.filter((n) => !prev.some((x) => normalizeClientName(x.name) === normalizeClientName(n.name)))]);
+  }, [metiersTous, suppliers, role]);
   const hasPendingAchat = (pendingRecommendations || []).some((r) => r.module === "achat");
   const lastSubmitRef = React.useRef(0); // anti double-clic/double-tap sur "Enregistrer l'achat"
   const [tab, setTab] = useState("achats");
@@ -492,7 +523,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 4</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("achat")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Achat et fournisseurs</div>
         <p className="text-sm mt-1" style={{ color: "#7A7460" }}>
           Chaque achat génère automatiquement son écriture comptable (compte de charge ↔ 401/512/530).
@@ -500,7 +531,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       </header>
 
       <div className="flex gap-1 mb-6 overflow-x-auto">
-        {[["achats", "Achats"], ["fournisseurs", "Fournisseurs"], ["performance", "Performance"]].map(([id, label]) => (
+        {[["achats", "Achats"], ["fournisseurs", "Fournisseurs"], ...(metiers.length > 0 ? [["metiers", espace === "commerce" || !espace ? "Achats des métiers" : "Achats " + (espace === "btp" ? "BTP" : espace === "indus" ? "Industries" : espace === "transport" ? "Transport" : "Immobilier")]] : []), ["performance", "Performance"]].map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -901,12 +932,12 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
             </thead>
             <tbody>
               {suppliers.map((s) => {
-                const due = purchases.filter((p) => p.supplier === s.name && p.status === "à payer").reduce((sum, p) => sum + p.amount, 0);
+                const dueAchats = purchases.filter((p) => p.supplier === s.name && p.status === "à payer").reduce((sum, p) => sum + p.amount, 0), dueMetier = resteMetier(s.name), due = dueAchats + dueMetier;
                 return (
                   <tr key={s.id} style={{ borderBottom: "1px solid #F3EFE3", background: editingSupplierId === s.id ? "#FAF8F1" : "transparent" }}>
                     <td className="py-2">{s.name}<RecordedStamp createdAt={s.createdAt} /></td>
                     <td className="py-2">{s.contact || "—"}</td>
-                    <td className="py-2 tabular text-right">{fmt(due)}</td>
+                    <td className="py-2 tabular text-right" data-testid="ach-four-du">{fmt(due)}{dueMetier > 0 && <div className="text-xs" style={{ color: "#8A8370" }}>dont {fmt(dueMetier)} dans les métiers</div>}</td>
                     <td className="py-2 text-right">
                       <div className="flex gap-2 justify-end">
                         <button onClick={() => startEditSupplier(s)} title="Modifier" style={{ color: "#152238" }}><Pencil size={14} /></button>
@@ -917,6 +948,18 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
                 );
               })}
             </tbody>
+          </table></div>
+        </div>
+      )}
+
+      {tab === "metiers" && (
+        <div className="bg-white rounded-lg p-5" style={{ border: "1px solid #EEE9DA" }} data-testid="ach-metiers">
+          <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Achats et dépenses saisis dans les modules de métier</div>
+          <div className="text-xs mb-3" style={{ color: "#8A8370" }}>Lecture seule : ces lignes sont comptées dans les dettes de chaque fournisseur. Pour les régler, ouvrez le module du métier concerné (BTP, Industries, Transport ou Immobilier : onglet Dépenses, ou Matières et achats).</div>
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead><tr className="text-left" style={{ color: "#8A8370", borderBottom: "1px solid #EEE9DA" }}><th className="py-2 font-normal">Date</th><th className="font-normal">Métier</th><th className="font-normal">Fournisseur</th><th className="font-normal">Détail</th><th className="font-normal text-right">Montant</th><th className="font-normal text-right">Reste à payer</th><th className="font-normal">État</th></tr></thead>
+            <tbody>{metiers.map((m) => (<tr key={m.src + m.id} data-testid="ach-metier-ligne" style={{ borderBottom: "1px solid #F3EFE3", opacity: m.etat === "annulé" ? 0.5 : 1 }}><td className="py-2 tabular">{m.date}</td><td>{m.src}</td><td>{m.supplier}</td><td>{m.label}</td><td className="tabular text-right">{fmt(m.amount)}</td><td className="tabular text-right">{fmt(m.reste)}</td><td>{m.etat}</td></tr>))}</tbody>
+            <tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }}><td className="py-2" colSpan={4}>Total ({metiers.filter((m) => m.etat !== "annulé").length} ligne{metiers.filter((m) => m.etat !== "annulé").length > 1 ? "s" : ""})</td><td className="tabular text-right" data-testid="ach-metiers-total">{fmt(metiers.filter((m) => m.etat !== "annulé").reduce((t, m) => t + m.amount, 0))}</td><td className="tabular text-right" data-testid="ach-metiers-reste">{fmt(metiers.reduce((t, m) => t + m.reste, 0))}</td><td></td></tr></tfoot>
           </table></div>
         </div>
       )}

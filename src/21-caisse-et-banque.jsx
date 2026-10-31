@@ -3,8 +3,8 @@
 // @depends ArrowDownCircle, ArrowUpCircle, AssistedPrincipleReminder, Card, CheckCircle2, ChequesPanel
 //   Circle, GENESIS_HASH, PendingRecommendationsBanner, Plus, RecordedStamp, RotateCcw
 //   _membership, detectAmountAnomaly, detectDuplicateAnomaly, detectRareAccountAnomaly, fmt
-//   isFutureDate, isLocked, simpleEntry, todayStr, uid, useAssistedAnomalyGate, useBrouillon
-//   useMemo, useState
+//   isFutureDate, isLocked, rangModule, simpleEntry, todayStr, uid, useAssistedAnomalyGate
+//   useBrouillon, useMemo, useState
 // @exports CaisseBanqueModule
 // ═══ FIN DE L'EN-TÊTE ═══
 const COUNTERPART_TYPES = ["Actif", "Passif", "Capitaux propres", "Charge", "Produit"];
@@ -230,7 +230,7 @@ function CaisseBanqueModule({ cheques, setCheques, invoices, setInvoices, purcha
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 2</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("caisse")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Caisse et banque</div>
         <p className="text-sm mt-1" style={{ color: "#7A7460" }}>
           Chaque opération saisie ici est automatiquement enregistrée dans le journal comptable (compte {compteCode}).

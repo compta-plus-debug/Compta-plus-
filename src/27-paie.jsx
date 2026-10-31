@@ -2,7 +2,8 @@
 // @module Paie
 // @depends AssistedPrincipleReminder, FISCAL_RULES_VALIDATED, Pencil, PendingRecommendationsBanner
 //   RecordedStamp, RotateCcw, _membership, detectAmountAnomaly, downloadTablePDF, fmt
-//   isFutureDate, isLocked, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useState
+//   isFutureDate, isLocked, rangModule, todayStr, uid, useAssistedAnomalyGate, useBackNav
+//   useEffect, useState
 // @exports PayrollModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // ── Chantier C : cotisations de paie à taux paramétrables ───────────────────
@@ -528,7 +529,7 @@ function PayrollModule({ accounts, setAccounts, entries, setEntries, employees, 
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 9</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("rh")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Salaires (RH)</div>
       </header>
 

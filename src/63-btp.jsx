@@ -117,7 +117,7 @@ function BtJournalForm({ entry, staff, effectif, canEdit, onSave }) {
   );
 }
 
-function BtpModule({ btp, setBtp, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail, employees, setEmployees, payslips }) {
+function BtpModule({ suppliers, btp, setBtp, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail, employees, setEmployees, payslips }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // secrétariat : clients, situations et encaissements
   const canFront = canEdit || isVendeur;
@@ -203,7 +203,7 @@ function BtpModule({ btp, setBtp, entries, setEntries, accounts, setAccounts, se
   const [selSite, setSelSite] = useState("");
   const [selSit, setSelSit] = useState("");
   const [selDep, setSelDep] = useState("");
-  const listes = (<><datalist id="bt-dl-unite">{btUniq(["m²", "m³", "ml", "unité", "kg", "tonne", "forfait", "jour", "heure", ...sites.flatMap((s) => (s.lines || []).map((l) => l.unit))]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="bt-dl-tiers">{btUniq(deps.map((d) => d.supplier)).map((n) => <option key={n} value={n} />)}</datalist><datalist id="bt-dl-role">{btUniq(["Conducteur de travaux", "Chef de chantier", "Ingénieur", "Architecte", "Chef d'équipe", "Topographe", "Magasinier", "Gardien", ...sites.flatMap((x) => (x.staff || []).map((m) => m.role))]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="bt-dl-staff">{btUniq(sites.flatMap((x) => (x.staff || []).map((m) => m.name))).map((n) => <option key={n} value={n} />)}</datalist><datalist id="bt-dl-ligne">{btUniq(sites.flatMap((s) => (s.lines || []).map((l) => l.label))).map((n) => <option key={n} value={n} />)}</datalist></>);
+  const listes = (<><datalist id="bt-dl-unite">{btUniq(["m²", "m³", "ml", "unité", "kg", "tonne", "forfait", "jour", "heure", ...sites.flatMap((s) => (s.lines || []).map((l) => l.unit))]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="bt-dl-tiers">{btUniq([...(suppliers || []).map((x) => x.name), ...deps.map((d) => d.supplier)]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="bt-dl-role">{btUniq(["Conducteur de travaux", "Chef de chantier", "Ingénieur", "Architecte", "Chef d'équipe", "Topographe", "Magasinier", "Gardien", ...sites.flatMap((x) => (x.staff || []).map((m) => m.role))]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="bt-dl-staff">{btUniq(sites.flatMap((x) => (x.staff || []).map((m) => m.name))).map((n) => <option key={n} value={n} />)}</datalist><datalist id="bt-dl-ligne">{btUniq(sites.flatMap((s) => (s.lines || []).map((l) => l.label))).map((n) => <option key={n} value={n} />)}</datalist></>);
 
   // ───────── Clients ─────────
   const [fcl, setFcl] = useBrouillon("btp-client", { name: "", phone: "", address: "" });

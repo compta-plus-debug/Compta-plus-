@@ -3,17 +3,17 @@
 // @depends APP_VERSION, BK_LABELS, CURRENCIES, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
 //   DEFAULT_SUPPLIERS, GroupedTabNav, NET_MSG, PartialResetPanel, Plus, RestorePreviewModal
 //   TAX_SYSTEMS, bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify, ecInviteError, fmt
-//   genInviteToken, invoicePrefix, isFutureDate, isLocked, logClientError, resizeImage
+//   genInviteToken, invoicePrefix, isFutureDate, isLocked, logClientError, rangModule, resizeImage
 //   resolveMembership, roleLabel, rpSave, supabase, todayStr, uid, useBackNav, useEffect, useState
 // @exports AdminModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function AdminModule({
   settings, setSettings, users, setUsers, currentUserEmail, companyId,
   accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, auditLog,
-  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex, sante, setSante, resto, setResto, hotel, setHotel, transport, setTransport, immo, setImmo, btp, setBtp,
+  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex, sante, setSante, resto, setResto, hotel, setHotel, transport, setTransport, immo, setImmo, btp, setBtp, indus, setIndus,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
   setEmployees, setPayslips, setSalaryAdvances, setSalesStations, setAssets, setAccruals, setDeferrals, setRiskProvisions, setEntryTemplates, setPendingApprovals,
-  showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged, ecoleLabels,
+  saveCategoryNow, showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged, ecoleLabels,
 }) {
   // École : le nom du métier suivi du rôle réel entre parenthèses (ex. « Secrétaire-caissier(ère) (Vendeur) »), quel que soit l'espace de travail ouvert
   const roleOptionLabel = (r) => (ecoleLabels && roleLabel(r, ecoleLabels) !== roleLabel(r) ? roleLabel(r, ecoleLabels) + " (" + roleLabel(r) + ")" : roleLabel(r));
@@ -421,7 +421,7 @@ function AdminModule({
   };
 
   const [lastExportAt, setLastExportAt] = useState(() => { try { return localStorage.getItem("compta-plus-last-export"); } catch (e) { return null; } });
-  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante, resto, hotel, transport, immo, btp });
+  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante, resto, hotel, transport, immo, btp, indus });
   const buildBackupNow = (label) => bkBuildFile(buildExportData(), companyId || myCompanyId, label);
   const exportData = () => {
     bkDownload(buildBackupNow("Export manuel"), `sauvegarde-${settings.companyName || "erp"}-${todayStr()}.json`);
@@ -492,6 +492,7 @@ function AdminModule({
     transport: { kind: "array", requiredKeys: ["id", "type"] },
     immo: { kind: "array", requiredKeys: ["id", "type"] },
     btp: { kind: "array", requiredKeys: ["id", "type"] },
+    indus: { kind: "array", requiredKeys: ["id", "type"] },
     payslips: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["netAmount", "grossAmount"], dateKeys: ["date"] },
     salaryAdvances: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["amount", "repaidAmount"], dateKeys: ["date"] },
   };
@@ -689,6 +690,7 @@ function AdminModule({
     if (data.transport && typeof setTransport === "function") setTransport(data.transport);
     if (data.immo && typeof setImmo === "function") setImmo(data.immo);
     if (data.btp && typeof setBtp === "function") setBtp(data.btp);
+    if (data.indus && typeof setIndus === "function") setIndus(data.indus);
     if (data.payslips) setPayslips(data.payslips);
     if (data.salaryAdvances) setSalaryAdvances(data.salaryAdvances);
   };
@@ -773,11 +775,19 @@ function AdminModule({
   const [showPasteImport, setShowPasteImport] = useState(false);
 
   // Applique la réinitialisation choisie (les confirmations sont faites dans PartialResetPanel).
-  const applyReset = (sel, opts) => {
+  const applyReset = async (sel, opts) => {
     // Filet de sécurité : copie complète de l'état AVANT toute suppression.
     try { rpSave(companyId || myCompanyId, buildBackupNow("Avant réinitialisation"), "Avant réinitialisation", true).then(() => setRpRefresh((n) => n + 1)); } catch (e) { /* sans stockage local : la réinitialisation se fait quand même */ }
+    // ÉTAPE 1 — la date de clôture est effacée ET enregistrée sur le serveur AVANT de supprimer quoi que ce soit : la base
+    // refuse de supprimer une écriture, une facture ou un achat daté dans une période clôturée ; sans cet ordre, ces pièces
+    // étaient refusées puis rechargées depuis le serveur (elles « restaient » après la réinitialisation).
+    if (sel.compta && (settings.lockDate || settings.lastClosingDate)) {
+      const ns = { ...settings, lockDate: "", lastClosingDate: "" };
+      setSettings(ns);
+      try { if (typeof saveCategoryNow === "function") await saveCategoryNow("settings", ns); } catch (e) { /* la vérification finale le signalera */ }
+    }
     if (sel.compta) {
-      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]); if (typeof setSante === "function") setSante([]); if (typeof setResto === "function") setResto([]); if (typeof setHotel === "function") setHotel([]); if (typeof setTransport === "function") setTransport([]); if (typeof setImmo === "function") setImmo([]); if (typeof setBtp === "function") setBtp([]);
+      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]); if (typeof setSante === "function") setSante([]); if (typeof setResto === "function") setResto([]); if (typeof setHotel === "function") setHotel([]); if (typeof setTransport === "function") setTransport([]); if (typeof setImmo === "function") setImmo([]); if (typeof setBtp === "function") setBtp([]); if (typeof setIndus === "function") setIndus([]);
       setPayslips([]); setSalaryAdvances([]);
       setAssets([]); setAccruals([]); setDeferrals([]); setRiskProvisions([]); setLoans([]);
     }
@@ -790,12 +800,40 @@ function AdminModule({
     if (sel.employees) setEmployees([]);
     if (sel.stations) setSalesStations([]);
     if (sel.accounts) setAccounts(DEFAULT_ACCOUNTS);
+    // ÉTAPE 3 — vérification directement sur le serveur : on attend que les suppressions soient enregistrées puis on relit.
+    const aVerifier = [];
+    if (sel.compta) aVerifier.push(["entries", "écritures comptables"], ["invoices", "factures de vente"], ["purchases", "achats"], ["cheques", "chèques"], ["bizdocs", "documents commerciaux"], ["payslips", "bulletins de paie"], ["salaryAdvances", "avances de salaire"], ["assets", "immobilisations"], ["accruals", "régularisations"], ["deferrals", "produits et charges constatés d'avance"], ["riskProvisions", "provisions"], ["loans", "emprunts"], ["ecole", "données du bloc Éducation"], ["impex", "données du bloc Import-export"], ["sante", "données du bloc Santé"], ["resto", "données du bloc Restauration"], ["hotel", "données du bloc Hôtellerie"], ["transport", "données du bloc Transport"], ["immo", "données du bloc Immobilier"], ["btp", "données du bloc BTP"], ["indus", "données du bloc Industries artisanales"]);
+    if (sel.movements) aVerifier.push(["movements", "mouvements de stock"]);
+    if (sel.templates) aVerifier.push(["entryTemplates", "modèles d'écritures"], ["pendingApprovals", "approbations en attente"]);
+    if (sel.clients) aVerifier.push(["clients", "clients"]);
+    if (sel.suppliers) aVerifier.push(["suppliers", "fournisseurs"]);
+    if (sel.employees) aVerifier.push(["employees", "employés"]);
+    if (sel.stations) aVerifier.push(["salesStations", "postes de vente"]);
+    const restant = [];
+    for (let essai = 0; essai < 6; essai++) {
+      await new Promise((r) => setTimeout(r, essai === 0 ? 1500 : 2000));
+      restant.length = 0;
+      for (const [cat, label] of aVerifier) {
+        try {
+          const res = await window.storage.get("compta-" + cat);
+          if (res && res.value) {
+            const { data } = JSON.parse(res.value);
+            const d = data !== undefined && data !== null && !Array.isArray(data) && typeof data === "object" && "data" in data ? data.data : data;
+            const n = Array.isArray(d) ? d.length : 0;
+            const attendu = (cat === "clients" || cat === "suppliers") ? 0 : 0;
+            if (n > attendu && !(cat === "suppliers" && n <= (DEFAULT_SUPPLIERS || []).length && sel.suppliers) && !(cat === "clients" && n <= (DEFAULT_CLIENTS || []).length && sel.clients)) restant.push({ cat, label, n });
+          }
+        } catch (e) { /* lecture impossible : on réessaie */ }
+      }
+      if (restant.length === 0) break;
+    }
+    return { restant };
   };
 
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 8</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("admin")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Administration et paramètres</div>
       </header>
 
@@ -961,7 +999,7 @@ function AdminModule({
           <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
             <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Système de taxation</div>
             <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
-              Choisissez le régime applicable aux ventes du Module 3. Le taux par défaut s'applique aux nouveaux articles du catalogue (modifiable par article).
+              Choisissez le régime applicable aux ventes du module Vente. Le taux par défaut s'applique aux nouveaux articles du catalogue (modifiable par article).
             </p>
 
             <div className="mb-4">
@@ -1404,7 +1442,7 @@ function AdminModule({
             )}
           </div>
           <PartialResetPanel
-            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length + (sante || []).length + (resto || []).length + (hotel || []).length + (transport || []).length + (immo || []).length + (btp || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
+            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length + (sante || []).length + (resto || []).length + (hotel || []).length + (transport || []).length + (immo || []).length + (btp || []).length + (indus || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
             isPrimaryAdmin={isPrimaryAdmin} settings={settings} setSettings={setSettings}
             exportData={exportData} showToast={showToast} logAudit={logAudit}
             apply={applyReset}

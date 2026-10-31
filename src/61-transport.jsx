@@ -49,7 +49,7 @@ function trSolde(inv) {
   return { paye, reste: trR2((inv.total || 0) - paye) };
 }
 
-function TransportModule({ transport, setTransport, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
+function TransportModule({ suppliers, transport, setTransport, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // régulation : voyages, clients, factures et encaissements
   const canFront = canEdit || isVendeur;
@@ -94,7 +94,7 @@ function TransportModule({ transport, setTransport, entries, setEntries, account
   const [tk, setTk] = useState(false);
   const [selInv, setSelInv] = useState("");
   const [selVeh, setSelVeh] = useState("");
-  const listes = (<><datalist id="tr-dl-lieu">{trUniq(trips.flatMap((t) => [t.from, t.to])).map((n) => <option key={n} value={n} />)}</datalist><datalist id="tr-dl-kind">{trUniq(vehicles.map((v) => v.kind)).map((n) => <option key={n} value={n} />)}</datalist><datalist id="tr-dl-doc">{trUniq(["Assurance", "Contrôle technique", "Vignette", ...vehicles.flatMap((v) => (v.docs || []).map((d) => d.label))]).map((n) => <option key={n} value={n} />)}</datalist></>);
+  const listes = (<><datalist id="tr-dl-four">{trUniq([...(suppliers || []).map((y) => y.name), ...expenses.map((y) => y.supplier)]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="tr-dl-lieu">{trUniq(trips.flatMap((t) => [t.from, t.to])).map((n) => <option key={n} value={n} />)}</datalist><datalist id="tr-dl-kind">{trUniq(vehicles.map((v) => v.kind)).map((n) => <option key={n} value={n} />)}</datalist><datalist id="tr-dl-doc">{trUniq(["Assurance", "Contrôle technique", "Vignette", ...vehicles.flatMap((v) => (v.docs || []).map((d) => d.label))]).map((n) => <option key={n} value={n} />)}</datalist></>);
 
   // ───────── Véhicules ─────────
   const [fv, setFv] = useBrouillon("transport-vehicule", { plate: "", kind: "", model: "", capacity: "", odometer: "" });
@@ -422,13 +422,17 @@ function TransportModule({ transport, setTransport, entries, setEntries, account
   };
 
   // ───────── Dépenses des véhicules ─────────
-  const [fd, setFd] = useBrouillon("transport-depense", { vehicleId: "", kind: "carburant", date: todayStr(), label: "", liters: "", amount: "", mode: "caisse", odometer: "" });
+  const [fd, setFd] = useBrouillon("transport-depense", { vehicleId: "", kind: "carburant", date: todayStr(), label: "", liters: "", amount: "", mode: "caisse", odometer: "", supplier: "" });
   const [dq, setDq] = useState(""); const [dk, setDk] = useState(""); const [dv, setDv] = useState("");
+  const [selDep, setSelDep] = useState(""); const [rg, setRg] = useState({ amount: "", date: todayStr(), mode: "caisse" });
+  const payeDep = (x) => trR2((x.settlements || []).filter((s2) => s2.status !== "annulé").reduce((t, s2) => t + s2.amount, 0));
+  const resteDep = (x) => (x.mode === "apayer" && x.status !== "annulé" ? trR2(x.amount - payeDep(x)) : 0);
   const enregistrerDepense = () => {
     if (!canEdit) return;
     const amount = trR2(fd.amount);
     if (!fd.vehicleId) { showToast("Choisissez le véhicule."); return; }
     if (!(amount > 0)) { showToast("Indiquez le montant (en gourdes)."); return; }
+    if (fd.mode === "apayer" && !fd.supplier.trim()) { showToast("Pour une dépense à payer plus tard, indiquez le fournisseur."); return; }
     if (!verifDate(fd.date, "enregistrer cette dépense")) return;
     const def = TR_DEPENSES.find((x) => x[0] === fd.kind) || TR_DEPENSES[0];
     const compte = def[2], cpt = compteMode(fd.mode);
@@ -436,17 +440,39 @@ function TransportModule({ transport, setTransport, entries, setEntries, account
     trAjouterComptes(accounts, setAccounts, [compte, cpt]);
     const e = ecrire(fd.date, "Véhicule " + nomVeh(fd.vehicleId) + " — " + label, [{ account: compte, debit: amount, credit: 0 }, { account: cpt, debit: 0, credit: amount }], fd.vehicleId);
     const km = Number(fd.odometer) || 0;
-    setTransport((prev) => [...(prev || []).map((r) => (r.id === fd.vehicleId && km > (Number(r.odometer) || 0) ? { ...r, odometer: km } : r)), { type: "expense", id: trId(), date: fd.date, vehicleId: fd.vehicleId, kind: fd.kind, label, liters: Number(fd.liters) || 0, amount, mode: fd.mode, odometer: km, entryId: e.id, status: "valide", by: currentUserEmail || "" }]);
-    setFd({ ...fd, label: "", liters: "", amount: "", odometer: "" });
+    setTransport((prev) => [...(prev || []).map((r) => (r.id === fd.vehicleId && km > (Number(r.odometer) || 0) ? { ...r, odometer: km } : r)), { type: "expense", id: trId(), date: fd.date, vehicleId: fd.vehicleId, kind: fd.kind, label, liters: Number(fd.liters) || 0, amount, mode: fd.mode, supplier: fd.supplier.trim(), settlements: [], odometer: km, entryId: e.id, status: "valide", by: currentUserEmail || "" }]);
+    setFd({ ...fd, label: "", liters: "", amount: "", odometer: "", supplier: "" });
     showToast("Dépense enregistrée : " + fmt(amount) + "."); logAudit("Transport", "Dépense véhicule", nomVeh(fd.vehicleId) + " — " + label + " — " + fmt(amount));
   };
   const annulerDepense = (x) => {
     if (!canEdit || x.status === "annulé") return;
+    if (payeDep(x) > 0) { showToast("Annulez d'abord les règlements de cette dépense."); return; }
     if (!verifDate(today, "annuler cette dépense")) return;
     if (typeof window !== "undefined" && window.confirm && !window.confirm("Annuler cette dépense ? Une écriture inverse sera passée.")) return;
     const e = contre(x.entryId, "Annulation — " + nomVeh(x.vehicleId) + " — " + x.label + " (écriture inverse)", today, x.vehicleId);
     maj(x.id, (r) => ({ ...r, status: "annulé", reversalEntryId: e ? e.id : "" }));
     showToast("Dépense annulée.");
+  };
+  const reglerDep = (x) => {
+    if (!canEdit || x.mode !== "apayer" || x.status === "annulé") return;
+    const reste = resteDep(x);
+    const amount = rg.amount === "" ? reste : trR2(rg.amount);
+    if (!(amount > 0) || amount > reste + 0.004) { showToast("Le montant doit être compris entre 0 et le reste à payer (" + fmt(reste) + ")."); return; }
+    if (!verifDate(rg.date, "enregistrer ce règlement")) return;
+    if (rg.date < x.date) { showToast("Le règlement ne peut pas précéder la dépense."); return; }
+    const cpt = compteMode(rg.mode === "banque" ? "banque" : "caisse");
+    trAjouterComptes(accounts, setAccounts, [cpt, "401"]);
+    const e = ecrire(rg.date, "Règlement " + (x.supplier || "fournisseur") + " — " + x.label, [{ account: "401", debit: amount, credit: 0 }, { account: cpt, debit: 0, credit: amount }], x.vehicleId);
+    maj(x.id, (r) => ({ ...r, settlements: [...(r.settlements || []), { id: trId(), date: rg.date, amount, mode: rg.mode, entryId: e.id, status: "valide" }] }));
+    setRg({ ...rg, amount: "" }); showToast("Règlement de " + fmt(amount) + " enregistré."); logAudit("Transport", "Dette réglée", (x.supplier || "") + " — " + fmt(amount));
+  };
+  const annulerRegDep = (x, s2) => {
+    if (!canEdit || s2.status === "annulé") return;
+    if (!verifDate(today, "annuler ce règlement")) return;
+    if (typeof window !== "undefined" && window.confirm && !window.confirm("Annuler ce règlement ? Une écriture inverse sera passée.")) return;
+    const e = contre(s2.entryId, "Annulation règlement " + (x.supplier || "") + " (écriture inverse)", today, x.vehicleId);
+    maj(x.id, (r) => ({ ...r, settlements: r.settlements.map((y) => (y.id === s2.id ? { ...y, status: "annulé", reversalEntryId: e ? e.id : "" } : y)) }));
+    showToast("Règlement annulé.");
   };
   const Depenses = () => {
     const dF = expenses.filter((x) => (!dk || x.kind === dk) && (!dv || x.vehicleId === dv) && (!dq.trim() || [x.label, nomVeh(x.vehicleId)].join(" ").toLowerCase().includes(dq.trim().toLowerCase()))).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -464,6 +490,7 @@ function TransportModule({ transport, setTransport, entries, setEntries, account
             <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Détail (facultatif)</label><input value={fd.label} onChange={(e) => setFd({ ...fd, label: e.target.value })} className={ecInput} style={ecBorder} /></div>
             {fd.kind === "carburant" && <div><label className="text-xs" style={{ color: "#8A8370" }}>Litres (facultatif)</label><input type="number" min="0" value={fd.liters} onChange={(e) => setFd({ ...fd, liters: e.target.value })} className={ecInput + " tabular"} style={ecBorder} /></div>}
             <div><label className="text-xs" style={{ color: "#8A8370" }}>Compteur (km, facultatif)</label><input type="number" min="0" value={fd.odometer} onChange={(e) => setFd({ ...fd, odometer: e.target.value })} data-testid="tr-dep-km" className={ecInput + " tabular"} style={ecBorder} /></div>
+            <div><label className="text-xs" style={{ color: "#8A8370" }}>Fournisseur (obligatoire si « à payer »)</label><input list="tr-dl-four" value={fd.supplier} onChange={(e) => setFd({ ...fd, supplier: e.target.value })} data-testid="tr-dep-fournisseur" className={ecInput} style={ecBorder} /></div>
             <div><label className="text-xs" style={{ color: "#8A8370" }}>Montant (gourdes)</label><input type="number" min="0" value={fd.amount} onChange={(e) => setFd({ ...fd, amount: e.target.value })} data-testid="tr-dep-montant" className={ecInput + " tabular"} style={ecBorder} /></div>
           </div>
           <button onClick={enregistrerDepense} className="mt-2 px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="tr-dep-valider">Enregistrer la dépense</button></div>)}
@@ -473,8 +500,14 @@ function TransportModule({ transport, setTransport, entries, setEntries, account
           <div><label className="text-xs" style={{ color: "#8A8370" }}>Véhicule</label><select value={dv} onChange={(e) => setDv(e.target.value)} className={ecInput} style={ecBorder}><option value="">Tous</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></div>
         </div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Date</th><th>Véhicule</th><th>Nature</th><th>Détail</th><th className="text-right">Montant</th><th>État</th><th></th></tr></thead>
-          <tbody>{dF.map((x) => (<tr key={x.id} data-testid="tr-dep-ligne" style={{ opacity: x.status === "annulé" ? 0.55 : 1 }}><td className="py-1.5">{ecDateFr(x.date)}</td><td>{nomVeh(x.vehicleId)}</td><td className="text-xs">{(TR_DEPENSES.find((k) => k[0] === x.kind) || [0, x.kind])[1]}</td><td className="text-xs">{x.label}{x.liters ? " · " + x.liters + " L" : ""}</td><td className="text-right tabular">{fmt(x.amount)}</td><td>{x.status === "annulé" ? ecPastille("Annulée", "neutre") : ecPastille("Valide", "ok")}</td><td className="text-right">{canEdit && x.status !== "annulé" && <button onClick={() => annulerDepense(x)} className="text-xs" style={{ color: "#A6432F" }} data-testid="tr-dep-annuler">Annuler</button>}</td></tr>))}</tbody>
+          <tbody>{dF.map((x) => (<tr key={x.id} data-testid="tr-dep-ligne" style={{ opacity: x.status === "annulé" ? 0.55 : 1 }}><td className="py-1.5">{ecDateFr(x.date)}</td><td>{nomVeh(x.vehicleId)}</td><td className="text-xs">{(TR_DEPENSES.find((k) => k[0] === x.kind) || [0, x.kind])[1]}</td><td className="text-xs">{x.label}{x.liters ? " · " + x.liters + " L" : ""}</td><td className="text-right tabular">{fmt(x.amount)}</td><td>{x.status === "annulé" ? ecPastille("Annulée", "neutre") : x.mode === "apayer" ? (resteDep(x) > 0.004 ? ecPastille("À payer : " + fmt(resteDep(x)), "attente") : ecPastille("Payée", "ok")) : ecPastille("Valide", "ok")}{x.supplier ? <div className="text-xs" style={{ color: "#8A8370" }}>{x.supplier}</div> : null}</td><td className="text-right">{canEdit && x.mode === "apayer" && x.status !== "annulé" && <button onClick={() => setSelDep(x.id === selDep ? "" : x.id)} className="text-xs underline mr-2" data-testid="tr-dep-ouvrir">{x.id === selDep ? "Fermer" : "Régler"}</button>}{canEdit && x.status !== "annulé" && <button onClick={() => annulerDepense(x)} className="text-xs" style={{ color: "#A6432F" }} data-testid="tr-dep-annuler">Annuler</button>}</td></tr>))}</tbody>
           {dF.length > 0 && <tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }} data-testid="tr-dep-total-ligne"><td colSpan={4}>Total ({dFA.length}, hors annulées)</td><td className="text-right tabular" data-testid="tr-dep-tot">{fmt(trR2(dFA.reduce((s, x) => s + x.amount, 0)))}</td><td colSpan={2}></td></tr></tfoot>}</table></div>
+        {(() => { const x0 = expenses.find((y) => y.id === selDep); return x0 && x0.mode === "apayer" && x0.status !== "annulé" ? (<div className="ec-card p-4 mt-3" data-testid="tr-depreg-form"><div className="text-sm mb-2">Règlement de {x0.supplier || "fournisseur"} — {x0.label} — reste à payer <b className="tabular" data-testid="tr-dep-reste">{fmt(resteDep(x0))}</b></div>
+          {(x0.settlements || []).length > 0 && (<div className="ec-wrap mb-2"><table className="ec-table"><tbody>{x0.settlements.map((s2) => (<tr key={s2.id} data-testid="tr-reg-ligne" style={{ opacity: s2.status === "annulé" ? 0.5 : 1 }}><td className="py-1.5">{ecDateFr(s2.date)}</td><td>{s2.mode === "banque" ? "Banque" : "Caisse"}</td><td className="text-right tabular">{fmt(s2.amount)}</td><td className="text-right">{s2.status === "annulé" ? ecPastille("Annulé", "neutre") : (canEdit && <button onClick={() => annulerRegDep(x0, s2)} className="text-xs" style={{ color: "#A6432F" }}>Annuler</button>)}</td></tr>))}</tbody></table></div>)}
+          <div className="grid md:grid-cols-4 gap-2 items-end"><div><label className="text-xs" style={{ color: "#8A8370" }}>Montant (vide = tout le reste)</label><input type="number" min="0" step="0.01" value={rg.amount} onChange={(e) => setRg({ ...rg, amount: e.target.value })} data-testid="tr-reg-montant" className={ecInput + " tabular"} style={ecBorder} /></div>
+            <div><label className="text-xs" style={{ color: "#8A8370" }}>Date</label><input type="date" max={todayStr()} value={rg.date} onChange={(e) => setRg({ ...rg, date: e.target.value })} className={ecInput} style={ecBorder} /></div>
+            <div><label className="text-xs" style={{ color: "#8A8370" }}>Payé par</label><select value={rg.mode} onChange={(e) => setRg({ ...rg, mode: e.target.value })} className={ecInput} style={ecBorder}><option value="caisse">Caisse</option><option value="banque">Banque</option></select></div>
+            <button onClick={() => reglerDep(x0)} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="tr-reg-valider">Enregistrer le règlement</button></div></div>) : null; })()}
         {dF.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>{expenses.length === 0 ? "Aucune dépense." : "Aucune dépense ne correspond à ces filtres."}</div>}
       </div>
     );

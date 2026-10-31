@@ -19,7 +19,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, products, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, indus, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -191,6 +191,25 @@ function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp
       push({ key: "btp-retard:" + s.id, severity: "medium", category: "btp", title: "Chantier en retard sur la date de fin prévue", detail: `${s.name} : la fin prévue (${asbFr(s.end)}) est dépassée de ${asbDays(s.end, today)} jour(s) et le chantier n'est pas terminé.` });
     });
   }
+  if (A.includes("industrie") && (indus || []).length) {
+    const cli = new Map(asbRows(indus, "client").map((c) => [c.id, c.name]));
+    const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    asbRows(indus, "fact").filter((x) => x.status !== "annulee").forEach((x) => {
+      const reste = r2((x.net || 0) - (x.payments || []).filter((p) => p.status !== "annulé").reduce((s, p) => s + p.amount, 0));
+      const j = asbDays(x.date, today);
+      if (reste > 0.004 && j > 30) push({ key: "indus-impaye:" + x.id, severity: j > 60 ? "high" : "medium", category: "indus", title: "Facture de vente impayée", detail: `${cli.get(x.clientId) || "Client de passage"} : la facture ${x.number} du ${asbFr(x.date)} reste due à hauteur de ${reste.toFixed(2)} gourdes (${j} jours).` });
+    });
+    const lots = asbRows(indus, "lot").filter((l) => l.status !== "annulé");
+    const achats = asbRows(indus, "achat").filter((a) => a.status !== "annulé");
+    const ajs = asbRows(indus, "ajust").filter((a) => a.status !== "annulé");
+    asbRows(indus, "mat").filter((m) => m.active !== false && Number(m.min) > 0).forEach((m) => {
+      const st = achats.filter((a) => a.matId === m.id).reduce((t, a) => t + a.qty, 0) - lots.reduce((t, l) => t + (l.lines || []).filter((x) => x.matId === m.id).reduce((u, x) => u + x.qty, 0), 0) + ajs.filter((a) => a.target === "mat" && a.refId === m.id).reduce((t, a) => t + a.qty, 0);
+      if (st <= m.min) push({ key: "indus-stock:" + m.id, severity: "medium", category: "indus", title: "Matière première presque épuisée", detail: `${m.name} : ${Math.round(st * 1000) / 1000} ${m.unit} en stock pour un seuil d'alerte de ${m.min}.` });
+    });
+    asbRows(indus, "cmd").filter((c) => (c.status === "confirmee" || c.status === "enprod" || c.status === "prete") && c.due && c.due < today).slice(0, 25).forEach((c) => {
+      push({ key: "indus-retard:" + c.id, severity: "medium", category: "indus", title: "Commande en retard de livraison", detail: `${cli.get(c.clientId) || "Client"} : la commande ${c.number} devait être livrée le ${asbFr(c.due)} (${asbDays(c.due, today)} jour(s) de retard).` });
+    });
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -296,6 +315,20 @@ function asstHowToBlocs(f) {
       "Ouvrez l'espace Immobilier → onglet « Baux » et ouvrez le bail terminé.",
       "Vérifiez l'état des lieux de sortie et les loyers restants dus.",
       "Saisissez le montant rendu (si une retenue est justifiée) puis cliquez sur « Restituer le dépôt »."] },
+    "indus-impaye": { why: "Une facture impayée depuis plus de 30 jours immobilise votre trésorerie alors que les matières et le travail sont déjà payés.", steps: [
+      "Ouvrez l'espace Industries artisanales → onglet « Ventes » et ouvrez la facture indiquée.",
+      "Relancez le client avec le numéro de facture et le reste à payer.",
+      "Dès qu'il paie, cliquez sur « Encaisser » (date, mode).",
+      "Pour les commandes sur mesure, pensez à demander un acompte à la confirmation."] },
+    "indus-stock": { why: "Sans matière première, la fabrication s'arrête et les commandes prennent du retard.", steps: [
+      "Ouvrez l'espace Industries artisanales → onglet « Matières et achats ».",
+      "Vérifiez le stock réel (inventaire) ; en cas d'écart, utilisez « Ajuster » avec un motif.",
+      "Achetez la matière dans le formulaire « Acheter des matières » : le stock et le prix moyen se mettent à jour.",
+      "Adaptez le seuil d'alerte dans la fiche de la matière si besoin."] },
+    "indus-retard": { why: "Une commande livrée en retard abîme la confiance du client et peut le conduire à annuler.", steps: [
+      "Ouvrez l'espace Industries artisanales → onglet « Commandes » et ouvrez la commande indiquée.",
+      "Vérifiez qu'une fabrication existe (onglet Production) et que les matières sont en stock.",
+      "Prévenez le client et, s'il l'accepte, indiquez une nouvelle date en créant une commande à jour ; sinon livrez et facturez dès que prête."] },
     "btp-impaye": { why: "Une situation de travaux impayée depuis plus de 30 jours pèse sur votre trésorerie alors que vos dépenses de chantier, elles, sont déjà payées.", steps: [
       "Ouvrez l'espace BTP → onglet « Situations » et ouvrez la situation indiquée.",
       "Relancez le client avec le numéro de la situation et le net à payer.",

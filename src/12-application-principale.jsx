@@ -5,7 +5,7 @@
 //   CentreDeGestionModule, ComingSoon, ComptaModule, CreditCard, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS
 //   DEFAULT_PRODUCTS, DEFAULT_SETTINGS, DEFAULT_SUPPLIERS, DEFAULT_USERS, Dashboard, EcolesModule
 //   FALLBACK_HTG_PER_USD, GestionModule, GroupDashboardModule, HL_EVT, HelpCenterChat, HotelModule
-//   Icon, ImmobilierModule, ImportExportModule, LayoutDashboard, Lock, MODULES, Menu
+//   Icon, ImmobilierModule, ImportExportModule, IndusModule, LayoutDashboard, Lock, MODULES, Menu
 //   MessageCircle, NET_MSG, OFL_EVT, PLAN_TIER_INFO, PayrollModule, ROLE_MODULE_ACCESS
 //   RapportsModule, RestoModule, SUPABASE_URL, SanteModule, SecteursChoixModal, SecurityPanel
 //   Smartphone, StockModule, SuperAdminModule, TransportModule, UpgradeModal
@@ -88,6 +88,7 @@ function App() {
   const [purchases, setPurchases] = useState([]);
   // Registre des chèques (reçus de clients / émis à des fournisseurs), avec leur cycle de vie.
   const [cheques, setCheques] = useState([]);
+  const [indus, setIndus] = useState([]); // bloc Industries artisanales : matières, produits, recettes, lots, commandes, ventes, dépenses
   const [btp, setBtp] = useState([]); // bloc BTP et construction : clients, chantiers, situations, dépenses
   const [immo, setImmo] = useState([]); // bloc Immobilier et location : biens, locataires, baux, loyers, dépenses
   const [transport, setTransport] = useState([]); // bloc Transport et logistique : véhicules, chauffeurs, clients, voyages, factures, dépenses
@@ -403,10 +404,10 @@ function App() {
     try { base = asstScan({ entries, accounts, settings, today: todayStr(), hasSecurityPin: companyHasPin, lastBackupAt, products }); } catch (e) { base = []; }
     // contrôles propres à chaque bloc d'activité (Éducation, Import-export, Santé) : seulement pour les blocs actifs
     let blocs = [];
-    try { blocs = asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, products, actifs: secteursDroits(secteurs, { planTier, groupId, planStatus }).actifs, today: todayStr() }); } catch (e) { blocs = []; }
+    try { blocs = asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, indus, products, actifs: secteursDroits(secteurs, { planTier, groupId, planStatus }).actifs, today: todayStr() }); } catch (e) { blocs = []; }
     const rank = { high: 0, medium: 1, low: 2 };
     return [...base, ...blocs].sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
-  }, [assistantActive, loaded, entries, accounts, settings, companyHasPin, products, ecole, impex, sante, resto, hotel, transport, immo, btp, secteurs, planTier, groupId, planStatus]);
+  }, [assistantActive, loaded, entries, accounts, settings, companyHasPin, products, ecole, impex, sante, resto, hotel, transport, immo, btp, indus, secteurs, planTier, groupId, planStatus]);
   const assistantVisible = useMemo(() => assistantAll.filter((f) => !(settings.assistantIgnored || {})[f.key]), [assistantAll, settings.assistantIgnored]);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
@@ -452,30 +453,39 @@ function App() {
   const transportActif = secteursActifs.includes("transport");
   const immoActif = secteursActifs.includes("immobilier");
   const btpActif = secteursActifs.includes("btp");
+  const indusActif = secteursActifs.includes("industrie");
   const hotelActif = restoActif; // l'hôtellerie fait partie du secteur « Restauration et hôtellerie »
   const santeKind = ((sante || []).find((r) => r && r.type === "etab") || {}).kind || "cabinet"; // type d'établissement de santé (noms des rôles)
   const modulesDuRole = allowedModulesFor(role, settings); // null = accès à tous les modules
   // Secrétaire-caissier(ère) : le rôle Vendeur d'une école accède aussi au module Écoles (encaissements seulement, voir le module)
-  const allowedModuleIds = modulesDuRole && role === "Vendeur" && (ecolesActif || santeActif || restoActif || transportActif || immoActif || btpActif) ? [...modulesDuRole, ...(btpActif ? ["btp"] : []), ...(transportActif ? ["transport"] : []), ...(immoActif ? ["immo"] : []), ...(ecolesActif ? ["ecole"] : []), ...(santeActif ? ["sante"] : []), ...(restoActif ? ["resto", "hotel"] : [])] : modulesDuRole;
+  const allowedModuleIds = modulesDuRole && role === "Vendeur" && (ecolesActif || santeActif || restoActif || transportActif || immoActif || btpActif || indusActif) ? [...modulesDuRole, ...(indusActif ? ["indus"] : []), ...(btpActif ? ["btp"] : []), ...(transportActif ? ["transport"] : []), ...(immoActif ? ["immo"] : []), ...(ecolesActif ? ["ecole"] : []), ...(santeActif ? ["sante"] : []), ...(restoActif ? ["resto", "hotel"] : [])] : modulesDuRole;
   // Espace de travail (entreprise qui a le secteur Écoles) : « École » met l'école en premier et replie les outils de commerce ;
   // « Commerce » donne l'espace habituel. Le choix est mémorisé sur cet appareil.
   const [espaceChoisi, setEspaceChoisi] = useState(() => { try { return localStorage.getItem("compta-plus-espace") || ""; } catch (e) { return ""; } });
   // Commerce (vente, stock, clients…) n'est proposé que si l'activité en dépend : import-export, pharmacie, ou entreprise sans secteur.
   // Éducation et santé hors pharmacie ont leurs propres outils de facturation et d'encaissement.
-  const commerceUtile = ieActif || (santeActif && santeKind === "pharmacie") || (!ecolesActif && !santeActif && !restoActif && !transportActif && !immoActif && !btpActif);
-  const espacesDispo = [...(ecolesActif ? ["ecole"] : []), ...(ieActif ? ["impex"] : []), ...(santeActif ? ["sante"] : []), ...(restoActif ? ["resto", "hotel"] : []), ...(transportActif ? ["transport"] : []), ...(immoActif ? ["immo"] : []), ...(btpActif ? ["btp"] : []), ...(commerceUtile ? ["commerce"] : [])];
+  const commerceUtile = ieActif || (santeActif && santeKind === "pharmacie") || (!ecolesActif && !santeActif && !restoActif && !transportActif && !immoActif && !btpActif && !indusActif);
+  const espacesDispo = [...(ecolesActif ? ["ecole"] : []), ...(ieActif ? ["impex"] : []), ...(santeActif ? ["sante"] : []), ...(restoActif ? ["resto", "hotel"] : []), ...(transportActif ? ["transport"] : []), ...(immoActif ? ["immo"] : []), ...(btpActif ? ["btp"] : []), ...(indusActif ? ["indus"] : []), ...(commerceUtile ? ["commerce"] : [])];
   const espace = espacesDispo.includes(espaceChoisi) ? espaceChoisi : espacesDispo[0];
   const choisirEspace = (e) => { setEspaceChoisi(e); try { localStorage.setItem("compta-plus-espace", e); } catch (x) {} };
   const ESPACE_ECOLE_MODULES = ["ecole", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion"];
   const ESPACE_SANTE_MODULES = ["sante", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion", ...(santeKind === "pharmacie" ? ["stock"] : [])];
+  const ESPACE_INDUS_MODULES = ["indus", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion"];
   const ESPACE_BTP_MODULES = ["btp", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion"];
   const ESPACE_IMMO_MODULES = ["immo", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion"];
   const ESPACE_TRANSPORT_MODULES = ["transport", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion"];
   const ESPACE_HOTEL_MODULES = ["hotel", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion", "stock"];
   const ESPACE_RESTO_MODULES = ["resto", "caisse", "compta", "achat", "rh", "rapports", "admin", "gestion", "stock"];
   const ESPACE_ECOLE_LIBELLES = { achat: "Dépenses et fournisseurs", rh: "Salaires du personnel" };
-  const modulesVisibles = MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || (ecolesActif && espace === "ecole")) && (m.id !== "impex" || (ieActif && espace === "impex")) && (m.id !== "sante" || (santeActif && espace === "sante")) && (m.id !== "resto" || (restoActif && espace === "resto")) && (m.id !== "hotel" || (hotelActif && espace === "hotel")) && (m.id !== "transport" || (transportActif && espace === "transport")) && (m.id !== "immo" || (immoActif && espace === "immo")) && (m.id !== "btp" || (btpActif && espace === "btp")) && (espace !== "btp" || ESPACE_BTP_MODULES.includes(m.id)) && (espace !== "immo" || ESPACE_IMMO_MODULES.includes(m.id)) && (espace !== "transport" || ESPACE_TRANSPORT_MODULES.includes(m.id)) && (espace !== "hotel" || ESPACE_HOTEL_MODULES.includes(m.id)) && (espace !== "resto" || ESPACE_RESTO_MODULES.includes(m.id)) && (espace !== "ecole" || ESPACE_ECOLE_MODULES.includes(m.id)) && (espace !== "sante" || ESPACE_SANTE_MODULES.includes(m.id)))
-    .sort((a, b) => (espace === "impex" ? (b.id === "impex") - (a.id === "impex") : espace === "sante" ? (b.id === "sante") - (a.id === "sante") : espace === "resto" ? (b.id === "resto") - (a.id === "resto") : espace === "hotel" ? (b.id === "hotel") - (a.id === "hotel") : espace === "transport" ? (b.id === "transport") - (a.id === "transport") : espace === "immo" ? (b.id === "immo") - (a.id === "immo") : espace === "btp" ? (b.id === "btp") - (a.id === "btp") : 0));
+  // Ordre d'importance commun à tous les espaces de métier : le métier, puis l'argent (caisse), les dépenses et fournisseurs,
+  // le stock s'il existe, le personnel, et enfin la comptabilité, les rapports, la gestion avancée et l'administration.
+  const ESPACES_METIER = ["ecole", "sante", "resto", "hotel", "transport", "immo", "btp", "indus"];
+  const ORDRE_METIER = ["caisse", "achat", "stock", "rh", "compta", "rapports", "gestion", "admin"];
+  const ordreEspace = (esp, id) => (id === esp ? -1 : (ORDRE_METIER.indexOf(id) < 0 ? 99 : ORDRE_METIER.indexOf(id)));
+  const modulesVisibles = MODULES.filter((m) => (!allowedModuleIds || allowedModuleIds.includes(m.id)) && (m.id !== "ecole" || (ecolesActif && espace === "ecole")) && (m.id !== "impex" || (ieActif && espace === "impex")) && (m.id !== "sante" || (santeActif && espace === "sante")) && (m.id !== "resto" || (restoActif && espace === "resto")) && (m.id !== "hotel" || (hotelActif && espace === "hotel")) && (m.id !== "transport" || (transportActif && espace === "transport")) && (m.id !== "immo" || (immoActif && espace === "immo")) && (m.id !== "btp" || (btpActif && espace === "btp")) && (m.id !== "indus" || (indusActif && espace === "indus")) && (espace !== "indus" || ESPACE_INDUS_MODULES.includes(m.id)) && (espace !== "btp" || ESPACE_BTP_MODULES.includes(m.id)) && (espace !== "immo" || ESPACE_IMMO_MODULES.includes(m.id)) && (espace !== "transport" || ESPACE_TRANSPORT_MODULES.includes(m.id)) && (espace !== "hotel" || ESPACE_HOTEL_MODULES.includes(m.id)) && (espace !== "resto" || ESPACE_RESTO_MODULES.includes(m.id)) && (espace !== "ecole" || ESPACE_ECOLE_MODULES.includes(m.id)) && (espace !== "sante" || ESPACE_SANTE_MODULES.includes(m.id)))
+    .sort((a, b) => (espace === "impex" ? (b.id === "impex") - (a.id === "impex") : ESPACES_METIER.includes(espace) ? ordreEspace(espace, a.id) - ordreEspace(espace, b.id) : 0));
+  // Numéros de la barre latérale = rang réel dans l'espace (1, 2, 3…), identique dans l'en-tête de chaque module.
+  if (typeof window !== "undefined") { const rg = {}; modulesVisibles.forEach((m, i) => { rg[m.id] = i + 1; }); window.__rangModules = rg; }
   // Contrôle de cohérence Facturation ↔ Journal calculé ici (niveau App), pas
   // seulement dans le module Comptabilité, pour que l'alerte soit visible dès la
   // connexion quel que soit le module ouvert — l'incident du 14/08 (91 factures
@@ -540,10 +550,10 @@ function App() {
   }, [role, active, allowedModuleIds]);
   useEffect(() => {
     // espace École : l'accueil est le tableau de bord de l'école ; un module hors de l'espace choisi renvoie vers l'accueil de l'espace
-    const accueil = espace === "ecole" && modulesVisibles.some((m) => m.id === "ecole") ? "ecole" : espace === "impex" && modulesVisibles.some((m) => m.id === "impex") ? "impex" : espace === "sante" && modulesVisibles.some((m) => m.id === "sante") ? "sante" : espace === "resto" && modulesVisibles.some((m) => m.id === "resto") ? "resto" : espace === "hotel" && modulesVisibles.some((m) => m.id === "hotel") ? "hotel" : espace === "transport" && modulesVisibles.some((m) => m.id === "transport") ? "transport" : espace === "immo" && modulesVisibles.some((m) => m.id === "immo") ? "immo" : espace === "btp" && modulesVisibles.some((m) => m.id === "btp") ? "btp" : (allowedModuleIds ? allowedModuleIds[0] : "dashboard");
-    if (active === "dashboard" && (espace === "ecole" || espace === "impex" || espace === "sante" || espace === "resto" || espace === "hotel" || espace === "transport" || espace === "immo" || espace === "btp")) { setActive(accueil); return; }
+    const accueil = espace === "ecole" && modulesVisibles.some((m) => m.id === "ecole") ? "ecole" : espace === "impex" && modulesVisibles.some((m) => m.id === "impex") ? "impex" : espace === "sante" && modulesVisibles.some((m) => m.id === "sante") ? "sante" : espace === "resto" && modulesVisibles.some((m) => m.id === "resto") ? "resto" : espace === "hotel" && modulesVisibles.some((m) => m.id === "hotel") ? "hotel" : espace === "transport" && modulesVisibles.some((m) => m.id === "transport") ? "transport" : espace === "immo" && modulesVisibles.some((m) => m.id === "immo") ? "immo" : espace === "btp" && modulesVisibles.some((m) => m.id === "btp") ? "btp" : espace === "indus" && modulesVisibles.some((m) => m.id === "indus") ? "indus" : (allowedModuleIds ? allowedModuleIds[0] : "dashboard");
+    if (active === "dashboard" && (espace === "ecole" || espace === "impex" || espace === "sante" || espace === "resto" || espace === "hotel" || espace === "transport" || espace === "immo" || espace === "btp" || espace === "indus")) { setActive(accueil); return; }
     if (MODULES.some((m) => m.id === active) && !modulesVisibles.some((m) => m.id === active)) setActive(accueil);
-  }, [espace, active, role, ecolesActif, ieActif, santeActif, restoActif, hotelActif, transportActif, immoActif, btpActif]);
+  }, [espace, active, role, ecolesActif, ieActif, santeActif, restoActif, hotelActif, transportActif, immoActif, btpActif, indusActif]);
   const [toast, setToast] = useState(null);
   const [syncErrorCategories, setSyncErrorCategories] = useState([]); // catégories dont la dernière sauvegarde a échoué
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -608,6 +618,7 @@ function App() {
     transport: setTransport,
     immo: setImmo,
     btp: setBtp,
+    indus: setIndus,
   };
   const CATEGORIES = Object.keys(settersByCategory);
 
@@ -1096,7 +1107,7 @@ function App() {
     const daysSince = (Date.now() - last) / 86400000;
     if (daysSince < 7) return;
     try {
-      const data = { accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante, resto, hotel, transport, immo, btp };
+      const data = { accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante, resto, hotel, transport, immo, btp, indus };
       bkDownload(bkBuildFile(data, _membership && _membership.companyId, "Sauvegarde automatique hebdomadaire"), `sauvegarde-auto-${settings.companyName || "erp"}-${todayStr()}.json`);
       const now = new Date().toISOString();
       setSettings((prev) => ({ ...prev, lastAutoBackupAt: now }));
@@ -1161,6 +1172,7 @@ function App() {
   useEffect(() => { if (loaded && loadedCategoriesRef.current.transport) saveCategory("transport", transport); }, [transport, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.immo) saveCategory("immo", immo); }, [immo, loaded]);
   useEffect(() => { if (loaded && loadedCategoriesRef.current.btp) saveCategory("btp", btp); }, [btp, loaded]);
+  useEffect(() => { if (loaded && loadedCategoriesRef.current.indus) saveCategory("indus", indus); }, [indus, loaded]);
   // Les entreprises existantes ont un plan comptable déjà enregistré : on y ajoute
   // une seule fois le compte 5112 (Chèques à encaisser) s'il manque.
   useEffect(() => {
@@ -2510,7 +2522,7 @@ function App() {
             <div className="mt-2 px-5 pt-3 pb-1" data-testid="espace-selecteur">
               <div className="text-[10px] uppercase tracking-widest mb-1.5" style={{ color: "#5C6B8C" }}>Espace de travail</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
-                {[["ecole", "Éducation"], ["impex", "Import-export"], ["sante", "Santé"], ["resto", "Restauration"], ["hotel", "Hôtellerie"], ["transport", "Transport"], ["immo", "Immobilier"], ["btp", "BTP"], ["commerce", "Commerce"]].filter(([id]) => espacesDispo.includes(id)).map(([id, l]) => (
+                {[["ecole", "Éducation"], ["impex", "Import-export"], ["sante", "Santé"], ["resto", "Restauration"], ["hotel", "Hôtellerie"], ["transport", "Transport"], ["immo", "Immobilier"], ["btp", "BTP"], ["indus", "Industries artisanales"], ["commerce", "Commerce"]].filter(([id]) => espacesDispo.includes(id)).map(([id, l]) => (
                   <button key={id} data-testid={"espace-" + id} onClick={() => { choisirEspace(id); setMobileMenuOpen(false); }} className="rounded text-xs transition-colors"
                     style={{ padding: "9px 6px", lineHeight: 1.25, background: espace === id ? "#C9A24B" : "#1F3358", color: espace === id ? "#152238" : "#AEB8CE", fontWeight: espace === id ? 600 : 400 }}>{l}</button>
                 ))}
@@ -2518,7 +2530,7 @@ function App() {
             </div>
           )}
           <div className="mt-2 px-5 pt-3 pb-1 text-[10px] uppercase tracking-widest" style={{ color: "#5C6B8C" }}>
-            Modules{espace === "ecole" ? " — espace éducation" : espace === "impex" ? " — espace import-export" : espace === "sante" ? " — espace santé" : espace === "resto" ? " — espace restauration" : espace === "hotel" ? " — espace hôtellerie" : espace === "transport" ? " — espace transport" : espace === "immo" ? " — espace immobilier" : espace === "btp" ? " — espace BTP" : ""}{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
+            Modules{espace === "ecole" ? " — espace éducation" : espace === "impex" ? " — espace import-export" : espace === "sante" ? " — espace santé" : espace === "resto" ? " — espace restauration" : espace === "hotel" ? " — espace hôtellerie" : espace === "transport" ? " — espace transport" : espace === "immo" ? " — espace immobilier" : espace === "btp" ? " — espace BTP" : espace === "indus" ? " — espace industries artisanales" : ""}{settings && settings.accountingOnly === true && !ROLE_MODULE_ACCESS[role] ? " — espace comptable" : ""}
           </div>
           {modulesVisibles.map((m) => {
             const Icon = m.icon;
@@ -2534,9 +2546,9 @@ function App() {
                   borderLeft: isActive ? "3px solid #C9A24B" : "3px solid transparent",
                 }}
               >
-                <span className="tabular text-xs w-4" style={{ color: "#6C7A9C" }}>{m.n}</span>
+                <span className="tabular text-xs w-4" style={{ color: "#6C7A9C" }} data-testid={"nav-rang-" + m.id}>{modulesVisibles.findIndex((x) => x.id === m.id) + 1}</span>
                 <Icon size={16} />
-                <span className="flex-1 text-left">{(espace === "ecole" || espace === "sante" || espace === "resto" || espace === "hotel" || espace === "transport" || espace === "immo" || espace === "btp") && ESPACE_ECOLE_LIBELLES[m.id] ? ESPACE_ECOLE_LIBELLES[m.id] : m.label}</span>
+                <span className="flex-1 text-left">{(espace === "ecole" || espace === "sante" || espace === "resto" || espace === "hotel" || espace === "transport" || espace === "immo" || espace === "btp" || espace === "indus") && ESPACE_ECOLE_LIBELLES[m.id] ? ESPACE_ECOLE_LIBELLES[m.id] : m.label}</span>
                 {!m.ready && <Lock size={12} style={{ color: "#4A587A" }} />}
               </button>
             );
@@ -2803,6 +2815,11 @@ function App() {
         )}
         {active === "achat" && (
           <AchatModule
+            btp={btp}
+            indus={indus}
+            transport={transport}
+            immo={immo}
+            espace={espace}
             cheques={cheques}
             setCheques={setCheques}
             accounts={accounts}
@@ -2897,6 +2914,7 @@ function App() {
         )}
         {active === "gestion" && role !== "Vendeur" && (
           <GestionModule
+            espace={espace}
             premium={planTier === "assisted" || !!groupId}
             bizdocs={bizdocs} setBizdocs={setBizdocs}
             invoices={invoices} setInvoices={setInvoices}
@@ -2922,13 +2940,16 @@ function App() {
           <RestoModule resto={resto} setResto={setResto} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
         )}
         {active === "btp" && btpActif && (
-          <BtpModule btp={btp} setBtp={setBtp} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} employees={employees} setEmployees={setEmployees} payslips={payslips} />
+          <BtpModule suppliers={suppliers} btp={btp} setBtp={setBtp} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} employees={employees} setEmployees={setEmployees} payslips={payslips} />
+        )}
+        {active === "indus" && indusActif && (
+          <IndusModule suppliers={suppliers} indus={indus} setIndus={setIndus} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
         )}
         {active === "immo" && immoActif && (
-          <ImmobilierModule immo={immo} setImmo={setImmo} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
+          <ImmobilierModule suppliers={suppliers} immo={immo} setImmo={setImmo} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
         )}
         {active === "transport" && transportActif && (
-          <TransportModule transport={transport} setTransport={setTransport} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
+          <TransportModule suppliers={suppliers} transport={transport} setTransport={setTransport} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
         )}
         {active === "hotel" && hotelActif && (
           <HotelModule hotel={hotel} setHotel={setHotel} entries={entries} setEntries={setEntries} accounts={accounts} setAccounts={setAccounts} settings={settings} role={role} showToast={showToast} logAudit={logAudit} currentUserEmail={currentUserEmail} />
@@ -2995,6 +3016,9 @@ function App() {
             setImmo={setImmo}
             btp={btp}
             setBtp={setBtp}
+            indus={indus}
+            setIndus={setIndus}
+            saveCategoryNow={saveCategory}
             setAccounts={setAccounts}
             setEntries={setEntries}
             setProducts={setProducts}
@@ -3066,7 +3090,7 @@ function App() {
             </div>
           </div>
         )}
-        {active !== "dashboard" && active !== "compta" && active !== "caisse" && active !== "vente" && active !== "achat" && active !== "stock" && active !== "crm" && active !== "rapports" && active !== "admin" && active !== "rh" && active !== "gestion" && active !== "ecole" && active !== "impex" && active !== "sante" && active !== "resto" && active !== "hotel" && active !== "transport" && active !== "immo" && active !== "btp" && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" && active !== "groupdashboard" && (
+        {active !== "dashboard" && active !== "compta" && active !== "caisse" && active !== "vente" && active !== "achat" && active !== "stock" && active !== "crm" && active !== "rapports" && active !== "admin" && active !== "rh" && active !== "gestion" && active !== "ecole" && active !== "impex" && active !== "sante" && active !== "resto" && active !== "hotel" && active !== "transport" && active !== "immo" && active !== "btp" && active !== "indus" && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" && active !== "groupdashboard" && (
           <ComingSoon module={MODULES.find((m) => m.id === active)} />
         )}
         </div>

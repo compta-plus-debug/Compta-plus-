@@ -52,7 +52,7 @@ function imSolde(r) {
   return { paye, reste: imR2((r.total || 0) - paye) };
 }
 
-function ImmobilierModule({ immo, setImmo, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
+function ImmobilierModule({ suppliers, immo, setImmo, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // accueil : locataires, loyers, encaissements, quittances
   const canFront = canEdit || isVendeur;
@@ -101,7 +101,7 @@ function ImmobilierModule({ immo, setImmo, entries, setEntries, accounts, setAcc
   const [selBien, setSelBien] = useState("");
   const [selBail, setSelBail] = useState("");
   const [selLoyer, setSelLoyer] = useState("");
-  const listes = (<><datalist id="im-dl-type">{imUniq(["Appartement", "Maison", "Studio", "Chambre", "Local commercial", "Bureau", "Entrepôt", "Terrain", ...biens.map((b) => b.kind)]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="im-dl-detail">{imUniq(depenses.map((d) => d.label)).map((n) => <option key={n} value={n} />)}</datalist></>);
+  const listes = (<><datalist id="im-dl-four">{imUniq([...(suppliers || []).map((y) => y.name), ...depenses.map((y) => y.supplier)]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="im-dl-type">{imUniq(["Appartement", "Maison", "Studio", "Chambre", "Local commercial", "Bureau", "Entrepôt", "Terrain", ...biens.map((b) => b.kind)]).map((n) => <option key={n} value={n} />)}</datalist><datalist id="im-dl-detail">{imUniq(depenses.map((d) => d.label)).map((n) => <option key={n} value={n} />)}</datalist></>);
 
   // ───────── Biens ─────────
   const [fb, setFb] = useBrouillon("immo-bien", { name: "", kind: "", address: "", notes: "" });
@@ -451,30 +451,56 @@ function ImmobilierModule({ immo, setImmo, entries, setEntries, accounts, setAcc
   };
 
   // ───────── Dépenses des biens ─────────
-  const [fd, setFd] = useBrouillon("immo-depense", { propertyId: "", kind: "entretien", date: todayStr(), label: "", amount: "", mode: "caisse" });
+  const [fd, setFd] = useBrouillon("immo-depense", { propertyId: "", kind: "entretien", date: todayStr(), label: "", amount: "", mode: "caisse", supplier: "" });
   const [dq, setDq] = useState(""); const [dk, setDk] = useState(""); const [dv, setDv] = useState("");
+  const [selDep, setSelDep] = useState(""); const [rg, setRg] = useState({ amount: "", date: todayStr(), mode: "caisse" });
+  const payeDep = (x) => imR2((x.settlements || []).filter((s2) => s2.status !== "annulé").reduce((t, s2) => t + s2.amount, 0));
+  const resteDep = (x) => (x.mode === "apayer" && x.status !== "annulé" ? imR2(x.amount - payeDep(x)) : 0);
   const enregistrerDepense = () => {
     if (!canEdit) return;
     const amount = imR2(fd.amount);
     if (!fd.propertyId) { showToast("Choisissez le bien."); return; }
     if (!(amount > 0)) { showToast("Indiquez le montant (en gourdes)."); return; }
+    if (fd.mode === "apayer" && !fd.supplier.trim()) { showToast("Pour une dépense à payer plus tard, indiquez le fournisseur."); return; }
     if (!verifDate(fd.date, "enregistrer cette dépense")) return;
     const def = IM_DEPENSES.find((x) => x[0] === fd.kind) || IM_DEPENSES[0];
     const compte = def[2], cpt = compteMode(fd.mode);
     const label = fd.label.trim() || def[1];
     imAjouterComptes(accounts, setAccounts, [compte, cpt]);
     const e = ecrire(fd.date, "Bien " + nomBien(fd.propertyId) + " — " + label, [{ account: compte, debit: amount, credit: 0 }, { account: cpt, debit: 0, credit: amount }], fd.propertyId);
-    ajouter({ type: "expense", id: imId(), date: fd.date, propertyId: fd.propertyId, kind: fd.kind, label, amount, mode: fd.mode, entryId: e.id, status: "valide", by: currentUserEmail || "" });
-    setFd({ ...fd, label: "", amount: "" });
+    ajouter({ type: "expense", id: imId(), date: fd.date, propertyId: fd.propertyId, kind: fd.kind, label, amount, mode: fd.mode, supplier: fd.supplier.trim(), settlements: [], entryId: e.id, status: "valide", by: currentUserEmail || "" });
+    setFd({ ...fd, label: "", amount: "", supplier: "" });
     showToast("Dépense enregistrée : " + fmt(amount) + "."); logAudit("Immobilier", "Dépense d'un bien", nomBien(fd.propertyId) + " — " + label + " — " + fmt(amount));
   };
   const annulerDepense = (x) => {
     if (!canEdit || x.status === "annulé") return;
+    if (payeDep(x) > 0) { showToast("Annulez d'abord les règlements de cette dépense."); return; }
     if (!verifDate(today, "annuler cette dépense")) return;
     if (typeof window !== "undefined" && window.confirm && !window.confirm("Annuler cette dépense ? Une écriture inverse sera passée.")) return;
     const e = contre(x.entryId, "Annulation — " + nomBien(x.propertyId) + " — " + x.label + " (écriture inverse)", today, x.propertyId);
     maj(x.id, (r) => ({ ...r, status: "annulé", reversalEntryId: e ? e.id : "" }));
     showToast("Dépense annulée.");
+  };
+  const reglerDep = (x) => {
+    if (!canEdit || x.mode !== "apayer" || x.status === "annulé") return;
+    const reste = resteDep(x);
+    const amount = rg.amount === "" ? reste : imR2(rg.amount);
+    if (!(amount > 0) || amount > reste + 0.004) { showToast("Le montant doit être compris entre 0 et le reste à payer (" + fmt(reste) + ")."); return; }
+    if (!verifDate(rg.date, "enregistrer ce règlement")) return;
+    if (rg.date < x.date) { showToast("Le règlement ne peut pas précéder la dépense."); return; }
+    const cpt = compteMode(rg.mode === "banque" ? "banque" : "caisse");
+    imAjouterComptes(accounts, setAccounts, [cpt, "401"]);
+    const e = ecrire(rg.date, "Règlement " + (x.supplier || "fournisseur") + " — " + x.label, [{ account: "401", debit: amount, credit: 0 }, { account: cpt, debit: 0, credit: amount }], x.propertyId);
+    maj(x.id, (r) => ({ ...r, settlements: [...(r.settlements || []), { id: imId(), date: rg.date, amount, mode: rg.mode, entryId: e.id, status: "valide" }] }));
+    setRg({ ...rg, amount: "" }); showToast("Règlement de " + fmt(amount) + " enregistré."); logAudit("Immobilier", "Dette réglée", (x.supplier || "") + " — " + fmt(amount));
+  };
+  const annulerRegDep = (x, s2) => {
+    if (!canEdit || s2.status === "annulé") return;
+    if (!verifDate(today, "annuler ce règlement")) return;
+    if (typeof window !== "undefined" && window.confirm && !window.confirm("Annuler ce règlement ? Une écriture inverse sera passée.")) return;
+    const e = contre(s2.entryId, "Annulation règlement " + (x.supplier || "") + " (écriture inverse)", today, x.propertyId);
+    maj(x.id, (r) => ({ ...r, settlements: r.settlements.map((y) => (y.id === s2.id ? { ...y, status: "annulé", reversalEntryId: e ? e.id : "" } : y)) }));
+    showToast("Règlement annulé.");
   };
   const Depenses = () => {
     const dF = depenses.filter((x) => (!dk || x.kind === dk) && (!dv || x.propertyId === dv) && (!dq.trim() || [x.label, nomBien(x.propertyId)].join(" ").toLowerCase().includes(dq.trim().toLowerCase()))).sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -489,7 +515,8 @@ function ImmobilierModule({ immo, setImmo, entries, setEntries, accounts, setAcc
             <div><label className="text-xs" style={{ color: "#8A8370" }}>Payé par</label><select value={fd.mode} onChange={(e) => setFd({ ...fd, mode: e.target.value })} className={ecInput} style={ecBorder}><option value="caisse">Caisse</option><option value="banque">Banque</option><option value="apayer">À payer (dette)</option></select></div>
           </div>
           <div className="grid md:grid-cols-4 gap-2 items-end mt-2">
-            <div className="md:col-span-3"><label className="text-xs" style={{ color: "#8A8370" }}>Détail (facultatif)</label><input list="im-dl-detail" value={fd.label} onChange={(e) => setFd({ ...fd, label: e.target.value })} className={ecInput} style={ecBorder} /></div>
+            <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Détail (facultatif)</label><input list="im-dl-detail" value={fd.label} onChange={(e) => setFd({ ...fd, label: e.target.value })} className={ecInput} style={ecBorder} /></div>
+            <div><label className="text-xs" style={{ color: "#8A8370" }}>Fournisseur (obligatoire si « à payer »)</label><input list="im-dl-four" value={fd.supplier} onChange={(e) => setFd({ ...fd, supplier: e.target.value })} data-testid="im-dep-fournisseur" className={ecInput} style={ecBorder} /></div>
             <div><label className="text-xs" style={{ color: "#8A8370" }}>Montant (gourdes)</label><input type="number" min="0" value={fd.amount} onChange={(e) => setFd({ ...fd, amount: e.target.value })} data-testid="im-dep-montant" className={ecInput + " tabular"} style={ecBorder} /></div>
           </div>
           <button onClick={enregistrerDepense} className="mt-2 px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="im-dep-valider">Enregistrer la dépense</button></div>)}
@@ -499,8 +526,14 @@ function ImmobilierModule({ immo, setImmo, entries, setEntries, accounts, setAcc
           <div><label className="text-xs" style={{ color: "#8A8370" }}>Bien</label><select value={dv} onChange={(e) => setDv(e.target.value)} className={ecInput} style={ecBorder}><option value="">Tous</option>{biens.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
         </div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Date</th><th>Bien</th><th>Nature</th><th>Détail</th><th className="text-right">Montant</th><th>État</th><th></th></tr></thead>
-          <tbody>{dF.map((x) => (<tr key={x.id} data-testid="im-dep-ligne" style={{ opacity: x.status === "annulé" ? 0.55 : 1 }}><td className="py-1.5">{ecDateFr(x.date)}</td><td>{nomBien(x.propertyId)}</td><td className="text-xs">{(IM_DEPENSES.find((k) => k[0] === x.kind) || [0, x.kind])[1]}</td><td className="text-xs">{x.label}</td><td className="text-right tabular">{fmt(x.amount)}</td><td>{x.status === "annulé" ? ecPastille("Annulée", "neutre") : ecPastille("Valide", "ok")}</td><td className="text-right">{canEdit && x.status !== "annulé" && <button onClick={() => annulerDepense(x)} className="text-xs" style={{ color: "#A6432F" }} data-testid="im-dep-annuler">Annuler</button>}</td></tr>))}</tbody>
+          <tbody>{dF.map((x) => (<tr key={x.id} data-testid="im-dep-ligne" style={{ opacity: x.status === "annulé" ? 0.55 : 1 }}><td className="py-1.5">{ecDateFr(x.date)}</td><td>{nomBien(x.propertyId)}</td><td className="text-xs">{(IM_DEPENSES.find((k) => k[0] === x.kind) || [0, x.kind])[1]}</td><td className="text-xs">{x.label}</td><td className="text-right tabular">{fmt(x.amount)}</td><td>{x.status === "annulé" ? ecPastille("Annulée", "neutre") : x.mode === "apayer" ? (resteDep(x) > 0.004 ? ecPastille("À payer : " + fmt(resteDep(x)), "attente") : ecPastille("Payée", "ok")) : ecPastille("Valide", "ok")}{x.supplier ? <div className="text-xs" style={{ color: "#8A8370" }}>{x.supplier}</div> : null}</td><td className="text-right">{canEdit && x.mode === "apayer" && x.status !== "annulé" && <button onClick={() => setSelDep(x.id === selDep ? "" : x.id)} className="text-xs underline mr-2" data-testid="im-dep-ouvrir">{x.id === selDep ? "Fermer" : "Régler"}</button>}{canEdit && x.status !== "annulé" && <button onClick={() => annulerDepense(x)} className="text-xs" style={{ color: "#A6432F" }} data-testid="im-dep-annuler">Annuler</button>}</td></tr>))}</tbody>
           {dF.length > 0 && <tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }} data-testid="im-dep-total-ligne"><td colSpan={4}>Total ({dFA.length}, hors annulées)</td><td className="text-right tabular" data-testid="im-dep-tot">{fmt(imR2(dFA.reduce((s, x) => s + x.amount, 0)))}</td><td colSpan={2}></td></tr></tfoot>}</table></div>
+        {(() => { const x0 = depenses.find((y) => y.id === selDep); return x0 && x0.mode === "apayer" && x0.status !== "annulé" ? (<div className="ec-card p-4 mt-3" data-testid="im-depreg-form"><div className="text-sm mb-2">Règlement de {x0.supplier || "fournisseur"} — {x0.label} — reste à payer <b className="tabular" data-testid="im-dep-reste">{fmt(resteDep(x0))}</b></div>
+          {(x0.settlements || []).length > 0 && (<div className="ec-wrap mb-2"><table className="ec-table"><tbody>{x0.settlements.map((s2) => (<tr key={s2.id} data-testid="im-reg-ligne" style={{ opacity: s2.status === "annulé" ? 0.5 : 1 }}><td className="py-1.5">{ecDateFr(s2.date)}</td><td>{s2.mode === "banque" ? "Banque" : "Caisse"}</td><td className="text-right tabular">{fmt(s2.amount)}</td><td className="text-right">{s2.status === "annulé" ? ecPastille("Annulé", "neutre") : (canEdit && <button onClick={() => annulerRegDep(x0, s2)} className="text-xs" style={{ color: "#A6432F" }}>Annuler</button>)}</td></tr>))}</tbody></table></div>)}
+          <div className="grid md:grid-cols-4 gap-2 items-end"><div><label className="text-xs" style={{ color: "#8A8370" }}>Montant (vide = tout le reste)</label><input type="number" min="0" step="0.01" value={rg.amount} onChange={(e) => setRg({ ...rg, amount: e.target.value })} data-testid="im-reg-montant" className={ecInput + " tabular"} style={ecBorder} /></div>
+            <div><label className="text-xs" style={{ color: "#8A8370" }}>Date</label><input type="date" max={todayStr()} value={rg.date} onChange={(e) => setRg({ ...rg, date: e.target.value })} className={ecInput} style={ecBorder} /></div>
+            <div><label className="text-xs" style={{ color: "#8A8370" }}>Payé par</label><select value={rg.mode} onChange={(e) => setRg({ ...rg, mode: e.target.value })} className={ecInput} style={ecBorder}><option value="caisse">Caisse</option><option value="banque">Banque</option></select></div>
+            <button onClick={() => reglerDep(x0)} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="im-reg-valider">Enregistrer le règlement</button></div></div>) : null; })()}
         {dF.length === 0 && <div className="text-sm" style={{ color: "#8A8370" }}>{depenses.length === 0 ? "Aucune dépense." : "Aucune dépense ne correspond à ces filtres."}</div>}
       </div>
     );

@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Creances et clients
 // @depends ChequeDialog, History, InvoiceSheet, Plus, RecordedStamp, X, _membership, balanceDue, fmt
-//   makeChequeRecord, normalizeClientName, simpleEntry, todayStr, uid, useAssistedAnomalyGate
-//   useBackNav, useBrouillon, useEffect, useState
+//   makeChequeRecord, normalizeClientName, rangModule, simpleEntry, todayStr, uid
+//   useAssistedAnomalyGate, useBackNav, useBrouillon, useEffect, useState
 // @exports CRMModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Provision pour créances douteuses — mêmes principes que la dépréciation de
@@ -402,10 +402,10 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
     <>
     <div className={`p-4 md:p-8 max-w-6xl${printInv ? " no-print" : ""}`}>
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 6</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("crm")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Comptes clients (CRM)</div>
         <p className="text-sm mt-1" style={{ color: "#7A7460" }}>
-          Fiches alimentées automatiquement par les factures du Module 3 — un client apparaît dès sa première vente.
+          Fiches alimentées automatiquement par les factures du module Vente — un client apparaît dès sa première vente.
         </p>
       </header>
 
@@ -464,7 +464,7 @@ function CRMModule({ setCheques, clients, setClients, invoices, setInvoices, ent
       <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
         {listRows.length === 0 ? (
           <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }}>
-            Aucun client pour le moment. Ajoutez une fiche client ou faites une vente dans le Module 3.
+            Aucun client pour le moment. Ajoutez une fiche client ou faites une vente dans le module Vente.
           </div>
         ) : (
           <div className="overflow-x-auto overflow-y-auto max-h-[65vh] border rounded" style={{ borderColor: "#EEE9DA" }}><table className="w-full text-sm">

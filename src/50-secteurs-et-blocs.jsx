@@ -15,7 +15,7 @@ const SECTEURS_PRIX = { pack: 12, A: 8, B: 5, C: 3 };
 const SECTEURS_CATALOGUE = [
   { id: "ecoles", label: "Éducation", desc: "Écoles, formations professionnelles, universités : élèves ou étudiants, frais, crédits, échéances, reçus, impayés", grille: "A", dispo: true },
   { id: "import_export", label: "Import-export", desc: "Dossiers d'importation, coût de revient, TCA à l'importation, exportations", grille: "A", dispo: true },
-  { id: "industrie", label: "Industries artisanales", desc: "Fiches de fabrication, coût de revient, matières premières", grille: "A", dispo: false },
+  { id: "industrie", label: "Industries artisanales", desc: "Matières premières et stock, produits et recettes, lots de fabrication avec coût de revient, commandes sur mesure et devis, ventes et factures, dépenses d'atelier, rentabilité par produit", grille: "A", dispo: true },
   { id: "sante", label: "Santé (cabinets, cliniques, hôpitaux)", desc: "Facturation par acte, assureurs, pharmacie", grille: "B", dispo: true },
   { id: "ong", label: "ONG, associations, églises", desc: "Fonds affectés, bailleurs, reçus de dons", grille: "B", dispo: false },
   { id: "btp", label: "BTP et construction", desc: "Chantiers et bordereaux de prix, devis, avances, situations de travaux avec retenue de garantie, dépenses et sous-traitants, rentabilité par chantier", grille: "C", dispo: true },

@@ -1,9 +1,9 @@
 // ═══ MODULE ═══
 // @module Stock
 // @depends ArrowDownCircle, ArrowUpCircle, AssistedPrincipleReminder, PendingRecommendationsBanner, Plus
-//   RecordedStamp, Trash2, _membership, detectAmountAnomaly, fmt, isLocked, resolveMembership
-//   stockReconcile, supabase, todayStr, uid, useAssistedAnomalyGate, useBackNav, useBrouillon
-//   useEffect, useMemo, useState
+//   RecordedStamp, Trash2, _membership, detectAmountAnomaly, fmt, isLocked, rangModule
+//   resolveMembership, stockReconcile, supabase, todayStr, uid, useAssistedAnomalyGate, useBackNav
+//   useBrouillon, useEffect, useMemo, useState
 // @exports StockModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Dépréciation de stock — dévalue un produit sans en retirer la quantité physique
@@ -377,10 +377,10 @@ function StockModule({ products, setProducts, movements, setMovements, accounts,
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 5</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("stock")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Stock et inventaire</div>
         <p className="text-sm mt-1" style={{ color: "#7A7460" }}>
-          Le stock est décrémenté automatiquement à chaque vente de marchandise (Module 3).
+          Le stock est décrémenté automatiquement à chaque vente de marchandise (module Vente).
         </p>
       </header>
 
@@ -421,7 +421,7 @@ function StockModule({ products, setProducts, movements, setMovements, accounts,
           })()}
           {stockProducts.length === 0 ? (
             <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }}>
-              Aucune marchandise au catalogue. Ajoutez des articles de type « Marchandise » depuis le Module 3 — Catalogue.
+              Aucune marchandise au catalogue. Ajoutez des articles de type « Marchandise » depuis le module Vente — Catalogue.
             </div>
           ) : (
             <>

@@ -8,7 +8,7 @@
 //   detectTaxAnomaly, downloadInvoicePDF, factureDateHeure, fmt, invoicePrefix, isFutureDate
 //   isLocked, makeChequeRecord, nifLigne, normalizeClientName, oflCompanyId, oflEnqueue, oflFinal
 //   oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved, oflTimeout
-//   printInvoiceBluetooth, resizeImage, simpleEntry, suggestSimilarTiers, supabase
+//   printInvoiceBluetooth, rangModule, resizeImage, simpleEntry, suggestSimilarTiers, supabase
 //   tauxFactureTexte, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useMemo
 //   useState
 // @exports VenteModule
@@ -990,7 +990,7 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
     <>
     <div className={`p-4 md:p-8 max-w-6xl${printInvoice ? " no-print" : ""}`}>
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 3</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("vente")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Vente — POS et facturation</div>
         <p className="text-sm mt-1" style={{ color: "#7A7460" }}>
           Chaque vente génère automatiquement sa facture et son écriture comptable (compte 706/707).

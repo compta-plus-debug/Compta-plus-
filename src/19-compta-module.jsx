@@ -7,7 +7,7 @@
 //   RiskProvisionsPanel, RotateCcw, X, _membership, buildReversedCorrectedLines
 //   buildReversedCorrection, canonicalEntryContent, cleanSuggestionLabel, detectAmountAnomaly
 //   detectDuplicateAnomaly, detectRareAccountAnomaly, detectReversedAnomaly, fmt, isFutureDate
-//   isLocked, sha256Hex, simpleEntry, suggestAccountFromHistory, todayStr, uid
+//   isLocked, rangModule, sha256Hex, simpleEntry, suggestAccountFromHistory, todayStr, uid
 //   useAssistedAnomalyGate, useBackNav, useEffect, useState, verifyChain, verifyChainFull
 // @exports ComptaModule
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -439,7 +439,7 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries: setEntriesPr
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <header className="mb-6">
-        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module 1</div>
+        <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("compta")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Comptabilité</div>
       </header>
 

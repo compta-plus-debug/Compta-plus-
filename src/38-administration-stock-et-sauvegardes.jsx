@@ -131,7 +131,7 @@ const BK_LABELS = {
   clients: "Clients", settings: "Paramètres", users: "Utilisateurs", employees: "Employés",
   salesStations: "Postes de vente", assets: "Immobilisations", accruals: "Charges à payer / produits à recevoir",
   deferrals: "Charges / produits d'avance", riskProvisions: "Provisions pour risques", entryTemplates: "Modèles d'écritures",
-  pendingApprovals: "Approbations en attente", cheques: "Chèques", bizdocs: "Documents commerciaux", ecole: "Éducation (élèves, étudiants, frais, reçus)", impex: "Import-export (dossiers)", sante: "Santé (patients, factures, assureurs, praticiens)", resto: "Restauration (tables, menu, commandes, service)", hotel: "Hôtellerie (chambres, clients, réservations, factures de séjour)", transport: "Transport et logistique (véhicules, chauffeurs, voyages, factures, dépenses)", immo: "Immobilier et location (biens, locataires, baux, loyers, dépenses)", btp: "BTP et construction (chantiers, situations de travaux, dépenses)",
+  pendingApprovals: "Approbations en attente", cheques: "Chèques", bizdocs: "Documents commerciaux", ecole: "Éducation (élèves, étudiants, frais, reçus)", impex: "Import-export (dossiers)", sante: "Santé (patients, factures, assureurs, praticiens)", resto: "Restauration (tables, menu, commandes, service)", hotel: "Hôtellerie (chambres, clients, réservations, factures de séjour)", transport: "Transport et logistique (véhicules, chauffeurs, voyages, factures, dépenses)", immo: "Immobilier et location (biens, locataires, baux, loyers, dépenses)", btp: "BTP et construction (chantiers, situations de travaux, dépenses)", indus: "Industries artisanales (matières, produits, recettes, lots, commandes, ventes)",
   payslips: "Bulletins de paie", salaryAdvances: "Avances sur salaire", loans: "Emprunts",
 };
 // Empreinte (cyrb53) : détecte un fichier tronqué ou altéré (copier-coller incomplet,
@@ -420,7 +420,9 @@ function PartialResetPanel({ counts, isPrimaryAdmin, settings, setSettings, appl
   const chosen = ITEMS.filter((i) => sel[i.id]);
   const problem = sel.accounts && !sel.compta ? "Le plan comptable ne peut être réinitialisé que si la comptabilité est aussi effacée (sinon des écritures référenceraient des comptes disparus)." : null;
 
-  const run = () => {
+  const [rapport, setRapport] = useState(null);
+  const [enCours, setEnCours] = useState(false);
+  const run = async () => {
     if (!isPrimaryAdmin) { showToast("Seul l'administrateur principal peut réinitialiser les données de l'entreprise."); return; }
     if (chosen.length === 0) { showToast("Cochez au moins une catégorie à réinitialiser."); return; }
     if (problem) { showToast(problem); return; }
@@ -430,11 +432,15 @@ function PartialResetPanel({ counts, isPrimaryAdmin, settings, setSettings, appl
     const typed = window.prompt('Action irréversible. Pour confirmer, tapez exactement RÉINITIALISER (en majuscules) :');
     const normalized = (typed || "").trim().toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     if (normalized !== "REINITIALISER") { showToast("Réinitialisation annulée."); return; }
-    apply(sel, { zeroStock: !sel.products && zeroStock });
-    if (sel.compta) setSettings({ ...settings, lockDate: "", lastClosingDate: "" });
+    setEnCours(true); setRapport(null);
+    let res = null;
+    try { res = await apply(sel, { zeroStock: !sel.products && zeroStock }); } catch (e) { res = { restant: [{ cat: "?", label: "la réinitialisation a été interrompue", n: 0 }] }; }
+    setEnCours(false);
     logAudit("Administration", sel.products && sel.compta && ITEMS.every((i) => sel[i.id]) ? "Réinitialisation complète des données" : "Réinitialisation partielle des données", chosen.map((i) => i.label).join(", ") + (!sel.products && zeroStock ? " + quantités de stock remises à zéro" : ""));
-    showToast("Réinitialisation effectuée.");
-    setSel({}); setOpen(false);
+    const restant = (res && res.restant) || [];
+    setRapport({ ok: restant.length === 0, restant, compta: !!sel.compta });
+    showToast(restant.length === 0 ? "Réinitialisation effectuée et vérifiée sur le serveur." : "Réinitialisation incomplète : voir le détail dans le panneau.");
+    setSel({});
   };
 
   const Row = ({ it }) => (
@@ -480,9 +486,12 @@ function PartialResetPanel({ counts, isPrimaryAdmin, settings, setSettings, appl
             </label>
           )}
           {problem && <div className="text-xs p-2 rounded mt-3" style={{ background: "#F7E9E3", color: "#A6432F" }}>{problem}</div>}
+          {enCours && <div className="text-xs p-2 rounded mt-3" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="reset-encours">Réinitialisation en cours : la date de clôture est d'abord effacée, puis les données, puis le résultat est vérifié sur le serveur. Ne fermez pas la page (quelques secondes).</div>}
+          {rapport && rapport.ok && <div className="text-xs p-2 rounded mt-3" style={{ background: "#E3F2EE", color: "#0F6B5C" }} data-testid="reset-rapport-ok">Réinitialisation terminée et vérifiée : toutes les catégories choisies sont vides sur le serveur.</div>}
+          {rapport && !rapport.ok && <div className="text-xs p-2 rounded mt-3" style={{ background: "#F7E9E3", color: "#A6432F" }} data-testid="reset-rapport-ko"><b>Réinitialisation incomplète.</b> Il reste sur le serveur : {rapport.restant.map((r) => r.n + " " + r.label).join(", ")}. Le serveur a refusé certaines suppressions (période clôturée ou règle de protection). Relancez la réinitialisation ; si le message revient, notez-le et transmettez-le-moi.</div>}
           <div className="flex flex-wrap gap-2 mt-4">
             <button onClick={exportData} className="px-3 py-1.5 rounded text-xs" style={{ border: "1px solid #152238", color: "#152238" }}>Télécharger une sauvegarde d'abord</button>
-            <button onClick={run} disabled={chosen.length === 0 || !!problem} className="px-3 py-1.5 rounded text-xs text-white" style={{ background: "#A6432F", opacity: chosen.length === 0 || problem ? 0.5 : 1 }}>Réinitialiser la sélection ({chosen.length})</button>
+            <button onClick={run} disabled={chosen.length === 0 || !!problem || enCours} className="px-3 py-1.5 rounded text-xs text-white" style={{ background: "#A6432F", opacity: chosen.length === 0 || problem ? 0.5 : 1 }}>Réinitialiser la sélection ({chosen.length})</button>
             <button onClick={() => { setOpen(false); setSel({}); }} className="px-3 py-1.5 rounded text-xs" style={{ border: "1px solid #DDD6C4", color: "#7A7460" }}>Annuler</button>
           </div>
         </div>
