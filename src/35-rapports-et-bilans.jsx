@@ -214,7 +214,8 @@ function RapportsModule({ payslips, employees, suppliers, accounts, balances, in
     else if (kind === "annee") { setGlFrom(`${y}-01-01`); setGlTo(todayStr()); }
   };
   const exportGrandLivreCSV = () => {
-    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const sureCsv = (v) => { const t = String(v ?? ""); return typeof v === "string" && /^[=+\-@\t\r]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t) ? "'" + t : t; }; // neutralise les formules (=, +, -, @) que Excel exécuterait
+    const esc = (v) => `"${sureCsv(v).replace(/"/g, '""')}"`;
     const out = [["Compte", "Libellé du compte", "Date", "Libellé de l'écriture", "Débit", "Crédit", "Solde progressif (débit − crédit)"].join(",")];
     glData.forEach(({ account, ledger }) => {
       out.push([esc(account.code), esc(account.name), "", esc("Solde d'ouverture"), "", "", ledger.opening.toFixed(2)].join(","));
@@ -319,7 +320,8 @@ function RapportsModule({ payslips, employees, suppliers, accounts, balances, in
     // prévus en v2.0 (voir note dans l'interface).
     const cols = ["Date", "Compte", "Libellé du compte", "Libellé de l'écriture", "Débit", "Crédit"];
     const rows = [cols.join(",")];
-    const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const sureCsv = (v) => { const t = String(v ?? ""); return typeof v === "string" && /^[=+\-@\t\r]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t) ? "'" + t : t; }; // neutralise les formules (=, +, -, @) que Excel exécuterait
+    const esc = (v) => `"${sureCsv(v).replace(/"/g, '""')}"`;
     const sorted = [...entries].sort((a, b) => (a.date > b.date ? 1 : -1));
     sorted.forEach((e) => {
       (e.lines || []).forEach((l) => {

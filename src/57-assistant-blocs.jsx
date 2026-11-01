@@ -19,7 +19,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, indus, agri, products, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, indus, agri, ong, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -243,6 +243,37 @@ function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp
       push({ key: "agri-camp:" + c.id, severity: "medium", category: "agri", title: "Campagne ouverte depuis plus de 6 mois sans récolte", detail: `${c.name} (${c.number}) est ouverte depuis le ${asbFr(c.start)} sans aucune récolte enregistrée.` });
     });
   }
+  // ───── ONG, associations, églises ─────
+  if (A.includes("ong") && (ong || []).length) {
+    const r2o = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    const dons = asbRows(ong, "don").filter((d) => d.status !== "annulé");
+    const deps = asbRows(ong, "dep").filter((d) => d.status !== "annulé");
+    const vires = asbRows(ong, "vire").filter((v) => v.status !== "annulé");
+    asbRows(ong, "fonds").forEach((f) => {
+      const rec = r2o(dons.filter((d) => d.fondId === f.id).reduce((s, d) => s + d.amount, 0) + vires.filter((v) => v.to === f.id).reduce((s, v) => s + v.amount, 0) - vires.filter((v) => v.from === f.id).reduce((s, v) => s + v.amount, 0));
+      const dep = r2o(deps.filter((d) => d.fondId === f.id).reduce((s, d) => s + d.amount, 0));
+      if (f.status !== "clos" && Number(f.budget) > 0 && dep > Number(f.budget) + 0.004) push({ key: "ong-budget:" + f.id, severity: "medium", category: "ong", title: "Budget d'un projet dépassé", detail: `${f.name} : ${asbG(dep)} dépensés pour un budget de ${asbG(f.budget)}.` });
+      if (f.status === "clos" && Math.abs(r2o(rec - dep)) > 0.004) push({ key: "ong-fonds-clos:" + f.id, severity: "high", category: "ong", title: "Fonds clôturé avec un solde", detail: `${f.name} est clôturé mais son solde est de ${asbG(rec - dep)}.` });
+    });
+    const an = String(today).slice(0, 4);
+    asbRows(ong, "membre").filter((m) => m.status !== "inactif" && Number(m.cotis) > 0).forEach((m) => {
+      const per = m.period === "mensuelle" ? 12 : m.period === "trimestrielle" ? 4 : 1;
+      let retard = 0;
+      for (let i = 0; i < per; i++) {
+        const mo = m.period === "mensuelle" ? i + 1 : m.period === "trimestrielle" ? i * 3 + 1 : 1;
+        const key = m.period === "mensuelle" ? an + "-" + String(mo).padStart(2, "0") : m.period === "trimestrielle" ? an + "-T" + (i + 1) : an;
+        const debut = an + "-" + String(mo).padStart(2, "0") + "-01";
+        if (debut > today || debut < String(m.joined || "").slice(0, 7) + "-01" || asbDays(debut < (m.joined || "") ? m.joined : debut, today) <= 30) continue;
+        if (!dons.some((d) => d.kind === "cotisation" && d.memberId === m.id && d.periode === key)) retard++;
+      }
+      if (retard > 0) push({ key: "ong-cotis:" + m.id, severity: "low", category: "ong", title: "Cotisation en retard", detail: `${m.name} : ${retard} période(s) de cotisation ${an} non payée(s) depuis plus de 30 jours.` });
+    });
+    deps.filter((d) => d.mode === "apayer").forEach((d) => {
+      const reste = r2o(d.amount - (d.settlements || []).filter((x) => x.status !== "annulé").reduce((s, x) => s + x.amount, 0));
+      const j = asbDays(d.date, today);
+      if (reste > 0.004 && j > 30) push({ key: "ong-impaye:" + d.id, severity: j > 60 ? "high" : "medium", category: "ong", title: "Dépense à payer depuis longtemps", detail: `${d.supplier || d.label || "Dépense"} : ${asbG(reste)} à payer depuis le ${asbFr(d.date)} (${j} jours).` });
+    });
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -385,6 +416,22 @@ function asstHowToBlocs(f) {
       "Ouvrez l'espace Agriculture et élevage → onglet « Cultures » et ouvrez la campagne indiquée.",
       "Si la récolte a eu lieu, enregistrez-la avec sa vraie date.",
       "Si la culture est perdue, cliquez sur « Clôturer la campagne » : les frais restent comptés, le coût de revient n'est pas calculé."] },
+    "ong-budget": { why: "Quand un projet dépasse son budget, le bailleur peut refuser de financer la différence : il faut le prévenir et justifier avant son rapport.", steps: [
+      "Ouvrez l'espace ONG et associations → onglet « Fonds et projets » et ouvrez le projet indiqué.",
+      "Contrôlez les dépenses imputées : erreur de fonds, doublon, dépense à rattacher à un autre projet ?",
+      "Si le dépassement est réel, informez le bailleur (ou le comité) et demandez un avenant, ou prenez la différence sur le fonds général (virement entre fonds avec un motif)."] },
+    "ong-fonds-clos": { why: "Un fonds clôturé doit être à zéro : un solde restant signifie de l'argent affecté qui n'est ni dépensé ni rendu.", steps: [
+      "Ouvrez l'espace ONG et associations → onglet « Fonds et projets » et consultez le rapport financier du fonds.",
+      "Si le solde est positif, convenez avec le bailleur de son sort (remboursement ou report) et enregistrez un virement vers le fonds convenu.",
+      "Si le solde est négatif, des dépenses ont dépassé les recettes : justifiez-les ou rattachez-les au bon fonds."] },
+    "ong-cotis": { why: "Les cotisations non recouvrées privent l'organisation de ressources régulières et faussent les prévisions.", steps: [
+      "Ouvrez l'espace ONG et associations → onglet « Membres » et ouvrez la fiche indiquée.",
+      "Contactez le membre ; dès qu'il paie, cliquez sur « Enregistrer la cotisation » : le reçu est créé et la comptabilité se fait seule.",
+      "Si le membre a quitté l'organisation, passez-le en « inactif » pour ne plus le relancer."] },
+    "ong-impaye": { why: "Une dépense non payée depuis plus de 30 jours abîme la confiance du fournisseur et peut bloquer vos prochaines commandes.", steps: [
+      "Ouvrez l'espace ONG et associations → onglet « Dépenses » et ouvrez la dépense indiquée.",
+      "Vérifiez la trésorerie du fonds concerné, puis enregistrez le règlement (date, mode).",
+      "Si la dépense est contestée, notez-le dans le libellé et parlez-en au fournisseur."] },
     "btp-impaye": { why: "Une situation de travaux impayée depuis plus de 30 jours pèse sur votre trésorerie alors que vos dépenses de chantier, elles, sont déjà payées.", steps: [
       "Ouvrez l'espace BTP → onglet « Situations » et ouvrez la situation indiquée.",
       "Relancez le client avec le numéro de la situation et le net à payer.",

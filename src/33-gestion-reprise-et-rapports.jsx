@@ -271,7 +271,8 @@ function repJustify({ entries, bizdocs, from, to }) {
 
 // ---------------------------------------------------------------- Reprise, rapport ventes ↔ banque, pièces justificatives
 const repDownload = (name, rows) => {
-  const esc = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+  const sureCsv = (v) => { const t = String(v ?? ""); return typeof v === "string" && /^[=+\-@\t\r]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t) ? "'" + t : t; };
+  const esc = (v) => `"${sureCsv(v == null ? "" : v).replace(/"/g, '""')}"`;
   const blob = new Blob(["﻿" + rows.map((r) => r.map(esc).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const el = document.createElement("a");

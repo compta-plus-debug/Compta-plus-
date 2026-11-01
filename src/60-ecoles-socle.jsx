@@ -36,7 +36,8 @@ const ecBtnGold = { background: "#C9A24B", color: "#152238" };
 
 
 function ecTelecharger(nom, lignes) {
-  const csv = "﻿" + lignes.map((r) => r.map((v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(";")).join("\r\n");
+  const sureCsv = (v) => { const t = String(v ?? ""); return typeof v === "string" && /^[=+\-@\t\r]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t) ? "'" + t : t; }; // neutralise les formules (=, +, -, @) que Excel exécuterait
+  const csv = "﻿" + lignes.map((r) => r.map((v) => '"' + sureCsv(v == null ? "" : v).replace(/"/g, '""') + '"').join(";")).join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();

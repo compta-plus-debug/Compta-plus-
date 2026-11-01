@@ -17,7 +17,7 @@ const SECTEURS_CATALOGUE = [
   { id: "import_export", label: "Import-export", desc: "Dossiers d'importation, coût de revient, TCA à l'importation, exportations", grille: "A", dispo: true },
   { id: "industrie", label: "Industries artisanales", desc: "Matières premières et stock, produits et recettes, lots de fabrication avec coût de revient, commandes sur mesure et devis, ventes et factures, dépenses d'atelier, rentabilité par produit", grille: "A", dispo: true },
   { id: "sante", label: "Santé (cabinets, cliniques, hôpitaux)", desc: "Facturation par acte, assureurs, pharmacie", grille: "B", dispo: true },
-  { id: "ong", label: "ONG, associations, églises", desc: "Fonds affectés, bailleurs, reçus de dons", grille: "B", dispo: false },
+  { id: "ong", label: "ONG, associations, églises", desc: "Fonds affectés par projet, donateurs et bailleurs, reçus de dons numérotés, membres et cotisations, dîmes et offrandes, rapports financiers", grille: "B", dispo: true },
   { id: "btp", label: "BTP et construction", desc: "Chantiers et bordereaux de prix, devis, avances, situations de travaux avec retenue de garantie, dépenses et sous-traitants, rentabilité par chantier", grille: "C", dispo: true },
   { id: "immobilier", label: "Immobilier et location", desc: "Biens, locataires, baux et dépôts de garantie, loyers mensuels, avis d'échéance et quittances, dépenses par bien, impayés, rentabilité", grille: "C", dispo: true },
   { id: "restauration", label: "Restauration et hôtellerie", desc: "Tables, menu et coût des plats, commandes et additions, service du personnel hôtellerie (chambres, planning, réservations, factures de séjour)", grille: "C", dispo: true },
