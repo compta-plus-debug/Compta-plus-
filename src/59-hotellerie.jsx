@@ -348,10 +348,24 @@ function HotelModule({ hotel, setHotel, entries, setEntries, accounts, setAccoun
     const nuits = fm.reduce((s, b) => s + b.invoice.nights, 0);
     const heberg = hoR2(fm.reduce((s, b) => s + b.invoice.heberg, 0));
     const taux = totalChambres ? Math.round(enSejour.length / totalChambres * 100) : 0;
+    const guide = [
+      ["Types de chambres", "Onglet Chambres et tarifs : créez vos types (nom, personnes, tarif par nuit).", "chambres", types.length > 0],
+      ["Chambres", "Ajoutez vos chambres avec leur numéro et leur type.", "chambres", rooms.length > 0],
+      ["Clients", "Onglet Clients : enregistrez votre premier client.", "clients", guests.length > 0],
+      ["Réservation", "Onglet Réservations : choisissez le client, la chambre et les dates.", "resa", bookings.length > 0],
+      ["Arrivée", "À l'arrivée du client, ouvrez la réservation et enregistrez son arrivée.", "resa", bookings.some((b) => b.status === "arrivee" || b.status === "partie")],
+      ["Départ et facture", "Au départ, ajoutez les services, établissez la facture et encaissez.", "resa", factPayees.length > 0],
+      ["Planning", "Onglet Planning : visualisez les chambres occupées, réservées ou hors service sur 14 jours.", "planning", bookings.length > 0],
+    ];
+    const guideFait = guide.every((e) => e[3]);
     const kpis = [["Chambres occupées", enSejour.length + " / " + totalChambres, "hotel-kpi-occupees"], ["Taux d'occupation du jour", taux + " %", "hotel-kpi-taux"], ["Arrivées prévues aujourd'hui", String(arrivees.length), "hotel-kpi-arrivees"], ["Départs prévus aujourd'hui", String(departs.length), "hotel-kpi-departs"], ["Ventes du mois (séjours facturés)", hoM(ca), "hotel-kpi-mois"], ["Prix moyen par nuit (mois)", hoM(nuits ? heberg / nuits : 0), "hotel-kpi-prixmoyen"]];
     const ligne = (b, bouton) => (<div key={b.id} className="flex items-center justify-between text-sm py-1" data-testid="hotel-ligne-jour"><span>{guestDe(b.guestId).name} — {nomChambre(b.roomId)} ({ecDateFr(b.from)} → {ecDateFr(b.to)})</span><button onClick={() => { setSel(b.id); setTab("resa"); }} className="text-xs underline">{bouton}</button></div>);
     return (
       <div>
+        {(<div className="ec-card p-4 mb-5" data-testid="hotel-guide">
+          <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{guideFait ? " — toutes faites ✓" : ""}</div>
+          <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{guide.map(([t, d, tb, fait], i) => (<li key={i} data-testid="hotel-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && !(isVendeur && !["resa", "clients", "factures", "planning"].includes(tb)) && <button className="text-xs underline" data-testid="hotel-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
+        </div>)}
         {types.length + rooms.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="hotel-vide">Pour commencer, dans cet ordre : <b>1.</b> onglet <b>Chambres et tarifs</b> : créez vos types de chambres (nom, personnes, tarif par nuit) · <b>2.</b> ajoutez vos chambres (numéro et type) · <b>3.</b> facultatif : vos services (petit-déjeuner, blanchisserie…), la taxe de séjour et la TCA · <b>4.</b> onglet <b>Clients</b> : enregistrez un client · <b>5.</b> onglet <b>Réservations</b> : créez une réservation.</div>}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}

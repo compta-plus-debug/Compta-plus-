@@ -13,7 +13,7 @@ function GestionModule(props) {
   const accOnly = settings && settings.accountingOnly === true;
   // Dans les espaces de métier qui ont leurs propres devis et leurs propres ventes (hors commerce, import-export et santé),
   // les outils du commerce « Devis & commandes » et « Import POS » ne servent pas : on ne les propose pas.
-  const espaceSansCommerce = ["ecole", "resto", "hotel", "transport", "immo", "btp", "indus"].includes(props.espace);
+  const espaceSansCommerce = ["ecole", "resto", "hotel", "transport", "immo", "btp", "indus", "agri"].includes(props.espace);
   const hideTab = (id) => (accOnly && ACCOUNTING_ONLY_HIDDEN_GESTION_TABS.includes(id)) || (espaceSansCommerce && (id === "docs" || id === "importpos"));
   const groups = [
     { label: "Suivi", tabs: [["echeances", `Échéances${al.total ? ` (${al.total})` : ""}`], ["docs", "Devis & commandes"], ["avoirs", "Avoirs & retours"], ["acomptes", "Acomptes & frais"], ["inventaire", "Inventaire"], ["importpos", "Import POS"], ["reprise", "Reprise comptable"], ["rapportbanque", "Ventes ↔ banque"], ["justificatifs", "Pièces justificatives"]].filter(([id]) => !hideTab(id)) },

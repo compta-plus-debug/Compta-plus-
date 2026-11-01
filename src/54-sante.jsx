@@ -704,8 +704,8 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
             <span className="text-xs" style={{ color: "#7A7460" }}>Chaque type a ses propres données (patients, catalogue, factures, assureurs, praticiens) et ses propres mots. Aucune donnée médicale n'est enregistrée : administratif et comptabilité seulement.</span>
           </div>
         </div>)}
-        {!toutFait && (<div className="ec-card p-4 mb-5" data-testid="sante-guide">
-          <div className="display text-base mb-2" style={{ color: "#152238" }}>Pour démarrer, en 7 étapes</div>
+        {(<div className="ec-card p-4 mb-5" data-testid="sante-guide">
+          <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{toutFait ? " — toutes faites ✓" : ""}</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="sante-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && tb !== "etab" && <button className="text-xs underline" data-testid="sante-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
         {patients.length + invoices.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="sante-vide">Pour commencer : ajoutez vos <b>assureurs</b> et vos <b>{V.Praticiens.toLowerCase()}</b>, remplissez le <b>catalogue</b> (tarifs), puis créez vos <b>{V.Patients.toLowerCase()}</b> et votre première facture.</div>}

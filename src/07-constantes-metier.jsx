@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Constantes metier
 // @depends BadgeDollar, BarChart3, Bed, BookOpen, Boxes, Building, ClipboardIcon, Cross, Hammer, Settings
-//   ShoppingCart, Truck, Users, Utensils, Wallet
+//   ShoppingCart, Sprout, Truck, Users, Utensils, Wallet
 // @exports ACCOUNTING_ONLY_HIDDEN_GESTION_TABS, ASSET_CATEGORIES, CURRENCIES, CURRENT_CURRENCY
 //   DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS, DEFAULT_SETTINGS, DEFAULT_SUPPLIERS
 //   DEFAULT_USERS, MODULES, ROLE_MODULE_ACCESS, TAX_SYSTEMS, VENDEUR_WRITABLE_CATEGORIES
@@ -18,6 +18,7 @@ const MODULES = [
   { id: "admin", n: 8, label: "Administration", icon: Settings, ready: true },
   { id: "rh", n: 9, label: "Salaires (RH)", icon: BadgeDollar, ready: true },
   { id: "gestion", n: 10, label: "Gestion avancée", icon: ClipboardIcon, ready: true },
+  { id: "agri", n: 20, label: "Agriculture et élevage", icon: Sprout, ready: true }, // bloc par secteur : visible seulement si le secteur « Agriculture et élevage » est actif et l'espace choisi
   { id: "indus", n: 19, label: "Industries artisanales", icon: Boxes, ready: true }, // bloc par secteur : visible seulement si le secteur « Industries artisanales » est actif et l'espace choisi
   { id: "btp", n: 18, label: "BTP et construction", icon: Hammer, ready: true }, // bloc par secteur : visible seulement si le secteur « BTP et construction » est actif et l'espace choisi
   { id: "immo", n: 17, label: "Immobilier et location", icon: Building, ready: true }, // bloc par secteur : visible seulement si le secteur « Immobilier et location » est actif et l'espace choisi
@@ -78,7 +79,7 @@ function allowedModulesFor(role, settings) {
 // d'écrire ces catégories pour un Vendeur, échouerait à chaque fois (normal), et
 // afficherait indéfiniment la bannière d'erreur de synchronisation pour une
 // restriction de sécurité parfaitement normale.
-const VENDEUR_WRITABLE_CATEGORIES = ["products", "invoices", "movements", "entries", "ecole", "sante", "resto", "hotel", "transport", "immo", "btp", "indus"]; // « ecole » : secrétaire-caissier(ère) du bloc Écoles et « sante » : réception ou comptoir du bloc Santé (nécessitent les scripts SQL des v261 et v270)
+const VENDEUR_WRITABLE_CATEGORIES = ["products", "invoices", "movements", "entries", "ecole", "sante", "resto", "hotel", "transport", "immo", "btp", "indus", "agri"]; // « ecole » : secrétaire-caissier(ère) du bloc Écoles et « sante » : réception ou comptoir du bloc Santé (nécessitent les scripts SQL des v261 et v270)
 
 const DEFAULT_ACCOUNTS = [
   { code: "101", name: "Capital", type: "Capitaux propres" },

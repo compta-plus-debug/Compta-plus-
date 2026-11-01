@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Assistant blocs
-// @depends —
+// @depends Plus
 // @exports asstHowToBlocs, asstScanBlocs
 // ═══ FIN DE L'EN-TÊTE ═══
 // Assistant de contrôle (forfaits Assisté et Extension) — contrôles propres à chaque bloc d'activité.
@@ -19,7 +19,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, indus, products, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, indus, agri, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -210,6 +210,39 @@ function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp
       push({ key: "indus-retard:" + c.id, severity: "medium", category: "indus", title: "Commande en retard de livraison", detail: `${cli.get(c.clientId) || "Client"} : la commande ${c.number} devait être livrée le ${asbFr(c.due)} (${asbDays(c.due, today)} jour(s) de retard).` });
     });
   }
+  // ───── Agriculture et élevage ─────
+  if (A.includes("agriculture") && (agri || []).length) {
+    const cli = new Map(asbRows(agri, "client").map((c) => [c.id, c.name]));
+    const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    asbRows(agri, "fact").filter((x) => x.status !== "annulee").forEach((x) => {
+      const reste = r2((x.net || 0) - (x.payments || []).filter((p) => p.status !== "annulé").reduce((s, p) => s + p.amount, 0));
+      const j = asbDays(x.date, today);
+      if (reste > 0.004 && j > 30) push({ key: "agri-impaye:" + x.id, severity: j > 60 ? "high" : "medium", category: "agri", title: "Facture de vente impayée", detail: `${cli.get(x.clientId) || "Client de passage"} : la facture ${x.number} du ${asbFr(x.date)} reste due à hauteur de ${reste.toFixed(2)} gourdes (${j} jours).` });
+    });
+    const achats = asbRows(agri, "achat").filter((a) => a.status !== "annulé");
+    const usages = asbRows(agri, "usage").filter((u) => u.status !== "annulé");
+    const lots = asbRows(agri, "lot").filter((l) => l.status !== "annulé");
+    const ajs = asbRows(agri, "ajust").filter((a) => a.status !== "annulé");
+    asbRows(agri, "mat").filter((m) => m.active !== false && Number(m.min) > 0).forEach((m) => {
+      const st = achats.filter((a) => a.matId === m.id).reduce((t, a) => t + a.qty, 0) - usages.filter((u) => u.matId === m.id).reduce((t, u) => t + u.qty, 0) - lots.reduce((t, l) => t + (l.lines || []).filter((x) => x.matId === m.id).reduce((u, x) => u + x.qty, 0), 0) + ajs.filter((a) => a.target === "mat" && a.refId === m.id).reduce((t, a) => t + a.qty, 0);
+      if (st <= m.min) push({ key: "agri-stock:" + m.id, severity: "medium", category: "agri", title: "Intrant presque épuisé", detail: `${m.name} : ${Math.round(st * 1000) / 1000} ${m.unit} en stock pour un seuil d'alerte de ${m.min}.` });
+    });
+    const bandes = asbRows(agri, "bande").filter((b) => b.status === "encours");
+    const mouvs = asbRows(agri, "mouv").filter((m) => m.status !== "annulé");
+    asbRows(agri, "soin").filter((x) => x.status !== "annulé" && x.next && !x.nextDone && x.next < today).slice(0, 25).forEach((x) => {
+      const b = bandes.find((y) => y.id === x.bandeId);
+      if (b) push({ key: "agri-soin:" + x.id, severity: "medium", category: "agri", title: "Soin ou vaccin en retard", detail: `${b.name} : « ${x.label || "pesée"} » devait être refait le ${asbFr(x.next)} (${asbDays(x.next, today)} jour(s) de retard).` });
+    });
+    bandes.filter((b) => b.mode === "lot").forEach((b) => {
+      const base = (b.count0 || 0) + mouvs.filter((m) => m.bandeId === b.id && (m.kind === "naissance" || m.kind === "achat")).reduce((t, m) => t + m.qty, 0);
+      const morts = mouvs.filter((m) => m.bandeId === b.id && m.kind === "mortalite").reduce((t, m) => t + m.qty, 0);
+      if (base > 0 && morts * 100 / base > 10) push({ key: "agri-mortalite:" + b.id, severity: "high", category: "agri", title: "Mortalité élevée dans une bande", detail: `${b.name} : ${morts} animal(aux) morts sur ${base}, soit ${Math.round(morts * 1000 / base) / 10} %.` });
+    });
+    const recoltes = asbRows(agri, "recolte").filter((r) => r.status !== "annulé");
+    asbRows(agri, "camp").filter((c) => c.status === "encours" && c.start && asbDays(c.start, today) > 180 && !recoltes.some((r) => r.campId === c.id)).forEach((c) => {
+      push({ key: "agri-camp:" + c.id, severity: "medium", category: "agri", title: "Campagne ouverte depuis plus de 6 mois sans récolte", detail: `${c.name} (${c.number}) est ouverte depuis le ${asbFr(c.start)} sans aucune récolte enregistrée.` });
+    });
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -329,6 +362,29 @@ function asstHowToBlocs(f) {
       "Ouvrez l'espace Industries artisanales → onglet « Commandes » et ouvrez la commande indiquée.",
       "Vérifiez qu'une fabrication existe (onglet Production) et que les matières sont en stock.",
       "Prévenez le client et, s'il l'accepte, indiquez une nouvelle date en créant une commande à jour ; sinon livrez et facturez dès que prête."] },
+    "agri-impaye": { why: "Une facture impayée depuis plus de 30 jours immobilise votre trésorerie alors que les semences, l'aliment et le travail sont déjà payés.", steps: [
+      "Ouvrez l'espace Agriculture et élevage → onglet « Ventes » et ouvrez la facture indiquée.",
+      "Relancez le client avec le numéro de facture et le reste à payer.",
+      "Dès qu'il paie, cliquez sur « Encaisser » (date, mode).",
+      "Pour les gros clients, pensez à demander un acompte à la commande (précommande avant récolte)."] },
+    "agri-stock": { why: "Sans semences, engrais ou aliment, le travail de la ferme s'arrête ou les animaux souffrent.", steps: [
+      "Ouvrez l'espace Agriculture et élevage → onglet « Intrants et achats ».",
+      "Vérifiez le stock réel ; en cas d'écart, utilisez « Ajuster » avec un motif.",
+      "Achetez l'intrant dans le formulaire « Acheter des intrants » : le stock et le prix moyen se mettent à jour.",
+      "Adaptez le seuil d'alerte dans la fiche de l'intrant si besoin."] },
+    "agri-soin": { why: "Un vaccin ou un traitement oublié expose toute la bande à la maladie, avec un risque de mortalité.", steps: [
+      "Ouvrez l'espace Agriculture et élevage → onglet « Élevage » et ouvrez la bande indiquée.",
+      "Faites le soin ou le vaccin prévu, puis cliquez sur « Fait » dans la ligne du soin.",
+      "Enregistrez un nouveau soin avec la date du prochain rappel pour ne plus l'oublier."] },
+    "agri-mortalite": { why: "Plus de 10 % de mortalité signale un problème (eau, aliment, maladie, chaleur, densité) qui peut vider la bande et rendre la vente déficitaire.", steps: [
+      "Ouvrez l'espace Agriculture et élevage → onglet « Élevage » et ouvrez la bande indiquée.",
+      "Relisez les mouvements et les causes notées ; appelez un vétérinaire ou un technicien si la cause n'est pas claire.",
+      "Vérifiez les soins et vaccins faits, puis corrigez la cause avant de racheter des animaux.",
+      "Notez la cause dans la remarque de chaque mortalité pour garder une trace."] },
+    "agri-camp": { why: "Une campagne ouverte depuis plus de six mois sans récolte fausse le coût de revient et signale souvent un oubli de saisie ou une culture perdue.", steps: [
+      "Ouvrez l'espace Agriculture et élevage → onglet « Cultures » et ouvrez la campagne indiquée.",
+      "Si la récolte a eu lieu, enregistrez-la avec sa vraie date.",
+      "Si la culture est perdue, cliquez sur « Clôturer la campagne » : les frais restent comptés, le coût de revient n'est pas calculé."] },
     "btp-impaye": { why: "Une situation de travaux impayée depuis plus de 30 jours pèse sur votre trésorerie alors que vos dépenses de chantier, elles, sont déjà payées.", steps: [
       "Ouvrez l'espace BTP → onglet « Situations » et ouvrez la situation indiquée.",
       "Relancez le client avec le numéro de la situation et le net à payer.",

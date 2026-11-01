@@ -1006,8 +1006,8 @@ function IndusModule({ suppliers, indus, setIndus, entries, setEntries, accounts
     const kpis = [["Ventes du mois (HT)", fmt(caMois), "in-kpi-ca"], ["Encaissé ce mois", fmt(encMois), "in-kpi-enc"], ["Reste à encaisser", fmt(aEnc), "in-kpi-aenc"], ["Coût des fabrications du mois", fmt(coutMois), "in-kpi-cout"], ["Dépenses d'atelier du mois", fmt(depMois), "in-kpi-dep"], ["Commandes en cours", String(cmds.filter((c) => ["confirmee", "enprod", "prete"].includes(c.status)).length), "in-kpi-cmd"], ["Matières en stock bas", String(bas.length), "in-kpi-bas"], ["Choses à faire", String(afaire.length), "in-kpi-afaire"]];
     return (
       <div>
-        {!toutFait && (<div className="ec-card p-4 mb-5" data-testid="in-guide">
-          <div className="display text-base mb-2" style={{ color: "#152238" }}>Pour démarrer, en 7 étapes</div>
+        {(<div className="ec-card p-4 mb-5" data-testid="in-guide">
+          <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{toutFait ? " — toutes faites ✓" : ""}</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="in-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && !(isVendeur && !["commandes", "ventes"].includes(tb)) && <button className="text-xs underline" data-testid="in-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
         {mats.length + prods.length + cmds.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="in-vide">Pour commencer : ajoutez vos <b>matières premières</b> et vos <b>produits</b>, achetez des matières, puis enregistrez votre première <b>fabrication</b>.</div>}

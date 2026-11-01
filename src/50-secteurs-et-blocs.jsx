@@ -22,7 +22,7 @@ const SECTEURS_CATALOGUE = [
   { id: "immobilier", label: "Immobilier et location", desc: "Biens, locataires, baux et dépôts de garantie, loyers mensuels, avis d'échéance et quittances, dépenses par bien, impayés, rentabilité", grille: "C", dispo: true },
   { id: "restauration", label: "Restauration et hôtellerie", desc: "Tables, menu et coût des plats, commandes et additions, service du personnel hôtellerie (chambres, planning, réservations, factures de séjour)", grille: "C", dispo: true },
   { id: "transport", label: "Transport et logistique", desc: "Véhicules et échéances, chauffeurs, voyages et bordereaux, factures, dépenses par véhicule, rentabilité", grille: "C", dispo: true },
-  { id: "agriculture", label: "Agriculture et élevage", desc: "Campagnes agricoles, récoltes, intrants", grille: "C", dispo: false },
+  { id: "agriculture", label: "Agriculture et élevage", desc: "Parcelles et campagnes, récoltes, élevage par bande et par animal, intrants, catalogue de la ferme, ventes, dépenses imputées, coût de revient et rentabilité", grille: "C", dispo: true },
 ];
 const secteurLabel = (id) => { const s = SECTEURS_CATALOGUE.find((x) => x.id === id); return s ? s.label : id; };
 

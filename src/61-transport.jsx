@@ -546,8 +546,8 @@ function TransportModule({ suppliers, transport, setTransport, entries, setEntri
     const kpis = [["Voyages ce mois", String(nbMois), "tr-kpi-voyages"], ["Voyages en route", String(enRoute), "tr-kpi-enroute"], ["Facturé ce mois (hors taxe)", fmt(caMois), "tr-kpi-ca"], ["Encaissé ce mois", fmt(encMois), "tr-kpi-encaisse"], ["À recevoir des clients", fmt(dus), "tr-kpi-dus"], ["Dépenses ce mois", fmt(depMois), "tr-kpi-depenses"], ["Marge du mois", fmt(trR2(caMois - depMois)), "tr-kpi-marge"], ["Choses à faire", String(afaire.length), "tr-kpi-afaire"]];
     return (
       <div>
-        {!toutFait && (<div className="ec-card p-4 mb-5" data-testid="tr-guide">
-          <div className="display text-base mb-2" style={{ color: "#152238" }}>Pour démarrer, en 7 étapes</div>
+        {(<div className="ec-card p-4 mb-5" data-testid="tr-guide">
+          <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{toutFait ? " — toutes faites ✓" : ""}</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="tr-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && <button className="text-xs underline" data-testid="tr-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
         {vehicles.length + trips.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="tr-vide">Pour commencer : ajoutez vos <b>véhicules</b> et vos <b>chauffeurs</b>, enregistrez vos <b>clients</b>, puis créez votre premier <b>voyage</b>.</div>}

@@ -49,7 +49,7 @@ function ProductHistoryModal({ productId, products, movements, onClose }) {
 
 // Achats et dépenses saisis dans les modules de métier (BTP, Industries artisanales) : lus ici en consultation seulement,
 // pour que le total dû à chaque fournisseur soit complet. Le règlement se fait toujours dans le module du métier.
-function achatsDesMetiers(btp, indus, transport, immo) {
+function achatsDesMetiers(btp, indus, transport, immo, agri) {
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
   const reste = (d) => (d.status === "annulé" || d.mode !== "apayer" ? 0 : r2(d.amount - (d.settlements || []).filter((x) => x.status !== "annulé").reduce((t, x) => t + x.amount, 0)));
   const etat = (d) => (d.status === "annulé" ? "annulé" : d.mode === "apayer" && reste(d) > 0.004 ? "à payer" : "payé");
@@ -58,6 +58,9 @@ function achatsDesMetiers(btp, indus, transport, immo) {
   (btp || []).filter((r) => r && r.type === "dep" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "BTP", id: d.id, date: d.date, supplier: d.supplier.trim(), label: ((sites.find((x) => x.id === d.siteId) || {}).name ? (sites.find((x) => x.id === d.siteId).name + " — ") : "") + (d.label || ""), amount: d.amount, reste: reste(d), etat: etat(d) }));
   (indus || []).filter((r) => r && r.type === "achat" && (r.supplier || "").trim()).forEach((a) => out.push({ src: "Industries", id: a.id, date: a.date, supplier: a.supplier.trim(), label: "Matière : " + ((mats.find((x) => x.id === a.matId) || {}).name || ""), amount: a.amount, reste: reste(a), etat: etat(a) }));
   (indus || []).filter((r) => r && r.type === "dep" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Industries", id: d.id, date: d.date, supplier: d.supplier.trim(), label: d.label || "", amount: d.amount, reste: reste(d), etat: etat(d) }));
+  const matsA = (agri || []).filter((r) => r && r.type === "mat");
+  (agri || []).filter((r) => r && r.type === "achat" && (r.supplier || "").trim()).forEach((a) => out.push({ src: "Agriculture", id: a.id, date: a.date, supplier: a.supplier.trim(), label: "Intrant : " + ((matsA.find((x) => x.id === a.matId) || {}).name || ""), amount: a.amount, reste: reste(a), etat: etat(a) }));
+  (agri || []).filter((r) => r && r.type === "dep" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Agriculture", id: d.id, date: d.date, supplier: d.supplier.trim(), label: d.label || "", amount: d.amount, reste: reste(d), etat: etat(d) }));
   const vehs = (transport || []).filter((r) => r && r.type === "vehicle"), biens = (immo || []).filter((r) => r && r.type === "property");
   (transport || []).filter((r) => r && r.type === "expense" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Transport", id: d.id, date: d.date, supplier: d.supplier.trim(), label: ((vehs.find((x) => x.id === d.vehicleId) || {}).plate ? (vehs.find((x) => x.id === d.vehicleId).plate + " — ") : "") + (d.label || ""), amount: d.amount, reste: reste(d), etat: etat(d) }));
   (immo || []).filter((r) => r && r.type === "expense" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Immobilier", id: d.id, date: d.date, supplier: d.supplier.trim(), label: ((biens.find((x) => x.id === d.propertyId) || {}).name ? (biens.find((x) => x.id === d.propertyId).name + " — ") : "") + (d.label || ""), amount: d.amount, reste: reste(d), etat: etat(d) }));
@@ -65,11 +68,11 @@ function achatsDesMetiers(btp, indus, transport, immo) {
 }
 // Quels métiers montrer selon l'espace de travail ouvert : chacun voit ses propres achats ; l'espace Commerce les voit tous ;
 // les autres espaces (restauration, santé, éducation…) n'en ont pas.
-const achatsMetiersVisibles = (espace) => (espace === "btp" ? ["BTP"] : espace === "indus" ? ["Industries"] : espace === "transport" ? ["Transport"] : espace === "immo" ? ["Immobilier"] : espace === "commerce" || !espace ? ["BTP", "Industries", "Transport", "Immobilier"] : []);
+const achatsMetiersVisibles = (espace) => (espace === "btp" ? ["BTP"] : espace === "indus" ? ["Industries"] : espace === "agri" ? ["Agriculture"] : espace === "transport" ? ["Transport"] : espace === "immo" ? ["Immobilier"] : espace === "commerce" || !espace ? ["BTP", "Industries", "Agriculture", "Transport", "Immobilier"] : []);
 
-function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppliers, setSuppliers, purchases, setPurchases, products, setProducts, movements, setMovements, settings, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation, btp, indus, transport, immo, espace }) {
+function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppliers, setSuppliers, purchases, setPurchases, products, setProducts, movements, setMovements, settings, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation, btp, indus, agri, transport, immo, espace }) {
   const anomalyGate = useAssistedAnomalyGate();
-  const metiersTous = useMemo(() => achatsDesMetiers(btp, indus, transport, immo), [btp, indus, transport, immo]);
+  const metiersTous = useMemo(() => achatsDesMetiers(btp, indus, transport, immo, agri), [btp, indus, transport, immo, agri]);
   const metiers = useMemo(() => metiersTous.filter((m) => achatsMetiersVisibles(espace).includes(m.src)), [metiersTous, espace]);
   const resteMetier = (nom) => Math.round(metiers.filter((m) => normalizeClientName(m.supplier) === normalizeClientName(nom)).reduce((t, m) => t + m.reste, 0) * 100) / 100;
   // Les fournisseurs vus dans les modules de métier rejoignent la liste commune (une seule fois, sans doublon).
@@ -531,7 +534,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       </header>
 
       <div className="flex gap-1 mb-6 overflow-x-auto">
-        {[["achats", "Achats"], ["fournisseurs", "Fournisseurs"], ...(metiers.length > 0 ? [["metiers", espace === "commerce" || !espace ? "Achats des métiers" : "Achats " + (espace === "btp" ? "BTP" : espace === "indus" ? "Industries" : espace === "transport" ? "Transport" : "Immobilier")]] : []), ["performance", "Performance"]].map(([id, label]) => (
+        {[["achats", "Achats"], ["fournisseurs", "Fournisseurs"], ...(metiers.length > 0 ? [["metiers", espace === "commerce" || !espace ? "Achats des métiers" : "Achats " + (espace === "btp" ? "BTP" : espace === "indus" ? "Industries" : espace === "agri" ? "Agriculture" : espace === "transport" ? "Transport" : "Immobilier")]] : []), ["performance", "Performance"]].map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -955,7 +958,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       {tab === "metiers" && (
         <div className="bg-white rounded-lg p-5" style={{ border: "1px solid #EEE9DA" }} data-testid="ach-metiers">
           <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Achats et dépenses saisis dans les modules de métier</div>
-          <div className="text-xs mb-3" style={{ color: "#8A8370" }}>Lecture seule : ces lignes sont comptées dans les dettes de chaque fournisseur. Pour les régler, ouvrez le module du métier concerné (BTP, Industries, Transport ou Immobilier : onglet Dépenses, ou Matières et achats).</div>
+          <div className="text-xs mb-3" style={{ color: "#8A8370" }}>Lecture seule : ces lignes sont comptées dans les dettes de chaque fournisseur. Pour les régler, ouvrez le module du métier concerné (BTP, Industries, Agriculture, Transport ou Immobilier : onglet Dépenses, ou Intrants et achats).</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="text-left" style={{ color: "#8A8370", borderBottom: "1px solid #EEE9DA" }}><th className="py-2 font-normal">Date</th><th className="font-normal">Métier</th><th className="font-normal">Fournisseur</th><th className="font-normal">Détail</th><th className="font-normal text-right">Montant</th><th className="font-normal text-right">Reste à payer</th><th className="font-normal">État</th></tr></thead>
             <tbody>{metiers.map((m) => (<tr key={m.src + m.id} data-testid="ach-metier-ligne" style={{ borderBottom: "1px solid #F3EFE3", opacity: m.etat === "annulé" ? 0.5 : 1 }}><td className="py-2 tabular">{m.date}</td><td>{m.src}</td><td>{m.supplier}</td><td>{m.label}</td><td className="tabular text-right">{fmt(m.amount)}</td><td className="tabular text-right">{fmt(m.reste)}</td><td>{m.etat}</td></tr>))}</tbody>

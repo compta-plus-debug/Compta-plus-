@@ -439,9 +439,23 @@ function RestoModule({ resto, setResto, entries, setEntries, accounts, setAccoun
     const ventesPlat = {};
     mois.forEach((o) => o.lines.forEach((l) => { ventesPlat[l.label] = (ventesPlat[l.label] || 0) + l.qty; }));
     const top = Object.keys(ventesPlat).sort((a, b) => ventesPlat[b] - ventesPlat[a]).slice(0, 5);
+    const guide = [
+      ["Tables", "Onglet Salle : créez vos tables (numéro, places).", "salle", tables.length > 0],
+      ["Menu", "Onglet Menu : ajoutez vos plats avec photo, catégorie et prix.", "menu", dishes.length > 0],
+      ["Recettes", "Onglet Recettes et coûts : liez les ingrédients du stock pour connaître le coût et la marge de chaque plat.", "recettes", dishes.some((d) => (d.recipe || []).length > 0)],
+      ["Personnel", "Onglet Personnel : ajoutez vos employés et leur poste pour répartir le service.", "personnel", staff.length > 0],
+      ["Première commande", "Onglet Salle : touchez une table, ajoutez les plats, envoyez en cuisine.", "salle", orders.length > 0],
+      ["Premier encaissement", "Encaissez l'addition : la facture et la comptabilité se font toutes seules.", "salle", payees.length > 0],
+      ["Service et pourboires", "Onglet Service et pourboires : répartissez au personnel ce qui a été encaissé pour lui.", "service", payouts.length > 0],
+    ];
+    const guideFait = guide.every((e) => e[3]);
     const kpis = [["Ventes du jour", rsM(caJour), "resto-kpi-jour"], ["Additions du jour", String(jour.length), "resto-kpi-nb"], ["Panier moyen (jour)", rsM(panier), "resto-kpi-panier"], ["Ventes du mois", rsM(caMois), "resto-kpi-mois"], ["Commandes ouvertes", String(ouvertes.length), "resto-kpi-ouvertes"], ["Service à répartir", rsM(poolTout), "resto-kpi-service"]];
     return (
       <div>
+        {(<div className="ec-card p-4 mb-5" data-testid="resto-guide">
+          <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{guideFait ? " — toutes faites ✓" : ""}</div>
+          <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{guide.map(([t, d, tb, fait], i) => (<li key={i} data-testid="resto-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && !(isVendeur && !["salle", "menu", "recettes", "factures"].includes(tb)) && <button className="text-xs underline" data-testid="resto-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
+        </div>)}
         {tables.length + dishes.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="resto-vide">Pour commencer, dans cet ordre : <b>1.</b> onglet <b>Salle</b> : créez vos tables · <b>2.</b> onglet <b>Menu</b> : ajoutez vos plats avec photo et prix · <b>3.</b> onglet <b>Recettes et coûts</b> : liez les ingrédients du stock · <b>4.</b> onglet <b>Personnel</b> : ajoutez vos employés et leur poste · <b>5.</b> onglet <b>Salle</b> : touchez une table pour prendre une commande.</div>}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
