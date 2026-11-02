@@ -17,6 +17,7 @@ const SECTEURS_CATALOGUE = [
   { id: "import_export", label: "Import-export", desc: "Dossiers d'importation, coût de revient, TCA à l'importation, exportations", grille: "A", dispo: true },
   { id: "industrie", label: "Industries artisanales", desc: "Matières premières et stock, produits et recettes, lots de fabrication avec coût de revient, commandes sur mesure et devis, ventes et factures, dépenses d'atelier, rentabilité par produit", grille: "A", dispo: true },
   { id: "sante", label: "Santé (cabinets, cliniques, hôpitaux)", desc: "Facturation par acte, assureurs, pharmacie", grille: "B", dispo: true },
+  { id: "services", label: "Services et prestations", desc: "Sécurité privée, clubs et événementiel, coiffure et beauté, nettoyage, conseil et formation, réparation : catalogue de prestations, clients, factures au comptant ou à crédit, contrats mensuels facturés en un clic, créances âgées, résultat", grille: "C", dispo: true },
   { id: "ong", label: "ONG, associations, églises", desc: "Fonds affectés par projet, donateurs et bailleurs, reçus de dons numérotés, membres et cotisations, dîmes et offrandes, rapports financiers", grille: "B", dispo: true },
   { id: "btp", label: "BTP et construction", desc: "Chantiers et bordereaux de prix, devis, avances, situations de travaux avec retenue de garantie, dépenses et sous-traitants, rentabilité par chantier", grille: "C", dispo: true },
   { id: "immobilier", label: "Immobilier et location", desc: "Biens, locataires, baux et dépôts de garantie, loyers mensuels, avis d'échéance et quittances, dépenses par bien, impayés, rentabilité", grille: "C", dispo: true },
@@ -91,7 +92,7 @@ function SecteursChoixModal({ companyId, onSaved, onClose, showToast }) {
         <div className="text-lg font-medium mb-1" style={{ color: "#152238" }}>Choisissez vos secteurs d'activité</div>
         <p className="text-xs mb-4" style={{ color: "#7A7460" }}>
           Jusqu'à {SECTEURS_MAX} secteurs, choisis une seule fois. Chaque secteur ajoute à Compta+ des écrans et des états propres à votre métier.
-          Votre activité de commerce et de services est toujours couverte par le socle de base.
+          Si aucun secteur ne correspond à votre métier, vous n'avez rien à choisir : le socle Commerce (ventes, achats, stock, caisse, comptabilité, salaires) est déjà prêt à l'emploi.
         </p>
         <SecteursListe sel={sel} onToggle={toggle} disabled={saving} />
         <div className="text-xs mt-3" style={{ color: "#7A7460" }} data-testid="secteurs-compte">{sel.length} sur {SECTEURS_MAX} choisis</div>

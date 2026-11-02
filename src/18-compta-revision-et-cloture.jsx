@@ -1,10 +1,10 @@
 // ═══ MODULE ═══
 // @module Compta revision et cloture
-// @depends EC_BALANCE_COLS, EC_JOURNAL_COLS, EC_PLAN_COLS, EC_TARGETS, FileDown, _membership
-//   applyLettrage, bankRecoCompute, bkBuildFile, ecBalanceRows, ecChecks, ecCsv, ecDownloadCsv
-//   ecFmt, ecJournalRows, ecPlanRows, ecSortEntries, fmt, lettrageLines, lettrageSuggest
-//   nextLetterCode, rcR2, removeLettrage, rpSave, stockReconcile, supabase, todayStr, uid
-//   useEffect, useMemo, useState
+// @depends EC_BALANCE_COLS, EC_JOURNAL_COLS, EC_PLAN_COLS, EC_TARGETS, FileDown, MENTION_EXPERT
+//   _membership, applyLettrage, bankRecoCompute, bkBuildFile, ecBalanceRows, ecChecks, ecCsv
+//   ecDownloadCsv, ecFmt, ecJournalRows, ecPlanRows, ecSortEntries, fmt, lettrageLines
+//   lettrageSuggest, nextLetterCode, rcR2, removeLettrage, rpSave, stockReconcile, supabase
+//   todayStr, uid, useEffect, useMemo, useState
 // @exports AffectationResultatPanel, BankReconciliationPanel, ClotureAnnuellePanel, LettragePanel
 //   RevisionPanel
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -473,6 +473,7 @@ function ClotureAnnuellePanel({ accounts, entries, setEntries, settings, setSett
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+        <div className="text-xs mb-3 p-2 rounded" style={{ background: "#F4F1E6", color: "#5B563F" }} data-testid="mention-expert-cloture">{MENTION_EXPERT}</div>
         <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Clôture de l'exercice</div>
         <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
           Calcule le résultat depuis la {settings.lastClosingDate ? `dernière clôture (${settings.lastClosingDate})` : "création de l'entreprise"} jusqu'à la date choisie, solde tous les comptes de charges et de produits mouvementés sur cette période, et transfère le résultat au Report à nouveau. La période est ensuite verrouillée jusqu'à cette date.

@@ -1,11 +1,11 @@
 // ═══ MODULE ═══
 // @module Constantes metier
-// @depends BadgeDollar, BarChart3, Bed, BookOpen, Boxes, Building, ClipboardIcon, Cross, Hammer, Heart
-//   Settings, ShoppingCart, Sprout, Truck, Users, Utensils, Wallet
+// @depends BadgeDollar, BarChart3, Bed, BookOpen, Boxes, Briefcase, Building, ClipboardIcon, Cross
+//   Hammer, Heart, Settings, ShoppingCart, Sprout, Truck, Users, Utensils, Wallet
 // @exports ACCOUNTING_ONLY_HIDDEN_GESTION_TABS, ASSET_CATEGORIES, CURRENCIES, CURRENT_CURRENCY
 //   DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS, DEFAULT_SETTINGS, DEFAULT_SUPPLIERS
-//   DEFAULT_USERS, MODULES, ROLE_MODULE_ACCESS, TAX_SYSTEMS, VENDEUR_WRITABLE_CATEGORIES
-//   __uidCounter, allowedModulesFor, isLocked, rangModule, roleLabel
+//   DEFAULT_USERS, MENTION_EXPERT, MENTION_EXPERT_COURTE, MODULES, ROLE_MODULE_ACCESS, TAX_SYSTEMS
+//   VENDEUR_WRITABLE_CATEGORIES, __uidCounter, allowedModulesFor, isLocked, rangModule, roleLabel
 // ═══ FIN DE L'EN-TÊTE ═══
 const MODULES = [
   { id: "compta", n: 1, label: "Comptabilité", icon: BookOpen, ready: true },
@@ -18,6 +18,7 @@ const MODULES = [
   { id: "admin", n: 8, label: "Administration", icon: Settings, ready: true },
   { id: "rh", n: 9, label: "Salaires (RH)", icon: BadgeDollar, ready: true },
   { id: "gestion", n: 10, label: "Gestion avancée", icon: ClipboardIcon, ready: true },
+  { id: "services", n: 22, label: "Services et prestations", icon: Briefcase, ready: true }, // bloc par secteur : visible seulement si le secteur « Services et prestations » est actif et l'espace choisi
   { id: "ong", n: 21, label: "ONG, associations, églises", icon: Heart, ready: true }, // bloc par secteur : visible seulement si le secteur « ONG, associations, églises » est actif et l'espace choisi
   { id: "agri", n: 20, label: "Agriculture et élevage", icon: Sprout, ready: true }, // bloc par secteur : visible seulement si le secteur « Agriculture et élevage » est actif et l'espace choisi
   { id: "indus", n: 19, label: "Industries artisanales", icon: Boxes, ready: true }, // bloc par secteur : visible seulement si le secteur « Industries artisanales » est actif et l'espace choisi
@@ -80,7 +81,11 @@ function allowedModulesFor(role, settings) {
 // d'écrire ces catégories pour un Vendeur, échouerait à chaque fois (normal), et
 // afficherait indéfiniment la bannière d'erreur de synchronisation pour une
 // restriction de sécurité parfaitement normale.
-const VENDEUR_WRITABLE_CATEGORIES = ["products", "invoices", "movements", "entries", "ecole", "sante", "resto", "hotel", "transport", "immo", "btp", "indus", "agri", "ong"]; // « ecole » : secrétaire-caissier(ère) du bloc Écoles et « sante » : réception ou comptoir du bloc Santé (nécessitent les scripts SQL des v261 et v270)
+// Mention de précision : Compta+ est un outil de gestion qui aide à tenir les comptes ; il ne remplace ni un cabinet comptable ni un expert-comptable.
+// Affichée sur les états, les clôtures, les écrans de déclaration et en pied des PDF de rapports.
+const MENTION_EXPERT = "Compta+ est un outil d'aide à la gestion et à la tenue des comptes. Il ne remplace ni un cabinet comptable ni un expert-comptable : l'établissement et la certification des états financiers, les déclarations fiscales et sociales, le choix du plan comptable et du régime d'imposition, les opérations de fin d'exercice et tout avis juridique ou fiscal relèvent de votre expert-comptable, de votre juriste et des autorités compétentes. Faites valider ces éléments avant de les déposer ou de les remettre à un tiers.";
+const MENTION_EXPERT_COURTE = "Outil d'aide à la gestion : ne remplace pas un expert-comptable. À faire valider avant dépôt ou remise à un tiers.";
+const VENDEUR_WRITABLE_CATEGORIES = ["products", "invoices", "movements", "entries", "ecole", "sante", "resto", "hotel", "transport", "immo", "btp", "indus", "agri", "ong", "services"]; // « ecole » : secrétaire-caissier(ère) du bloc Écoles et « sante » : réception ou comptoir du bloc Santé (nécessitent les scripts SQL des v261 et v270)
 
 const DEFAULT_ACCOUNTS = [
   { code: "101", name: "Capital", type: "Capitaux propres" },

@@ -10,7 +10,7 @@
 function AdminModule({
   settings, setSettings, users, setUsers, currentUserEmail, companyId,
   accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, auditLog,
-  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex, sante, setSante, resto, setResto, hotel, setHotel, transport, setTransport, immo, setImmo, btp, setBtp, indus, setIndus, agri, setAgri, ong, setOng,
+  employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, setLoans, entryTemplates, pendingApprovals, cheques, setCheques, bizdocs, setBizdocs, ecole, setEcole, impex, setImpex, sante, setSante, resto, setResto, hotel, setHotel, transport, setTransport, immo, setImmo, btp, setBtp, indus, setIndus, agri, setAgri, ong, setOng, services, setServices,
   setAccounts, setEntries, setProducts, setProductImages, setInvoices, setSuppliers, setPurchases, setMovements, setClients,
   setEmployees, setPayslips, setSalaryAdvances, setSalesStations, setAssets, setAccruals, setDeferrals, setRiskProvisions, setEntryTemplates, setPendingApprovals,
   saveCategoryNow, showToast, logAudit, planTier, groupId, groupName, groupMaxCompanies, secteurs, planStatus, onSecteursChanged, ecoleLabels,
@@ -421,7 +421,7 @@ function AdminModule({
   };
 
   const [lastExportAt, setLastExportAt] = useState(() => { try { return localStorage.getItem("compta-plus-last-export"); } catch (e) { return null; } });
-  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante, resto, hotel, transport, immo, btp, indus, agri, ong });
+  const buildExportData = () => ({ accounts, entries, products, productImages, invoices, suppliers, purchases, movements, clients, settings, users, employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante, resto, hotel, transport, immo, btp, indus, agri, ong, services });
   const buildBackupNow = (label) => bkBuildFile(buildExportData(), companyId || myCompanyId, label);
   const exportData = () => {
     bkDownload(buildBackupNow("Export manuel"), `sauvegarde-${settings.companyName || "erp"}-${todayStr()}.json`);
@@ -495,6 +495,7 @@ function AdminModule({
     indus: { kind: "array", requiredKeys: ["id", "type"] },
     agri: { kind: "array", requiredKeys: ["id", "type"] },
     ong: { kind: "array", requiredKeys: ["id", "type"] },
+    services: { kind: "array", requiredKeys: ["id", "type"] },
     payslips: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["netAmount", "grossAmount"], dateKeys: ["date"] },
     salaryAdvances: { kind: "array", requiredKeys: ["id", "employeeId"], numericKeys: ["amount", "repaidAmount"], dateKeys: ["date"] },
   };
@@ -695,6 +696,7 @@ function AdminModule({
     if (data.indus && typeof setIndus === "function") setIndus(data.indus);
     if (data.agri && typeof setAgri === "function") setAgri(data.agri);
     if (data.ong && typeof setOng === "function") setOng(data.ong);
+    if (data.services && typeof setServices === "function") setServices(data.services);
     if (data.payslips) setPayslips(data.payslips);
     if (data.salaryAdvances) setSalaryAdvances(data.salaryAdvances);
   };
@@ -791,7 +793,7 @@ function AdminModule({
       try { if (typeof saveCategoryNow === "function") await saveCategoryNow("settings", ns); } catch (e) { /* la vérification finale le signalera */ }
     }
     if (sel.compta) {
-      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]); if (typeof setSante === "function") setSante([]); if (typeof setResto === "function") setResto([]); if (typeof setHotel === "function") setHotel([]); if (typeof setTransport === "function") setTransport([]); if (typeof setImmo === "function") setImmo([]); if (typeof setBtp === "function") setBtp([]); if (typeof setIndus === "function") setIndus([]); if (typeof setAgri === "function") setAgri([]); if (typeof setOng === "function") setOng([]);
+      setEntries([]); setInvoices([]); setPurchases([]); setCheques([]); setBizdocs([]); if (typeof setEcole === "function") setEcole([]); if (typeof setImpex === "function") setImpex([]); if (typeof setSante === "function") setSante([]); if (typeof setResto === "function") setResto([]); if (typeof setHotel === "function") setHotel([]); if (typeof setTransport === "function") setTransport([]); if (typeof setImmo === "function") setImmo([]); if (typeof setBtp === "function") setBtp([]); if (typeof setIndus === "function") setIndus([]); if (typeof setAgri === "function") setAgri([]); if (typeof setOng === "function") setOng([]); if (typeof setServices === "function") setServices([]);
       setPayslips([]); setSalaryAdvances([]);
       setAssets([]); setAccruals([]); setDeferrals([]); setRiskProvisions([]); setLoans([]);
     }
@@ -806,7 +808,7 @@ function AdminModule({
     if (sel.accounts) setAccounts(DEFAULT_ACCOUNTS);
     // ÉTAPE 3 — vérification directement sur le serveur : on attend que les suppressions soient enregistrées puis on relit.
     const aVerifier = [];
-    if (sel.compta) aVerifier.push(["entries", "écritures comptables"], ["invoices", "factures de vente"], ["purchases", "achats"], ["cheques", "chèques"], ["bizdocs", "documents commerciaux"], ["payslips", "bulletins de paie"], ["salaryAdvances", "avances de salaire"], ["assets", "immobilisations"], ["accruals", "régularisations"], ["deferrals", "produits et charges constatés d'avance"], ["riskProvisions", "provisions"], ["loans", "emprunts"], ["ecole", "données du bloc Éducation"], ["impex", "données du bloc Import-export"], ["sante", "données du bloc Santé"], ["resto", "données du bloc Restauration"], ["hotel", "données du bloc Hôtellerie"], ["transport", "données du bloc Transport"], ["immo", "données du bloc Immobilier"], ["btp", "données du bloc BTP"], ["indus", "données du bloc Industries artisanales"], ["agri", "données du bloc Agriculture et élevage"], ["ong", "données du bloc ONG, associations, églises"]);
+    if (sel.compta) aVerifier.push(["entries", "écritures comptables"], ["invoices", "factures de vente"], ["purchases", "achats"], ["cheques", "chèques"], ["bizdocs", "documents commerciaux"], ["payslips", "bulletins de paie"], ["salaryAdvances", "avances de salaire"], ["assets", "immobilisations"], ["accruals", "régularisations"], ["deferrals", "produits et charges constatés d'avance"], ["riskProvisions", "provisions"], ["loans", "emprunts"], ["ecole", "données du bloc Éducation"], ["impex", "données du bloc Import-export"], ["sante", "données du bloc Santé"], ["resto", "données du bloc Restauration"], ["hotel", "données du bloc Hôtellerie"], ["transport", "données du bloc Transport"], ["immo", "données du bloc Immobilier"], ["btp", "données du bloc BTP"], ["indus", "données du bloc Industries artisanales"], ["agri", "données du bloc Agriculture et élevage"], ["ong", "données du bloc ONG, associations, églises"], ["services", "données du bloc Services et prestations"]);
     if (sel.movements) aVerifier.push(["movements", "mouvements de stock"]);
     if (sel.templates) aVerifier.push(["entryTemplates", "modèles d'écritures"], ["pendingApprovals", "approbations en attente"]);
     if (sel.clients) aVerifier.push(["clients", "clients"]);
@@ -1446,7 +1448,7 @@ function AdminModule({
             )}
           </div>
           <PartialResetPanel
-            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length + (sante || []).length + (resto || []).length + (hotel || []).length + (transport || []).length + (immo || []).length + (btp || []).length + (indus || []).length + (agri || []).length + (ong || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
+            counts={{ entries: entries.length, invoices: invoices.length, purchases: purchases.length, cheques: (cheques || []).length, bizdocs: (bizdocs || []).length + (ecole || []).length + (impex || []).length + (sante || []).length + (resto || []).length + (hotel || []).length + (transport || []).length + (immo || []).length + (btp || []).length + (indus || []).length + (agri || []).length + (ong || []).length + (services || []).length, payslips: payslips.length + salaryAdvances.length, assets: assets.length + accruals.length + deferrals.length + riskProvisions.length, movements: movements.length, templates: entryTemplates.length + pendingApprovals.length, products: products.length, clients: clients.length, suppliers: suppliers.length, employees: employees.length, stations: salesStations.length, accounts: accounts.length }}
             isPrimaryAdmin={isPrimaryAdmin} settings={settings} setSettings={setSettings}
             exportData={exportData} showToast={showToast} logAudit={logAudit}
             apply={applyReset}

@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Declarations fiscales
-// @depends HEADER_RGB, downloadTablePDF, fmt, pdfSafe, useState
+// @depends HEADER_RGB, MENTION_EXPERT, downloadTablePDF, fmt, pdfSafe, useState
 // @exports CalendrierFiscalPanel, ComparatifPanel, DeclarationIRPanel, DeclarationTCAPanel
 //   FISCAL_RULES_VALIDATED, RetenuesPrestationsPanel, VersementsAnnuelsPanel
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -184,6 +184,7 @@ function DeclarationTCAPanel({ invoices, settings, defaultYear, defaultMonth, en
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+        <div className="text-xs mb-3 p-2 rounded" style={{ background: "#F4F1E6", color: "#5B563F" }} data-testid="mention-expert-tca">{MENTION_EXPERT}</div>
         <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Déclaration TCA — Formulaire DGI No. 018</div>
         <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
           Reproduit le formulaire simplifié de la DGI (Haïti). Le chiffre d'affaires du mois est lu directement de vos factures. Le Code fiscal (articles 186 et 190) fixe la TCA à 10 % et la déclaration mensuelle entre le 1er et le 15 du mois suivant ; la TCA déductible sur vos achats (articles 187 et 188), saisie dans Achats, est déduite ci-dessous ; l'excédent éventuel est reporté sur les mois suivants sans remboursement. Les entreprises de moins de 10 millions de HTG de chiffre d'affaires sont en franchise (article 193), sans TCA.
@@ -431,6 +432,7 @@ function DeclarationIRPanel({ entries, accounts, invoices, settings, defaultYear
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
+        <div className="text-xs mb-3 p-2 rounded" style={{ background: "#F4F1E6", color: "#5B563F" }} data-testid="mention-expert-ir">{MENTION_EXPERT}</div>
         <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Impôt sur le Revenu</div>
         <p className="text-xs mb-4" style={{ color: "#8A8370" }}>
           Deux régimes existent (Code fiscal en vigueur depuis le 1er octobre 2026) : le <strong>Forfaitaire</strong> (articles 62 à 66), pour les entreprises dont le chiffre d'affaires de l'exercice précédent est inférieur à 10 000 000 HTG ; le <strong>Réel</strong> (article 68), à partir de 10 000 000 HTG, avec le barème progressif pour les personnes physiques (article 132) et l'impôt sur les sociétés à 30 % pour les personnes morales (article 137).

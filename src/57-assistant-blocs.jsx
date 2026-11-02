@@ -19,7 +19,7 @@ const asbAdd = (iso, n) => { const d = new Date(String(iso).slice(0, 10) + "T12:
 const asbFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : String(iso || ""); };
 const asbRows = (list, type) => (list || []).filter((r) => r && r.type === type);
 
-function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, indus, agri, ong, products, actifs, today }) {
+function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp, indus, agri, ong, services, products, actifs, today }) {
   const out = [];
   const A = actifs || [];
   const push = (f) => out.push({ fix: null, ...f });
@@ -274,6 +274,34 @@ function asstScanBlocs({ ecole, impex, sante, resto, hotel, transport, immo, btp
       if (reste > 0.004 && j > 30) push({ key: "ong-impaye:" + d.id, severity: j > 60 ? "high" : "medium", category: "ong", title: "Dépense à payer depuis longtemps", detail: `${d.supplier || d.label || "Dépense"} : ${asbG(reste)} à payer depuis le ${asbFr(d.date)} (${j} jours).` });
     });
   }
+  // ───── Services et prestations ─────
+  if (A.includes("services") && (services || []).length) {
+    const r2s = (n) => Math.round((Number(n) || 0) * 100) / 100;
+    const payeS = (arr) => (arr || []).filter((x) => x.status !== "annulé").reduce((s, x) => s + x.amount, 0);
+    const ventesS = asbRows(services, "vente").filter((v) => v.status !== "annulé");
+    const depsS = asbRows(services, "dep").filter((d) => d.status !== "annulé");
+    ventesS.filter((v) => v.mode === "credit").forEach((v) => {
+      const reste = r2s(v.total - payeS(v.settlements));
+      const j = asbDays(v.date, today);
+      if (reste > 0.004 && j > 30) push({ key: "services-impaye:" + v.id, severity: j > 60 ? "high" : "medium", category: "services", title: "Facture de prestations impayée", detail: `${v.number} : ${asbG(reste)} à encaisser depuis le ${asbFr(v.date)} (${j} jours).` });
+    });
+    asbRows(services, "contrat").filter((c) => c.status === "actif" && c.start && c.start.slice(0, 7) < String(today).slice(0, 7)).forEach((c) => {
+      const mois = String(today).slice(0, 7);
+      let y = Number(c.start.slice(0, 4)), m = Number(c.start.slice(5, 7)), n = 0;
+      for (let i = 0; i < 600; i++) {
+        const ym = y + "-" + String(m).padStart(2, "0");
+        if (ym >= mois || (c.end && ym > c.end.slice(0, 7))) break;
+        if (!ventesS.some((v) => v.contratId === c.id && v.periode === ym)) n++;
+        m += 1; if (m > 12) { m = 1; y += 1; }
+      }
+      if (n > 0) push({ key: "services-contrat:" + c.id, severity: "medium", category: "services", title: "Contrat mensuel non facturé", detail: `${c.label} : ${n} mois passé(s) sans facture.` });
+    });
+    depsS.filter((d) => d.mode === "apayer").forEach((d) => {
+      const reste = r2s(d.amount - payeS(d.settlements));
+      const j = asbDays(d.date, today);
+      if (reste > 0.004 && j > 30) push({ key: "services-dep:" + d.id, severity: j > 60 ? "high" : "medium", category: "services", title: "Dépense à payer depuis longtemps", detail: `${d.supplier || d.label || "Dépense"} : ${asbG(reste)} à payer depuis le ${asbFr(d.date)} (${j} jours).` });
+    });
+  }
   const rank = { high: 0, medium: 1, low: 2 };
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.key).localeCompare(String(b.key)));
 }
@@ -432,6 +460,18 @@ function asstHowToBlocs(f) {
       "Ouvrez l'espace ONG et associations → onglet « Dépenses » et ouvrez la dépense indiquée.",
       "Vérifiez la trésorerie du fonds concerné, puis enregistrez le règlement (date, mode).",
       "Si la dépense est contestée, notez-le dans le libellé et parlez-en au fournisseur."] },
+    "services-impaye": { why: "Une facture de prestations impayée depuis plus de 30 jours pèse sur votre trésorerie, alors que vos dépenses (agents, produits, location) sont déjà payées.", steps: [
+      "Ouvrez l'espace Services et prestations → onglet « Factures » et cliquez « Encaisser » sur la facture indiquée.",
+      "Relancez le client avec le numéro de la facture et le reste à payer ; proposez un paiement en deux fois si besoin.",
+      "Pour les clients qui paient toujours en retard, demandez un acompte ou le paiement au comptant."] },
+    "services-contrat": { why: "Un mois de contrat non facturé est de l'argent gagné mais jamais réclamé : il manque à votre chiffre d'affaires et à votre trésorerie.", steps: [
+      "Ouvrez l'espace Services et prestations → onglet « Contrats » et trouvez le contrat indiqué.",
+      "Cliquez sur « Facturer » pour chaque mois manquant : la facture et la comptabilité se créent d'un clic.",
+      "Si le contrat est terminé, renseignez sa date de fin ou suspendez-le pour ne plus recevoir ce rappel."] },
+    "services-dep": { why: "Une dépense non payée depuis plus de 30 jours abîme la confiance du fournisseur et peut bloquer vos prochaines commandes.", steps: [
+      "Ouvrez l'espace Services et prestations → onglet « Dépenses » et cliquez « Régler » sur la dépense indiquée.",
+      "Vérifiez votre trésorerie, puis enregistrez le règlement (date, mode).",
+      "Si la dépense est contestée, notez-le dans le détail et parlez-en au fournisseur."] },
     "btp-impaye": { why: "Une situation de travaux impayée depuis plus de 30 jours pèse sur votre trésorerie alors que vos dépenses de chantier, elles, sont déjà payées.", steps: [
       "Ouvrez l'espace BTP → onglet « Situations » et ouvrez la situation indiquée.",
       "Relancez le client avec le numéro de la situation et le net à payer.",

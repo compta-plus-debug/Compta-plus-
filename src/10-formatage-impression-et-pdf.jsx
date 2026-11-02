@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Formatage impression et pdf
-// @depends CURRENCIES, CURRENT_CURRENCY, todayStr
+// @depends CURRENCIES, CURRENT_CURRENCY, MENTION_EXPERT_COURTE, todayStr
 // @exports HEADER_RGB, InvoiceSheet, MENTION_FRANCHISE_TCA, RecordedStamp, TicketBody
 //   adresseClientFacture, connectThermalPrinter, disconnectThermalPrinter
 //   downloadEtatsFinanciersPDF, downloadInvoicePDF, downloadTablePDF, factureDateHeure, fmt
@@ -828,6 +828,13 @@ function downloadTablePDF({ title, settings, columns, rows, footerLines }) {
     doc.setFontSize(10);
     footerLines.forEach((line) => { doc.text(pdfSafe(line), 14, fy); fy += 6; });
   }
+  // Mention de précision en pied de page (ne remplace pas l'expert-comptable)
+  try {
+    doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+    const lignes = doc.splitTextToSize(pdfSafe(MENTION_EXPERT_COURTE), 182);
+    doc.text(lignes, 14, doc.internal.pageSize.getHeight() - 10);
+    doc.setTextColor(0, 0, 0);
+  } catch (e) { /* le PDF reste valable sans la mention */ }
   doc.save(`${title.replace(/\s+/g, "-")}-${todayStr()}.pdf`);
 }
 

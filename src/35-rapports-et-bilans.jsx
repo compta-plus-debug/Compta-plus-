@@ -1,11 +1,11 @@
 // ═══ MODULE ═══
 // @module Rapports et bilans
 // @depends CalendrierFiscalPanel, ComparatifPanel, DeclarationIRPanel, DeclarationTCAPanel, Download
-//   EC_BALANCE_COLS, EC_JOURNAL_COLS, FileDown, GroupedTabNav, Printer, RetenuesPrestationsPanel
-//   SimpleDonutChart, SimpleLineChart, VersementsAnnuelsPanel, computeBalances
-//   downloadEtatsFinanciersPDF, downloadTablePDF, ecBalanceRows, ecCsv, ecDownloadCsv
-//   ecJournalRows, fmt, loansTotals, monthLabel, rangModule, todayStr, useBackNav, useMemo
-//   useState
+//   EC_BALANCE_COLS, EC_JOURNAL_COLS, FileDown, GroupedTabNav, MENTION_EXPERT
+//   MENTION_EXPERT_COURTE, Printer, RetenuesPrestationsPanel, SimpleDonutChart, SimpleLineChart
+//   VersementsAnnuelsPanel, computeBalances, downloadEtatsFinanciersPDF, downloadTablePDF
+//   ecBalanceRows, ecCsv, ecDownloadCsv, ecJournalRows, fmt, loansTotals, monthLabel, rangModule
+//   todayStr, useBackNav, useMemo, useState
 // @exports BilanClasseView, RapportsModule, bilanClasse
 // ═══ FIN DE L'EN-TÊTE ═══
 function buildLedger(entries, accountCode, from, to) {
@@ -430,6 +430,7 @@ function RapportsModule({ payslips, employees, suppliers, accounts, balances, in
         <div className="text-xs uppercase tracking-widest" style={{ color: "#C9A24B" }}>Module {rangModule("rapports")}</div>
         <div className="display text-3xl" style={{ color: "#152238" }}>Rapports et analyse</div>
         <p className="text-sm mt-1" style={{ color: "#7A7460" }}>États calculés en continu à partir du journal comptable et des ventes.</p>
+        <p className="text-xs mt-2 p-2 rounded" style={{ background: "#F4F1E6", color: "#5B563F" }} data-testid="mention-expert-rapports">{MENTION_EXPERT}</p>
       </header>
 
       {/* En-tête visible uniquement à l'impression (bouton "Imprimer" ci-dessous) */}
@@ -442,6 +443,7 @@ function RapportsModule({ payslips, employees, suppliers, accounts, balances, in
           {settings.companyAddress && <div style={{ fontSize: 12, color: "#555" }}>{settings.companyAddress}</div>}
           <div style={{ fontSize: 14, fontWeight: 600, marginTop: 8, color: "#152238" }}>{reportTitles[tab] || "Rapport"}</div>
           <div className="tabular" style={{ fontSize: 12, color: "#888" }}>Généré le {todayStr()}</div>
+          <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>{MENTION_EXPERT_COURTE}</div>
         </div>
       </div>
 

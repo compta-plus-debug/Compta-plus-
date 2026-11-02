@@ -49,7 +49,7 @@ function ProductHistoryModal({ productId, products, movements, onClose }) {
 
 // Achats et dépenses saisis dans les modules de métier (BTP, Industries artisanales) : lus ici en consultation seulement,
 // pour que le total dû à chaque fournisseur soit complet. Le règlement se fait toujours dans le module du métier.
-function achatsDesMetiers(btp, indus, transport, immo, agri, ong) {
+function achatsDesMetiers(btp, indus, transport, immo, agri, ong, services) {
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
   const reste = (d) => (d.status === "annulé" || d.mode !== "apayer" ? 0 : r2(d.amount - (d.settlements || []).filter((x) => x.status !== "annulé").reduce((t, x) => t + x.amount, 0)));
   const etat = (d) => (d.status === "annulé" ? "annulé" : d.mode === "apayer" && reste(d) > 0.004 ? "à payer" : "payé");
@@ -62,6 +62,7 @@ function achatsDesMetiers(btp, indus, transport, immo, agri, ong) {
   (agri || []).filter((r) => r && r.type === "achat" && (r.supplier || "").trim()).forEach((a) => out.push({ src: "Agriculture", id: a.id, date: a.date, supplier: a.supplier.trim(), label: "Intrant : " + ((matsA.find((x) => x.id === a.matId) || {}).name || ""), amount: a.amount, reste: reste(a), etat: etat(a) }));
   (agri || []).filter((r) => r && r.type === "dep" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Agriculture", id: d.id, date: d.date, supplier: d.supplier.trim(), label: d.label || "", amount: d.amount, reste: reste(d), etat: etat(d) }));
   (ong || []).filter((r) => r && r.type === "dep" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "ONG", id: d.id, date: d.date, supplier: d.supplier.trim(), label: d.label || "", amount: d.amount, reste: reste(d), etat: etat(d) }));
+  (services || []).filter((r) => r && r.type === "dep" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Services", id: d.id, date: d.date, supplier: d.supplier.trim(), label: d.label || "", amount: d.amount, reste: reste(d), etat: etat(d) }));
   const vehs = (transport || []).filter((r) => r && r.type === "vehicle"), biens = (immo || []).filter((r) => r && r.type === "property");
   (transport || []).filter((r) => r && r.type === "expense" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Transport", id: d.id, date: d.date, supplier: d.supplier.trim(), label: ((vehs.find((x) => x.id === d.vehicleId) || {}).plate ? (vehs.find((x) => x.id === d.vehicleId).plate + " — ") : "") + (d.label || ""), amount: d.amount, reste: reste(d), etat: etat(d) }));
   (immo || []).filter((r) => r && r.type === "expense" && (r.supplier || "").trim()).forEach((d) => out.push({ src: "Immobilier", id: d.id, date: d.date, supplier: d.supplier.trim(), label: ((biens.find((x) => x.id === d.propertyId) || {}).name ? (biens.find((x) => x.id === d.propertyId).name + " — ") : "") + (d.label || ""), amount: d.amount, reste: reste(d), etat: etat(d) }));
@@ -69,11 +70,11 @@ function achatsDesMetiers(btp, indus, transport, immo, agri, ong) {
 }
 // Quels métiers montrer selon l'espace de travail ouvert : chacun voit ses propres achats ; l'espace Commerce les voit tous ;
 // les autres espaces (restauration, santé, éducation…) n'en ont pas.
-const achatsMetiersVisibles = (espace) => (espace === "btp" ? ["BTP"] : espace === "indus" ? ["Industries"] : espace === "agri" ? ["Agriculture"] : espace === "ong" ? ["ONG"] : espace === "transport" ? ["Transport"] : espace === "immo" ? ["Immobilier"] : espace === "commerce" || !espace ? ["BTP", "Industries", "Agriculture", "Transport", "Immobilier", "ONG"] : []);
+const achatsMetiersVisibles = (espace) => (espace === "btp" ? ["BTP"] : espace === "indus" ? ["Industries"] : espace === "agri" ? ["Agriculture"] : espace === "ong" ? ["ONG"] : espace === "services" ? ["Services"] : espace === "transport" ? ["Transport"] : espace === "immo" ? ["Immobilier"] : espace === "commerce" || !espace ? ["BTP", "Industries", "Agriculture", "Transport", "Immobilier", "ONG", "Services"] : []);
 
-function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppliers, setSuppliers, purchases, setPurchases, products, setProducts, movements, setMovements, settings, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation, btp, indus, agri, ong, transport, immo, espace }) {
+function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppliers, setSuppliers, purchases, setPurchases, products, setProducts, movements, setMovements, settings, role, showToast, logAudit, verifyTransactionSaved, planTier, recordPendingRecommendation, currentUserEmail, pendingRecommendations, resolvePendingRecommendation, btp, indus, agri, ong, services, transport, immo, espace }) {
   const anomalyGate = useAssistedAnomalyGate();
-  const metiersTous = useMemo(() => achatsDesMetiers(btp, indus, transport, immo, agri, ong), [btp, indus, transport, immo, agri, ong]);
+  const metiersTous = useMemo(() => achatsDesMetiers(btp, indus, transport, immo, agri, ong, services), [btp, indus, transport, immo, agri, ong, services]);
   const metiers = useMemo(() => metiersTous.filter((m) => achatsMetiersVisibles(espace).includes(m.src)), [metiersTous, espace]);
   const resteMetier = (nom) => Math.round(metiers.filter((m) => normalizeClientName(m.supplier) === normalizeClientName(nom)).reduce((t, m) => t + m.reste, 0) * 100) / 100;
   // Les fournisseurs vus dans les modules de métier rejoignent la liste commune (une seule fois, sans doublon).
@@ -535,7 +536,7 @@ function AchatModule({ cheques, setCheques, accounts, entries, setEntries, suppl
       </header>
 
       <div className="flex gap-1 mb-6 overflow-x-auto">
-        {[["achats", "Achats"], ["fournisseurs", "Fournisseurs"], ...(metiers.length > 0 ? [["metiers", espace === "commerce" || !espace ? "Achats des métiers" : "Achats " + (espace === "btp" ? "BTP" : espace === "indus" ? "Industries" : espace === "agri" ? "Agriculture" : espace === "ong" ? "ONG" : espace === "transport" ? "Transport" : "Immobilier")]] : []), ["performance", "Performance"]].map(([id, label]) => (
+        {[["achats", "Achats"], ["fournisseurs", "Fournisseurs"], ...(metiers.length > 0 ? [["metiers", espace === "commerce" || !espace ? "Achats des métiers" : "Achats " + (espace === "btp" ? "BTP" : espace === "indus" ? "Industries" : espace === "agri" ? "Agriculture" : espace === "ong" ? "ONG" : espace === "services" ? "Services" : espace === "transport" ? "Transport" : "Immobilier")]] : []), ["performance", "Performance"]].map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
