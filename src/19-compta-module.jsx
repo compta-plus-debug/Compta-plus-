@@ -177,6 +177,76 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries: setEntriesPr
     logAudit("Comptabilité", "Reconstruction écriture solde d'ouverture", `${inv.number} — ${fmt(inv.total)}`);
   };
 
+  // Régénère l'écriture de vente d'une facture qui n'en a pas (accroc de synchronisation entre
+  // la facture et son écriture). Reprend EXACTEMENT le schéma de la vente (module Vente) :
+  // encaissement au débit (530/512/411), produits au crédit par compte (remise globale répartie
+  // et frais divers inclus), taxe au crédit, et sortie de stock si la méthode « stock en actif »
+  // est choisie. Refuse (sans rien inventer) si la facture n'a pas de détail, si un article a
+  // disparu du catalogue, si des encaissements existent déjà, ou si l'écriture ne s'équilibre pas.
+  const buildMissingSaleEntries = (inv) => {
+    const lines = Array.isArray(inv.lines) ? inv.lines : [];
+    if (inv.reconstructedFromJournal || lines.length === 0) return { problem: "facture sans détail des articles" };
+    const total = Number(inv.total) || 0;
+    if (!(total > 0)) return { problem: "montant nul" };
+    if (Array.isArray(inv.payments) && inv.payments.length > 0) return { problem: "des encaissements existent déjà" };
+    const prodById = new Map((products || []).map((p) => [String(p.id), p]));
+    const byAccount = {};
+    let linesHT = 0;
+    for (const l of lines) {
+      const p = prodById.get(String(l.productId));
+      if (!p || !p.account) return { problem: `article « ${l.name || l.productId} » introuvable au catalogue` };
+      const sub = Number(l.subtotal) || 0;
+      byAccount[p.account] = (byAccount[p.account] || 0) + sub;
+      linesHT += sub;
+    }
+    const gDisc = Number(inv.globalDiscountAmount) || 0;
+    if (gDisc > 0 && linesHT > 0) Object.keys(byAccount).forEach((acc) => { byAccount[acc] -= gDisc * (byAccount[acc] / linesHT); });
+    (inv.fees || []).forEach((f) => { const amt = Number(f.amount) || 0; if (amt > 0 && f.account) byAccount[f.account] = (byAccount[f.account] || 0) + amt; });
+    const tax = Number(inv.totalTax) || 0;
+    const credits = Object.values(byAccount).reduce((x, y) => x + y, 0) + (tax > 0 ? tax : 0);
+    if (Math.abs(credits - total) > 0.05) return { problem: "les montants de la facture ne s'équilibrent pas" };
+    const payAccount = inv.paymentMode === "caisse" ? "530" : inv.paymentMode === "banque" ? "512" : "411";
+    const nowIso = new Date().toISOString();
+    const entry = {
+      id: uid(), invoiceId: inv.id, date: inv.date, createdAt: nowIso, regenerated: true,
+      label: `Vente ${inv.number}${inv.client && inv.client !== "Client comptant" ? " — " + inv.client : ""}`,
+      lines: [
+        { account: payAccount, debit: total, credit: 0 },
+        ...Object.entries(byAccount).map(([acc, amount]) => ({ account: acc, debit: 0, credit: Math.round(amount * 100) / 100 })),
+        ...(tax > 0 ? [{ account: settings.taxAccount, debit: 0, credit: tax }] : []),
+      ],
+    };
+    // Corrige l'arrondi éventuel sur la 1re ligne de produit pour garantir l'équilibre exact.
+    const dSum = entry.lines.reduce((x, l) => x + l.debit, 0), cSum = entry.lines.reduce((x, l) => x + l.credit, 0);
+    const diff = Math.round((dSum - cSum) * 100) / 100;
+    if (diff !== 0) { const i = entry.lines.findIndex((l) => l.credit > 0); if (i >= 0) entry.lines[i] = { ...entry.lines[i], credit: Math.round((entry.lines[i].credit + diff) * 100) / 100 }; }
+    const out = [entry];
+    if (settings.stockValuationMethod === "actif") {
+      const cogsTotal = lines.reduce((sum, l) => { const p = prodById.get(String(l.productId)); return p && p.type === "marchandise" ? sum + (Number(l.qty) || 0) * (Number(p.costPrice) || 0) : sum; }, 0);
+      if (cogsTotal > 0) out.push({ id: uid(), invoiceId: inv.id, date: inv.date, createdAt: nowIso, regenerated: true, label: `Sortie de stock — Vente ${inv.number}`, kind: "cogs", lines: [{ account: "6037", debit: cogsTotal, credit: 0 }, { account: "370", debit: 0, credit: cogsTotal }] });
+    }
+    return { entries: out };
+  };
+  const repairableMissing = invoicesWithoutEntry.map((inv) => ({ inv, res: inv.isOpeningBalance ? { opening: true } : buildMissingSaleEntries(inv) }));
+  const repairMissingEntries = (onlyInv) => {
+    if (role !== "Administrateur") { showToast("Seul un administrateur peut régénérer ces écritures."); return; }
+    const targets = repairableMissing.filter((r) => (!onlyInv || r.inv.id === onlyInv.id) && r.res.entries && !(typeof isLocked === "function" && isLocked(r.inv.date, settings)));
+    const lockedCount = repairableMissing.filter((r) => (!onlyInv || r.inv.id === onlyInv.id) && r.res.entries && typeof isLocked === "function" && isLocked(r.inv.date, settings)).length;
+    if (targets.length === 0) { showToast(lockedCount > 0 ? "Ces factures appartiennent à une période clôturée : rouvrez la période (avec motif) avant de régénérer l'écriture." : "Aucune écriture ne peut être régénérée automatiquement."); return; }
+    if (!window.confirm(`Régénérer ${targets.length} écriture(s) manquante(s) à partir des factures ? Chaque écriture reprend le détail de la facture (encaissement, produits, taxe) et sera marquée « régénérée ».`)) return;
+    const ids = new Set(targets.map((t) => String(t.inv.id)));
+    const added = targets.flatMap((t) => t.res.entries);
+    // Re-vérifie au moment de l'application : jamais de doublon si l'écriture est arrivée entre-temps.
+    setEntries((prev) => {
+      const already = new Set((prev || []).filter((e) => e.invoiceId && !isReversalEntry(e) && !isCogsEntry(e)).map((e) => String(e.invoiceId)));
+      const keep = added.filter((e) => !(already.has(String(e.invoiceId)) && !isCogsEntry(e)) && ids.has(String(e.invoiceId)));
+      return [...(prev || []), ...keep];
+    });
+    const skipped = repairableMissing.filter((r) => !onlyInv && !r.res.entries && !r.res.opening).length;
+    showToast(`${targets.length} écriture(s) régénérée(s).${skipped ? ` ${skipped} facture(s) restent à vérifier manuellement.` : ""}${lockedCount ? ` ${lockedCount} en période clôturée non traitée(s).` : ""}`);
+    logAudit("Comptabilité", "Régénération des écritures de vente manquantes", targets.map((t) => `${t.inv.number} (${fmt(t.inv.total)})`).join(", ").slice(0, 400));
+  };
+
   const rebuildInvoiceFromEntry = (entry) => {
     if (role !== "Administrateur") { showToast("Seul un administrateur peut recréer cette facture."); return; }
     const m = entry.label.match(/^Vente (\S+)(?: — (.*))?$/);
@@ -647,6 +717,11 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries: setEntriesPr
                   Recréer les {orphanSaleEntries.length} factures manquantes
                 </button>
               )}
+              {repairableMissing.some((r) => r.res.entries) && role === "Administrateur" && (
+                <button data-testid="repair-missing-entries" onClick={() => repairMissingEntries()} className="text-xs px-3 py-1.5 rounded" style={{ background: "#0F6B5C", color: "#fff" }}>
+                  Régénérer les {repairableMissing.filter((r) => r.res.entries).length} écriture(s) manquante(s)
+                </button>
+              )}
               {wrongfulDuplicates.length > 0 && role === "Administrateur" && (
                 <button onClick={cleanupWrongfulDuplicates} className="text-xs px-3 py-1.5 rounded" style={{ background: "#D9A441", color: "#152238" }}>
                   Nettoyer {wrongfulDuplicates.length} doublon(s) créé(s) par erreur
@@ -672,9 +747,11 @@ function ComptaModule({ accounts, setAccounts, entries, setEntries: setEntriesPr
                     <span>Facture {inv.number} ({inv.client}, {fmt(inv.total)}) présente dans Facturation, sans écriture correspondante dans le journal.</span>
                     {inv.isOpeningBalance && role === "Administrateur" ? (
                       <button onClick={() => rebuildOpeningBalanceEntry(inv)} className="underline text-left sm:shrink-0" style={{ color: "#A6432F" }}>Recréer l'écriture (solde d'ouverture)</button>
+                    ) : (() => { const r = repairableMissing.find((x) => x.inv.id === inv.id); return r && r.res.entries && role === "Administrateur" ? (
+                      <button data-testid="repair-one-entry" onClick={() => repairMissingEntries(inv)} className="underline text-left sm:shrink-0" style={{ color: "#0F6B5C" }}>Régénérer l'écriture</button>
                     ) : (
-                      <span className="sm:shrink-0" style={{ color: "#8A8370" }}>Contactez le support — nécessite une vérification manuelle.</span>
-                    )}
+                      <span className="sm:shrink-0" style={{ color: "#8A8370" }}>{r && r.res.problem ? `Vérification manuelle : ${r.res.problem}.` : "Contactez le support — nécessite une vérification manuelle."}</span>
+                    ); })()}
                   </div>
                 ))}
               </div>

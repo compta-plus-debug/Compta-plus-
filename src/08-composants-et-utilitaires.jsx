@@ -3,8 +3,8 @@
 // @depends __uidCounter, _membership, supabase, useState
 // @exports FALLBACK_HTG_PER_USD, GENESIS_HASH, GroupedTabNav, NET_MSG, PLAN_TIER_INFO
 //   canonicalEntryContent, friendlyError, genInviteToken, isFutureDate, normalizeClientName
-//   sanitizeUserMessage, sealEntries, sha256Hex, todayStr, uid, useBrouillon, verifyChain
-//   verifyChainFull
+//   normalizeProductName, sanitizeUserMessage, sealEntries, sha256Hex, todayStr, uid, useBrouillon
+//   verifyChain, verifyChainFull
 // ═══ FIN DE L'EN-TÊTE ═══
 // Brouillon de formulaire : ce qu'on est en train de saisir est gardé quand on ouvre un autre module ou un autre onglet,
 // puis retrouvé au retour. Propre à l'entreprise et au compte connecté ; expire après 6 heures ; ne garde que
@@ -89,6 +89,12 @@ function GroupedTabNav({ groups, tab, setTab, className }) {
       </div>
     </div>
   );
+}
+
+// Clé de comparaison d'un nom d'article : sans différence de majuscules/minuscules, d'accents,
+// d'espaces en trop ou de signes de ponctuation répétés (« Riz  Blanc », « riz blanc », « RIZ BLANC » = même article).
+function normalizeProductName(n) {
+  return String(n || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function normalizeClientName(n) {

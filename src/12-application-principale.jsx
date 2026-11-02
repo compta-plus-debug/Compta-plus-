@@ -1424,15 +1424,18 @@ function App() {
   // Applique la devise choisie dans les paramètres à toutes les mises en forme monétaires
   CURRENT_CURRENCY = settings.currency || "HTG";
 
+  const toastTimerRef = React.useRef(null);
   const showToast = (msg) => {
     msg = sanitizeUserMessage(msg);
     setToast(msg);
+    // Un nouveau message annule le minuteur du précédent : sinon l'ancien minuteur le faisait disparaître trop tôt.
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     // Durée adaptée à la longueur du message : un texte d'anomalie détaillé (avec
     // orientation vers un comptable) a besoin de bien plus de temps de lecture
     // qu'une simple confirmation ("Écriture enregistrée."). Plancher 2.2s (comme
     // avant), plafond 9s pour ne pas bloquer l'écran indéfiniment.
     const duration = Math.min(9000, Math.max(2200, msg.length * 60));
-    setTimeout(() => setToast(null), duration);
+    toastTimerRef.current = setTimeout(() => { toastTimerRef.current = null; setToast(null); }, duration);
   };
   useEffect(() => {
     try {

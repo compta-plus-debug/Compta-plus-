@@ -6,11 +6,11 @@
 //   Receipt, RecordedStamp, RotateCcw, ScanLine, TAX_SYSTEMS, TicketBody, Trash2, X, _membership
 //   adresseClientFacture, balanceDue, detectAmountAnomaly, detectDuplicateAnomaly
 //   detectTaxAnomaly, downloadInvoicePDF, factureDateHeure, fmt, invoicePrefix, isFutureDate
-//   isLocked, makeChequeRecord, nifLigne, normalizeClientName, oflCompanyId, oflEnqueue, oflFinal
-//   oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved, oflTimeout
-//   printInvoiceBluetooth, rangModule, resizeImage, simpleEntry, suggestSimilarTiers, supabase
-//   tauxFactureTexte, todayStr, uid, useAssistedAnomalyGate, useBackNav, useEffect, useMemo
-//   useState
+//   isLocked, makeChequeRecord, nifLigne, normalizeClientName, normalizeProductName, oflCompanyId
+//   oflEnqueue, oflFinal, oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved
+//   oflTimeout, printInvoiceBluetooth, rangModule, resizeImage, ruleRefusalMessage, simpleEntry
+//   suggestSimilarTiers, supabase, tauxFactureTexte, todayStr, uid, useAssistedAnomalyGate
+//   useBackNav, useEffect, useMemo, useState
 // @exports VenteModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Brouillon de vente : le panier en cours (produits, client, mode de paiement, remises, frais) est gardé quand on
@@ -249,7 +249,7 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
     setCart((c) => c.map((l) => {
       if (l.productId !== productId) return l;
       const p = products.find((pr) => pr.id === productId);
-      let nextQty = Math.max(1, Math.floor(Number(value)) || 1);
+      let nextQty = Math.min(1000000, Math.max(1, Math.floor(Number(value)) || 1)); // plafond : une saisie absurde (1e308) ne doit jamais produire un total infini
       if (p && p.type === "marchandise" && nextQty > (p.stock || 0)) {
         showToast(`Stock insuffisant : il ne reste que ${p.stock || 0} unité(s) de « ${p.name} » — quantité ramenée au maximum disponible.`);
         nextQty = Math.max(1, p.stock || 1);
@@ -597,6 +597,28 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
       logAudit("Vente", "Vente hors ligne", `${invNumber} — ${fmt(total)}`);
       return;
     }
+    // Enregistrement ATOMIQUE (v314) d'une NOUVELLE vente : facture + écritures dans une seule
+    // transaction côté base — impossible de garder l'une sans l'autre. Si la fonction n'est pas
+    // (encore) installée ou si la connexion flanche, on retombe sur l'ancienne méthode
+    // (sauvegardes séparées + vérification différée), qui reste en place comme filet.
+    let atomicDone = false;
+    if (!editingInvoiceId && !offlineMode) {
+      try {
+        const cidAtomic = await oflCompanyId();
+        const { data: atomicRes, error: atomicErr } = await oflTimeout(supabase.rpc("commit_sale_documents", {
+          target_company_id: cidAtomic,
+          p_invoice: newInvoice,
+          p_entries: [saleEntry, cogsEntry].filter(Boolean),
+        }), 12000);
+        if (atomicErr) throw atomicErr;
+        atomicDone = !!(atomicRes && atomicRes.ok);
+      } catch (eAtomic) {
+        const refus = typeof ruleRefusalMessage === "function" ? ruleRefusalMessage(eAtomic) : null;
+        if (refus) { showToast(refus + " La vente n'a pas été enregistrée."); return; }
+        atomicDone = false; // repli : méthode habituelle ci-dessous
+      }
+    }
+
     if (editingInvoiceId) {
       // Annule l'effet de l'ancienne version sur le stock avant d'appliquer la nouvelle.
       if (old) {
@@ -611,8 +633,9 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
       setInvoices((prev) => prev.map((i) => (i.id === editingInvoiceId ? newInvoice : i)));
     } else {
       const entriesToAdd = [saleEntry, cogsEntry].filter(Boolean);
-      setEntries((prev) => [...prev, ...entriesToAdd]);
-      setInvoices((prev) => [...prev, newInvoice]);
+      // Jamais de doublon : si l'écho temps réel de l'enregistrement atomique est déjà arrivé, rien n'est rajouté.
+      setEntries((prev) => { const have = new Set((prev || []).map((x) => x.id)); return [...prev, ...entriesToAdd.filter((x) => !have.has(x.id))]; });
+      setInvoices((prev) => ((prev || []).some((x) => x.id === newInvoice.id) ? prev : [...prev, newInvoice]));
     }
 
     // Décrémenter le stock des marchandises et journaliser les mouvements de sortie
@@ -924,13 +947,26 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
       showToast("Code, intitulé et prix requis.");
       return;
     }
+    // Valeurs saisies : jamais de prix négatif/nul/démesuré, de stock négatif ou de taxe hors 0-100 %.
+    const nPrice = Number(newProduct.price), nCost = Number(newProduct.costPrice || 0), nTva = Number(newProduct.tva || 0);
+    const nStock = Number(newProduct.stock || 0), nSeuil = Number(newProduct.seuil || 0);
+    if (!Number.isFinite(nPrice) || nPrice <= 0 || nPrice > 1e11) { showToast("Le prix doit être un nombre positif raisonnable."); return; }
+    if (!Number.isFinite(nCost) || nCost < 0 || nCost > 1e11) { showToast("Le coût de revient doit être un nombre positif ou nul."); return; }
+    if (!Number.isFinite(nTva) || nTva < 0 || nTva > 100) { showToast("La taxe doit être comprise entre 0 et 100 %."); return; }
+    if (newProduct.type === "marchandise" && (!Number.isFinite(nStock) || nStock < 0 || nStock > 1e9 || !Number.isFinite(nSeuil) || nSeuil < 0 || nSeuil > 1e9)) { showToast("Le stock et le seuil d'alerte doivent être des nombres positifs ou nuls."); return; }
+    if (String(newProduct.name).trim().length > 120 || String(newProduct.code).trim().length > 40) { showToast("Intitulé (120 caractères max.) ou code (40 max.) trop long."); return; }
     const codeTaken = products.some((p) => p.id !== editingProductId && p.code.trim().toLowerCase() === newProduct.code.trim().toLowerCase());
     if (codeTaken) {
-      showToast(`Le code « ${newProduct.code} » est déjà utilisé par un autre article. Choisissez un code unique.`);
+      const sameCode = products.find((p) => p.id !== editingProductId && p.code.trim().toLowerCase() === newProduct.code.trim().toLowerCase());
+      showToast(`Ce code existe déjà au Catalogue : « ${newProduct.code} » est utilisé par l'article « ${sameCode ? sameCode.name : ""} ». Choisissez un code unique.`);
       return;
     }
-    const nameTaken = products.some((p) => p.id !== editingProductId && p.name.trim().toLowerCase() === newProduct.name.trim().toLowerCase());
-    if (nameTaken && !window.confirm(`Un article nommé « ${newProduct.name} » existe déjà au catalogue (avec un autre code). Créer quand même une seconde fiche distincte ? Cela créera deux compteurs de stock séparés pour le même nom.`)) {
+    // Un article ne peut exister qu'UNE fois au catalogue : même nom = refus, quelle que soit la
+    // casse (majuscules/minuscules), les accents ou les espaces. Pas de seconde fiche « pour voir ».
+    const wantedKey = normalizeProductName(newProduct.name);
+    const sameName = products.find((p) => p.id !== editingProductId && normalizeProductName(p.name) === wantedKey);
+    if (sameName) {
+      showToast(`Cet article existe déjà au Catalogue : « ${sameName.name} » (code ${sameName.code}). Modifiez la fiche existante au lieu d'en créer une seconde.`);
       return;
     }
     const base = { ...newProduct, price: Number(newProduct.price), costPrice: Number(newProduct.costPrice || 0), tva: Number(newProduct.tva) };
@@ -955,7 +991,8 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
       setEditingProductId(null);
     } else {
       const newId = uid();
-      setProducts((prev) => [...prev, { ...base, id: newId, createdAt: new Date().toISOString() }]);
+      // Garde-fou contre un double clic : si la fiche vient d'être créée, on n'en ajoute pas une seconde.
+      setProducts((prev) => ((prev || []).some((p) => normalizeProductName(p.name) === wantedKey || String(p.code).trim().toLowerCase() === String(base.code).trim().toLowerCase()) ? prev : [...prev, { ...base, id: newId, createdAt: new Date().toISOString() }]));
       if (newProduct.image) setProductImages((prev) => ({ ...prev, [newId]: newProduct.image }));
       showToast("Article ajouté au catalogue.");
       logAudit("Vente", "Ajout article", `${base.code} — ${base.name}`);
@@ -1784,7 +1821,7 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
             <div>
               <label className="text-xs" style={{ color: "#8A8370" }}>Code</label>
               <div className="flex gap-1 mt-1">
-                <input value={newProduct.code} onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
+                <input data-testid="cat-code" value={newProduct.code} onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
                   placeholder="Manuel ou scanné" className="flex-1 min-w-0 border rounded px-2 py-1.5 text-sm" style={{ borderColor: "#DDD6C4" }} />
                 <button type="button" onClick={() => setShowScanner(true)} title="Scanner un code-barres ou QR"
                   className="shrink-0 border rounded px-2 flex items-center justify-center" style={{ borderColor: "#DDD6C4", color: "#152238" }}>
@@ -1794,12 +1831,12 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
             </div>
             <div className="col-span-2">
               <label className="text-xs" style={{ color: "#8A8370" }}>Intitulé</label>
-              <input value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+              <input data-testid="cat-name" value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                 className="w-full border rounded px-2 py-1.5 text-sm mt-1" style={{ borderColor: "#DDD6C4" }} />
             </div>
             <div>
               <label className="text-xs" style={{ color: "#8A8370" }}>Prix HT (vente)</label>
-              <input type="number" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+              <input data-testid="cat-price" type="number" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
                 className="w-full border rounded px-2 py-1.5 text-sm mt-1 tabular" style={{ borderColor: "#DDD6C4" }} />
             </div>
             <div>
@@ -1839,7 +1876,7 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
                 </div>
               </>
             )}
-            <button onClick={addProduct} className="flex items-center justify-center gap-2 px-4 py-2 rounded text-sm text-white h-[38px]" style={{ background: "#152238" }}>
+            <button data-testid="cat-add" onClick={addProduct} className="flex items-center justify-center gap-2 px-4 py-2 rounded text-sm text-white h-[38px]" style={{ background: "#152238" }}>
               {editingProductId ? <CheckCircle2 size={14} /> : <Plus size={14} />}
               {editingProductId ? "Enregistrer" : "Ajouter"}
             </button>
