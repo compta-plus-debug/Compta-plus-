@@ -155,7 +155,7 @@ for(const [typ,att,interdit,titre] of [['association',/ollecte/,/ffrande|îme/,/
 {const gros=(n)=>({type:'don',id:'d'+n,number:'RC-'+n,date:today,kind:'subvention',donorName:'X',fondId:'',amount:98765432109.55,mode:'banque',entryId:'x'+n,status:'valide'});
  const {p}=await boot(b,{settings:{companyName:'T',currency:'HTG'},primary:true,cats:{ong:[{type:'config',id:'cf',orgType:'ong'},gros(1),{type:'dep',id:'e1',date:today,kind:'activites',label:'x',supplier:'F',amount:45678901234.25,mode:'caisse',fondId:'',status:'valide',settlements:[]}]},pageInit:mk(['ong'],'Administrateur')});
  await p.setViewportSize({width:360,height:740});
- const modele=require('fs').readFileSync(require('path').join(__dirname,'..','src','parties','index.modele.html'),'utf8');
+ const _fs=require('fs'),_pa=require('path');const modele=_fs.readFileSync([_pa.join(__dirname,'..','src','parties','index.modele.html'),_pa.join(__dirname,'src','index.modele.html'),_pa.join(__dirname,'src','parties','index.modele.html')].find(f=>_fs.existsSync(f)),'utf8');
  const css=(modele.match(/<style>([\s\S]*?)<\/style>/)||[0,''])[1].replace(/@font-face[^}]*}/g,'')+'.grid{display:grid}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.gap-3{gap:12px}.tabular{font-variant-numeric:tabular-nums}.text-lg{font-size:18px}';
  await p.addStyleTag({content:css});await p.waitForTimeout(1500);
  const r=await p.evaluate(()=>[...document.querySelectorAll('.ec-kpi .tabular')].map(v=>({t:v.textContent,o:v.scrollWidth>v.clientWidth+1})));
