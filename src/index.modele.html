@@ -27,6 +27,18 @@
          d'entrer en conflit avec le tiroir de navigation de l'application, qui utilise le
          même geste horizontal depuis le bord gauche. */
       html, body { touch-action: pan-y; }
+      /* Petits écrans : aucun montant, liste déroulante ni tableau ne doit dépasser de sa carte ou de l'écran
+         (comme la page ne défile pas de côté, ce qui dépasse serait coupé). */
+      select, input, textarea { max-width: 100%; min-width: 0; }
+      @media screen and (max-width: 480px) {
+        .tabular.text-3xl, .tabular.text-2xl { font-size: clamp(15px, 5.2vw, 22px) !important; }
+        .tabular.text-xl, .tabular.text-lg { font-size: clamp(14px, 4.6vw, 18px) !important; }
+        .tabular.text-3xl, .tabular.text-2xl, .tabular.text-xl, .tabular.text-lg, .ec-kpi .tabular, .ec-kpi .display { line-height: 1.2; }
+        .tabular:not(td):not(th), .display.text-3xl, .display.text-2xl { overflow-wrap: anywhere; }
+      }
+      @media screen and (max-width: 640px) {
+        table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      }
       /* Polices hébergées avec le site (aucun appel à Google Fonts). */
       @font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/inter-latin-400-normal.woff2) format('woff2'); }
       @font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/inter-latin-500-normal.woff2) format('woff2'); }
