@@ -27,7 +27,7 @@ function builder(table) {
     if (!NET()) return netErr();
     if (table === "kv_store") {
       const rows = S.kvMulti ? Object.entries(S.kvMulti).flatMap(([cid, m]) => Object.entries(m).map(([k, v]) => ({ company_id: cid, key: k, value: v }))) : Object.entries(S.kv).map(([k, v]) => ({ company_id: "c1", key: k, value: v }));
-      if (st.op === "upsert") { const p = Array.isArray(st.payload) ? st.payload : [st.payload]; const _dat = (v) => { try { return JSON.stringify(JSON.parse(v).data); } catch (e) { return null; } }; if (S.periodeRule) { const _bad = p.find(x => { if (!['compta-entries', 'compta-invoices', 'compta-purchases'].includes(x.key)) return false; let lock = ''; try { lock = JSON.parse(S.kv['compta-settings']).data.lockDate || ''; } catch (e) {} if (!lock) return false; let oa = [], na = []; try { oa = JSON.parse(S.kv[x.key]).data || []; } catch (e) {} try { na = JSON.parse(x.value).data || []; } catch (e) {} const ids = new Set(na.map(i => i.id)); return oa.some(o => !ids.has(o.id) && o.date && o.date <= lock); }); if (_bad) return { data: null, error: { message: "REGLE|periode_cloturee|La période comptable est clôturée : cette pièce ne peut pas être supprimée.", code: "P0001" } }; } const _rr = p.find(x => S.ruleRefuse && S.ruleRefuse[x.key] && _dat(x.value) !== _dat(S.kv[x.key])); if (_rr) return { data: null, error: { message: "REGLE|test_regle|" + S.ruleRefuse[_rr.key], code: "P0001" } }; if (p.some(x => S.failSetKeys.includes(x.key))) return { data: null, error: { message: "TypeError: Failed to fetch", code: "" } }; p.forEach(x => { S.kv[x.key] = x.value; S.calls.push("kv.set " + x.key); }); return { data: p, error: null }; }
+      if (st.op === "upsert") { const p = Array.isArray(st.payload) ? st.payload : [st.payload]; const _dat = (v) => { try { return JSON.stringify(JSON.parse(v).data); } catch (e) { return null; } }; if (S.periodeRule) { const _bad = p.find(x => { if (!['compta-entries', 'compta-invoices', 'compta-purchases'].includes(x.key)) return false; let lock = ''; try { lock = JSON.parse(S.kv['compta-settings']).data.lockDate || ''; } catch (e) {} if (!lock) return false; let oa = [], na = []; try { oa = JSON.parse(S.kv[x.key]).data || []; } catch (e) {} try { na = JSON.parse(x.value).data || []; } catch (e) {} const ids = new Set(na.map(i => i.id)); return oa.some(o => !ids.has(o.id) && o.date && o.date <= lock); }); if (_bad) return { data: null, error: { message: "REGLE|periode_cloturee|La période comptable est clôturée : cette pièce ne peut pas être supprimée.", code: "P0001" } }; } const _rr = p.find(x => S.ruleRefuse && S.ruleRefuse[x.key] && _dat(x.value) !== _dat(S.kv[x.key])); if (_rr) return { data: null, error: { message: "REGLE|test_regle|" + S.ruleRefuse[_rr.key], code: "P0001" } }; if (p.some(x => S.failSetKeys.includes(x.key))) return { data: null, error: { message: "TypeError: Failed to fetch", code: "" } }; p.forEach(x => { S.kv[x.key] = x.value; S.calls.push("kv.set " + x.key); if (S.rtEcho) (S.rtHandlers || []).forEach(h => { try { h({ new: { key: x.key, value: x.value } }); } catch (e) {} }); }); return { data: p, error: null }; }
       let out = rows.filter(r => st.f.every(f => f(r)));
       if (st.op === "delete") { out.forEach(r => delete S.kv[r.key]); return { data: null, error: null }; }
       if (st.single || st.maybe) return { data: out[0] || null, error: null };
@@ -43,7 +43,7 @@ function builder(table) {
     if (st.single || st.maybe) return { data: out[0] || null, error: null };
     return { data: st.limit ? out.slice(0, st.limit) : out, error: null };
   };
-  api.then = (res, rej) => (S.hang || HNG() ? new Promise(() => {}) : Promise.resolve().then(run)).then(res, rej);
+  api.then = (res, rej) => (S.hang || HNG() ? new Promise(() => {}) : Promise.resolve().then(run).then(r => (S.lat ? new Promise(ok => setTimeout(() => ok(r), S.lat)) : r))).then(res, rej);
   return api;
 }
 const kvGet = (k) => { const v = S.kv[k]; return v ? JSON.parse(v) : null; };
@@ -77,7 +77,7 @@ const client = {
     return { data: null, error: null };
   },
   functions: { invoke: async (name, o) => { S.calls.push('fn ' + name); S.lastFn = { name, body: o && o.body }; if (S.fnH && S.fnH[name]) return S.fnH[name](o); return { data: null, error: { message: 'x' } }; } },
-  channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+  channel: () => ({ on(t, f, cb) { (S.rtHandlers = S.rtHandlers || []).push(cb); return this; }, subscribe() { return this; } }),
   removeChannel() {},
 };
 function applyStock(args) {
