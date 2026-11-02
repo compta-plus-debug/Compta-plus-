@@ -1328,8 +1328,10 @@ function App() {
       // Filet de sécurité : quelques secondes après la synchronisation, on revérifie que la vente est
       // toujours bien présente sur le serveur (facture, écritures, mouvements de stock) ; sinon on la remet.
       verifyLater: (fin, it) => {
+        const t0 = Date.now();
         [8000, 25000].forEach((delay) => setTimeout(async () => {
           try {
+            if (ctx.resetMs() >= t0) return; // une réinitialisation a eu lieu depuis : ne rien remettre
             const [a, b, c] = await Promise.all([window.storage.get("compta-invoices"), window.storage.get("compta-entries"), window.storage.get("compta-movements")]);
             const inv = dataOf(a), ent = dataOf(b), mov = dataOf(c);
             const invOk = Array.isArray(inv) && inv.some((x) => x.id === fin.invoice.id);
@@ -1348,6 +1350,7 @@ function App() {
         }, delay));
       },
       logAudit,
+      resetMs: () => Math.max(0, ...Object.values(knownResetRef.current || {}).map((r) => Number(String(r || "").split("-")[0]) || 0)),
       invoicePrefix: invoicePrefix(settings),
     };
     const r = await oflSyncAll(ctx);

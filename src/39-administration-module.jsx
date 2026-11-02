@@ -3,8 +3,9 @@
 // @depends APP_VERSION, BK_LABELS, CURRENCIES, DEFAULT_ACCOUNTS, DEFAULT_CLIENTS, DEFAULT_PRODUCTS
 //   DEFAULT_SUPPLIERS, GroupedTabNav, NET_MSG, PartialResetPanel, Plus, RestorePreviewModal
 //   TAX_SYSTEMS, bkBalance, bkBuildFile, bkDiff, bkDownload, bkVerify, ecInviteError, fmt
-//   genInviteToken, invoicePrefix, isFutureDate, isLocked, logClientError, rangModule, resizeImage
-//   resolveMembership, roleLabel, rpSave, supabase, todayStr, uid, useBackNav, useEffect, useState
+//   genInviteToken, invoicePrefix, isFutureDate, isLocked, logClientError, oflClear, rangModule
+//   resizeImage, resolveMembership, roleLabel, rpSave, supabase, todayStr, uid, useBackNav
+//   useEffect, useState
 // @exports AdminModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function AdminModule({
@@ -797,6 +798,7 @@ function AdminModule({
       setPayslips([]); setSalaryAdvances([]);
       setAssets([]); setAccruals([]); setDeferrals([]); setRiskProvisions([]); setLoans([]);
     }
+    if (sel.compta) { try { oflClear(); } catch (e) { /* ignoré */ } }
     if (sel.movements) setMovements([]);
     if (sel.templates) { setEntryTemplates([]); setPendingApprovals([]); }
     if (sel.products) { setProducts(DEFAULT_PRODUCTS); setProductImages({}); }

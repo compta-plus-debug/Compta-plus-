@@ -2,8 +2,8 @@
 // @module Scanner et ventes hors ligne
 // @depends X, _membership, fmt, friendlyError, resolveMembership, sanitizeUserMessage, useEffect
 //   useState
-// @exports BarcodeScannerModal, OFL_EVT, OflPanel, oflCompanyId, oflEnqueue, oflFinal, oflIsNetworkError
-//   oflLoad, oflProvisionalNumber, oflReserved, oflSyncAll, oflTimeout
+// @exports BarcodeScannerModal, OFL_EVT, OflPanel, oflClear, oflCompanyId, oflEnqueue, oflFinal
+//   oflIsNetworkError, oflLoad, oflProvisionalNumber, oflReserved, oflSyncAll, oflTimeout
 // ═══ FIN DE L'EN-TÊTE ═══
 // Fenêtre de scan de code-barres/QR via la caméra du téléphone/ordinateur. Utilise la
 // bibliothèque html5-qrcode chargée en CDN (window.Html5Qrcode). Appelle onScan(code) dès
@@ -94,7 +94,11 @@ const oflKey = () => "compta-plus-offline-sales-" + ((typeof _membership !== "un
 function oflLoad() { try { const a = JSON.parse(localStorage.getItem(oflKey()) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
 function oflNotify() { try { window.dispatchEvent(new Event(OFL_EVT)); } catch (e) { /* ignoré */ } }
 function oflSave(arr) { try { localStorage.setItem(oflKey(), JSON.stringify(arr)); oflNotify(); return true; } catch (e) { return false; } }
-function oflEnqueue(item) { const q = oflLoad(); q.push(item); return oflSave(q); }
+function oflEnqueue(item) { const q = oflLoad(); q.push({ queuedAt: Date.now(), ...item }); return oflSave(q); }
+// Réinitialisation : les ventes en attente sur cet appareil sont supprimées (sinon elles seraient rejouées et feraient revenir des factures)
+function oflClear() { try { localStorage.removeItem(oflKey()); } catch (e) { /* ignoré */ } oflNotify(); }
+// Retire de la file les ventes mises en attente AVANT la dernière réinitialisation (ms) ; retourne le nombre retiré
+function oflPurgeBefore(ms) { if (!ms) return 0; const q = oflLoad(); const k = q.filter((x) => !(x.queuedAt && x.queuedAt < ms)); if (k.length !== q.length) oflSave(k); return q.length - k.length; }
 function oflPatch(qid, patch) { const q = oflLoad(); const i = q.findIndex((x) => x.qid === qid); if (i < 0) return null; q[i] = { ...q[i], ...patch }; oflSave(q); return q[i]; }
 function oflRemove(qid) { oflSave(oflLoad().filter((x) => x.qid !== qid)); }
 function oflProvisionalNumber() {
@@ -135,6 +139,7 @@ let _oflSyncing = false;
 async function oflSyncAll(ctx) {
   if (_oflSyncing) return { skipped: true };
   if (typeof navigator !== "undefined" && navigator.onLine === false) return { offline: true };
+  try { if (ctx.resetMs) oflPurgeBefore(ctx.resetMs()); } catch (e) { /* ignoré */ }
   if (oflLoad().length === 0) return { done: 0, failed: 0, conflicts: 0 };
   _oflSyncing = true;
   let done = 0, failed = 0, conflicts = 0;
