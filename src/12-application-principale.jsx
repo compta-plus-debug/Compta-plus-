@@ -741,10 +741,21 @@ function App() {
         // Le nouveau numéro dépasse à la fois ce que le serveur connaît ET ce qu'on a
         // nous-mêmes déjà vu, pour ne jamais reculer même en cas de sauvegardes rapprochées.
         const newV = Math.max(serverV, knownVersionRef.current[category] || 0) + 1;
-        const saved = await window.storage.set(`compta-${category}`, JSON.stringify({ v: newV, data: toSave }));
-        if (!saved) throw new Error("Écriture refusée par le serveur (résultat vide)");
-        serverSnapshotRef.current[category] = toSave;
+        // On note la version AVANT d'écrire : le serveur renvoie l'« écho » temps réel de notre propre
+        // écriture parfois avant la réponse à l'appel. Sans ceci, cet écho (plus ancien que l'écran, si
+        // l'utilisateur a continué à saisir) remplaçait les données affichées : écritures et clients qui
+        // « disparaissaient puis revenaient », écarts de cohérence qui alternaient.
+        const versionAvant = knownVersionRef.current[category] || 0;
         knownVersionRef.current[category] = newV;
+        let saved;
+        try {
+          saved = await window.storage.set(`compta-${category}`, JSON.stringify({ v: newV, data: toSave }));
+          if (!saved) throw new Error("Écriture refusée par le serveur (résultat vide)");
+        } catch (eSet) {
+          if (knownVersionRef.current[category] === newV) knownVersionRef.current[category] = versionAvant;
+          throw eSet;
+        }
+        serverSnapshotRef.current[category] = toSave;
         try {
           const cidOk = _membership && _membership.companyId;
           if (cidOk) { hlCachePut(cidOk, category, { v: newV, data: toSave, at: Date.now() }); hlPendDel(cidOk, category); }
