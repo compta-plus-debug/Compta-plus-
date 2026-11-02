@@ -72,6 +72,14 @@ const client = {
     if (!NET()) return netErr();
     if (S.nextRpcFail > 0 && name === "commit_sale_stock") { S.nextRpcFail--; if (S.stockRpcFailAfterApply) applyStock(args); return netErr(); }
     if (S.rpcH && S.rpcH[name]) return S.rpcH[name](args);
+    if (name === "commit_sale_documents") {
+      if (S.atomicMissing) return { data: null, error: { message: "Could not find the function public.commit_sale_documents in the schema cache", code: "PGRST202" } };
+      const inv = (S.getCat("invoices") || []).filter(x => x.id !== args.p_invoice.id).concat([args.p_invoice]);
+      const ids = new Set((args.p_entries || []).map(e => e.id));
+      const ent = (S.getCat("entries") || []).filter(x => !ids.has(x.id)).concat(args.p_entries || []);
+      S.setCat("entries", ent); S.setCat("invoices", inv);
+      return { data: { ok: true }, error: null };
+    }
     if (name === "next_invoice_number") return { data: ++S.invCounter, error: null };
     if (name === "commit_sale_stock") return { data: applyStock(args), error: null };
     return { data: null, error: null };
