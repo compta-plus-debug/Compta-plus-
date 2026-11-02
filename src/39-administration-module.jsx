@@ -806,6 +806,23 @@ function AdminModule({
     if (sel.employees) setEmployees([]);
     if (sel.stations) setSalesStations([]);
     if (sel.accounts) setAccounts(DEFAULT_ACCOUNTS);
+    // ÉTAPE 2 — écriture FORCÉE sur le serveur, avec un marqueur de réinitialisation : le serveur est remplacé tel quel
+    // (sans fusion avec des éléments qu'un autre appareil y aurait ajoutés) et tout appareil resté ouvert avec d'anciennes
+    // données reconnaît le marqueur, adopte l'état réinitialisé et n'écrit rien par-dessus (les données ne reviennent plus).
+    try {
+      const epoch = Date.now() + "-" + uid();
+      const forcer = [];
+      if (sel.compta) ["entries", "invoices", "purchases", "cheques", "bizdocs", "ecole", "impex", "sante", "resto", "hotel", "transport", "immo", "btp", "indus", "agri", "ong", "services", "payslips", "salaryAdvances", "assets", "accruals", "deferrals", "riskProvisions", "loans"].forEach((c) => forcer.push([c, []]));
+      if (sel.movements) forcer.push(["movements", []]);
+      if (sel.templates) forcer.push(["entryTemplates", []], ["pendingApprovals", []]);
+      if (sel.products) forcer.push(["products", DEFAULT_PRODUCTS], ["productImages", {}]);
+      if (sel.clients) forcer.push(["clients", DEFAULT_CLIENTS]);
+      if (sel.suppliers) forcer.push(["suppliers", DEFAULT_SUPPLIERS]);
+      if (sel.employees) forcer.push(["employees", []]);
+      if (sel.stations) forcer.push(["salesStations", []]);
+      if (sel.accounts) forcer.push(["accounts", DEFAULT_ACCOUNTS]);
+      if (typeof saveCategoryNow === "function") for (const [c, val] of forcer) { try { await saveCategoryNow(c, val, { forceReset: epoch }); } catch (e) { /* la vérification finale le signalera */ } }
+    } catch (e) { /* la vérification finale le signalera */ }
     // ÉTAPE 3 — vérification directement sur le serveur : on attend que les suppressions soient enregistrées puis on relit.
     const aVerifier = [];
     if (sel.compta) aVerifier.push(["entries", "écritures comptables"], ["invoices", "factures de vente"], ["purchases", "achats"], ["cheques", "chèques"], ["bizdocs", "documents commerciaux"], ["payslips", "bulletins de paie"], ["salaryAdvances", "avances de salaire"], ["assets", "immobilisations"], ["accruals", "régularisations"], ["deferrals", "produits et charges constatés d'avance"], ["riskProvisions", "provisions"], ["loans", "emprunts"], ["ecole", "données du bloc Éducation"], ["impex", "données du bloc Import-export"], ["sante", "données du bloc Santé"], ["resto", "données du bloc Restauration"], ["hotel", "données du bloc Hôtellerie"], ["transport", "données du bloc Transport"], ["immo", "données du bloc Immobilier"], ["btp", "données du bloc BTP"], ["indus", "données du bloc Industries artisanales"], ["agri", "données du bloc Agriculture et élevage"], ["ong", "données du bloc ONG, associations, églises"], ["services", "données du bloc Services et prestations"]);

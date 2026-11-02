@@ -684,6 +684,11 @@ function App() {
   // Remplace un précédent système basé sur l'horloge (fenêtre de quelques secondes) qui
   // restait faillible en cas de réseau lent ou de plusieurs sauvegardes rapprochées.
   const knownVersionRef = React.useRef({});
+  // Marqueur de RÉINITIALISATION connu par cet appareil, par catégorie. Une réinitialisation écrit sur le
+  // serveur un marqueur ; un appareil resté ouvert avec d'anciennes données (téléphone/ordinateur) ne doit
+  // JAMAIS les re-sauvegarder par-dessus : il reconnaît le marqueur, adopte l'état réinitialisé et n'écrit rien.
+  const knownResetRef = React.useRef({});
+  const resetAdoptedAtRef = React.useRef(0);
 
   // Une valeur stockée peut être soit l'ancien format brut (juste le tableau/objet),
   // soit le nouveau format { v, data }. Cette fonction gère les deux de façon transparente.
@@ -693,18 +698,35 @@ function App() {
   // produits, ajoutées depuis des appareils différents pour des produits différents.
   const OBJECT_MERGE_CATEGORIES = { productImages: true };
 
-  const saveCategory = (category, value) => {
+  const saveCategory = (category, value, opts) => {
     if (role === "Vendeur" && !VENDEUR_WRITABLE_CATEGORIES.includes(category)) return;
     const previous = saveQueueRef.current[category] || Promise.resolve();
     const run = previous.then(async () => {
       try {
         let toSave = value;
         let serverV = 0;
+        let serverReset = null;
+        const forceReset = opts && opts.forceReset;
         const res = await window.storage.get(`compta-${category}`).catch(() => null);
         if (res && res.value) {
-          const { v, data: serverData } = unwrapVersioned(JSON.parse(res.value));
+          const { v, data: serverData, reset: srvReset } = unwrapVersioned(JSON.parse(res.value));
           serverV = v;
-          if (Array.isArray(value)) {
+          serverReset = srvReset;
+          // Appareil resté sur d'anciennes données alors que le serveur a été RÉINITIALISÉ depuis un autre appareil :
+          // on n'écrit rien (sinon les données effacées ressusciteraient) et on adopte l'état du serveur.
+          if (!forceReset && srvReset && srvReset !== knownResetRef.current[category]) {
+            settersByCategory[category](serverData);
+            serverSnapshotRef.current[category] = serverData;
+            knownVersionRef.current[category] = Math.max(v, knownVersionRef.current[category] || 0);
+            knownResetRef.current[category] = srvReset;
+            try { const cidS = _membership && _membership.companyId; if (cidS) { hlPendDel(cidS, category); hlCachePut(cidS, category, { v, data: serverData, at: Date.now() }); } } catch (e2) { /* ignoré */ }
+            resetAdoptedAtRef.current = Date.now();
+            try { showToast("Ces données ont été réinitialisées depuis un autre appareil : votre écran vient d'être mis à jour."); } catch (e3) { /* ignoré */ }
+            return;
+          }
+          if (forceReset) {
+            toSave = value; // réinitialisation volontaire : remplacement pur, sans fusion avec ce que le serveur contient
+          } else if (Array.isArray(value)) {
             const serverValue = Array.isArray(serverData) ? serverData : [];
             const keyFn = MERGE_KEY_BY_CATEGORY[category] || ((item) => item.id);
             toSave = mergeByKey(serverValue, value, keyFn, serverSnapshotRef.current[category]);
@@ -749,7 +771,9 @@ function App() {
         knownVersionRef.current[category] = newV;
         let saved;
         try {
-          saved = await window.storage.set(`compta-${category}`, JSON.stringify({ v: newV, data: toSave }));
+          const resetMark = forceReset || serverReset || undefined; // le marqueur est conservé par les sauvegardes suivantes
+          saved = await window.storage.set(`compta-${category}`, JSON.stringify(resetMark ? { v: newV, data: toSave, reset: resetMark } : { v: newV, data: toSave }));
+          if (resetMark) knownResetRef.current[category] = resetMark;
           if (!saved) throw new Error("Écriture refusée par le serveur (résultat vide)");
         } catch (eSet) {
           if (knownVersionRef.current[category] === newV) knownVersionRef.current[category] = versionAvant;
@@ -821,10 +845,12 @@ function App() {
   const refreshCategoryFromServer = async (category, setter) => {
     const res = await window.storage.get(`compta-${category}`);
     const parsed = res?.value ? JSON.parse(res.value) : null;
-    const { data } = unwrapVersioned(parsed);
+    const { data, v: vRef, reset: rRef } = unwrapVersioned(parsed);
     if (Array.isArray(data)) {
       setter(data);
       serverSnapshotRef.current[category] = data;
+      knownVersionRef.current[category] = Math.max(vRef || 0, knownVersionRef.current[category] || 0);
+      knownResetRef.current[category] = rRef || null;
       return data;
     }
     return null;
@@ -926,12 +952,15 @@ function App() {
         // Hors ligne : une catégorie jamais mise en cache n'est PAS considérée comme « vide » (on ne risque pas d'écraser le serveur avec des valeurs par défaut).
         const results = CATEGORIES.map((c) => ({ ok: allOk && !(fromCache && !cachedCats.has(c)), res: allOk && byKey[`compta-${c}`] !== undefined ? { value: byKey[`compta-${c}`] } : null }));
         let anyFound = false;
+        const resetAtLoad = {};
         results.forEach(({ ok, res }, i) => {
           const category = CATEGORIES[i];
           if (res && res.value !== undefined && res.value !== null) {
             anyFound = true;
             try {
-              const { v, data } = unwrapVersioned(JSON.parse(res.value));
+              const { v, data, reset: loadReset } = unwrapVersioned(JSON.parse(res.value));
+              knownResetRef.current[category] = loadReset || null;
+              resetAtLoad[category] = loadReset || null;
               // Migration douce : le régime "tva" (français) a été retiré au profit de
               // "iva" (Mexique) — une entreprise qui l'avait choisi avant ce changement
               // passe automatiquement sur "iva" en conservant son taux déjà configuré,
@@ -977,6 +1006,9 @@ function App() {
           let applied = 0; const conflicts = [];
           for (const cat of Object.keys(pend)) {
             if (!settersByCategory[cat] || !loadedCategoriesRef.current[cat]) continue;
+            // Modification hors ligne antérieure à une réinitialisation : elle ne doit pas ressusciter les données effacées.
+            const rstAt = resetAtLoad[cat] ? Number(String(resetAtLoad[cat]).split("-")[0]) : 0;
+            if (rstAt && (Number(pend[cat] && pend[cat].ts) || 0) < rstAt) { await hlPendDel(cid, cat); continue; }
             const keyFn = MERGE_KEY_BY_CATEGORY[cat] || ((item) => item.id);
             const r = hlOverlay(cat, serverSnapshotRef.current[cat], knownVersionRef.current[cat] || 0, pend[cat], keyFn);
             if (r.kind === "merged") { settersByCategory[cat](r.data); applied++; }
@@ -1336,13 +1368,17 @@ function App() {
     const id = setInterval(() => { if (navigator.onLine !== false) runOflSyncRef.current && runOflSyncRef.current(); }, 30000);
     return () => { clearTimeout(first); clearInterval(id); };
   }, [loaded, oflCount]);
+  const currentValues = () => ({
+    accounts, entries, products, invoices, suppliers, purchases,
+    movements, clients, settings, users, productImages, auditLog,
+    employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante,
+    resto, hotel, transport, immo, btp, indus, agri, ong, services, // blocs de secteur : « Sauvegarder maintenant » et les nouvelles tentatives doivent les couvrir aussi
+  });
+  const currentValuesRef = React.useRef(null);
+  currentValuesRef.current = currentValues;
   const retryAllSaves = async () => {
     setRetrySaving(true);
-    const values = {
-      accounts, entries, products, invoices, suppliers, purchases,
-      movements, clients, settings, users, productImages, auditLog,
-      employees, payslips, salaryAdvances, salesStations, assets, accruals, deferrals, riskProvisions, loans, entryTemplates, pendingApprovals, cheques, bizdocs, ecole, impex, sante,
-    };
+    const values = currentValues();
     await Promise.all(Object.entries(values).map(async ([cat, val]) => {
       if (role === "Vendeur" && !VENDEUR_WRITABLE_CATEGORIES.includes(cat)) return;
       if (!loadedCategoriesRef.current[cat]) {
@@ -1352,10 +1388,11 @@ function App() {
         try {
           const res = await window.storage.get(`compta-${cat}`);
           if (res && res.value !== undefined && res.value !== null) {
-            const { v, data } = unwrapVersioned(JSON.parse(res.value));
+            const { v, data, reset: rr } = unwrapVersioned(JSON.parse(res.value));
             settersByCategory[cat](data);
             serverSnapshotRef.current[cat] = data;
             knownVersionRef.current[cat] = v;
+            knownResetRef.current[cat] = rr || null;
           }
           loadedCategoriesRef.current[cat] = true;
           setSyncErrorCategories((prev) => prev.filter((c) => c !== cat));
@@ -1367,10 +1404,61 @@ function App() {
       }
     }));
     setRetrySaving(false);
-    if (syncErrorCategories.length === 0) showToast("Sauvegarde réussie — toutes les données sont synchronisées.");
+    if (Date.now() - resetAdoptedAtRef.current < 30000) { /* le message « données réinitialisées ailleurs » reste affiché */ }
+    else if (syncErrorCategories.length === 0) showToast("Sauvegarde réussie — toutes les données sont synchronisées.");
     else showToast("La sauvegarde a encore échoué pour certaines données — vérifiez votre connexion internet.");
   };
   retryAllSavesRef.current = retryAllSaves;
+
+  // Remise à niveau au RETOUR sur l'application (onglet qui redevient visible, réseau revenu, focus) : un appareil
+  // resté en veille peut avoir perdu la synchronisation en direct. Sans ceci, il gardait d'anciennes données (élément
+  // supprimé ou réinitialisé ailleurs) et la sauvegarde suivante pouvait les faire revenir. On ne touche QUE les
+  // catégories sans modification locale en attente ; celles-ci restent gérées par la fusion habituelle à l'enregistrement.
+  const resyncBusyRef = React.useRef(false);
+  const resyncLastRef = React.useRef(0);
+  const resyncFromServer = async (force) => {
+    if (!loaded || hlNetDown() || resyncBusyRef.current) return;
+    if (!force && Date.now() - resyncLastRef.current < 10000) return;
+    resyncBusyRef.current = true; resyncLastRef.current = Date.now();
+    try {
+      const { companyId } = await resolveMembership();
+      const keys = CATEGORIES.map((c) => `compta-${c}`);
+      const { data, error } = await oflTimeout(supabase.from("kv_store").select("key, value").eq("company_id", companyId).in("key", keys), 20000);
+      if (error || !Array.isArray(data)) return;
+      const vals = currentValuesRef.current ? currentValuesRef.current() : {};
+      for (const row of data) {
+        const cat = String(row.key || "").replace("compta-", "");
+        if (!settersByCategory[cat] || !loadedCategoriesRef.current[cat] || row.value === undefined || row.value === null) continue;
+        let parsed; try { parsed = unwrapVersioned(JSON.parse(row.value)); } catch (e) { continue; }
+        if (parsed.v <= (knownVersionRef.current[cat] || 0)) continue;
+        let sameAsSnapshot = false;
+        try { sameAsSnapshot = JSON.stringify(vals[cat]) === JSON.stringify(serverSnapshotRef.current[cat]); } catch (e) { sameAsSnapshot = false; }
+        if (!sameAsSnapshot) continue; // modifications locales non enregistrées : on ne les écrase pas
+        settersByCategory[cat](parsed.data);
+        serverSnapshotRef.current[cat] = parsed.data;
+        knownVersionRef.current[cat] = parsed.v;
+        knownResetRef.current[cat] = parsed.reset || null;
+        try { hlCachePut(companyId, cat, { v: parsed.v, data: parsed.data, at: Date.now() }); } catch (e2) { /* ignoré */ }
+      }
+    } catch (e) { /* réseau instable : on réessaiera au prochain retour */ }
+    finally { resyncBusyRef.current = false; }
+  };
+  const resyncRef = React.useRef(null);
+  resyncRef.current = resyncFromServer;
+  useEffect(() => {
+    if (!loaded) return;
+    let hiddenAt = 0;
+    const onVis = () => {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 20000) resyncRef.current && resyncRef.current(true);
+    };
+    const onBack = () => { resyncRef.current && resyncRef.current(false); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", onBack);
+    window.addEventListener("focus", onBack);
+    const id = setInterval(() => { if (!document.hidden) resyncRef.current && resyncRef.current(false); }, 300000);
+    return () => { document.removeEventListener("visibilitychange", onVis); window.removeEventListener("online", onBack); window.removeEventListener("focus", onBack); clearInterval(id); };
+  }, [loaded]);
 
   // Enregistre une action dans le journal des modifications : qui, où (module), quoi
   // (action), et le détail. Passé aux modules qui ont besoin de tracer leurs actions.
@@ -1401,7 +1489,7 @@ function App() {
               const setter = settersByCategory[category];
               if (!setter || row.value === undefined || row.value === null) return;
               try {
-                const { v, data } = unwrapVersioned(JSON.parse(row.value));
+                const { v, data, reset: rtReset } = unwrapVersioned(JSON.parse(row.value));
                 // Rejet strict : si ce qu'on reçoit n'est pas plus récent que ce qu'on
                 // connaît déjà, on l'ignore. Contrairement à une fenêtre de délai, ceci
                 // ne peut jamais se tromper, quelle que soit la latence réseau.
@@ -1409,6 +1497,7 @@ function App() {
                 setter(data);
                 serverSnapshotRef.current[category] = data;
                 knownVersionRef.current[category] = v;
+                knownResetRef.current[category] = rtReset || null;
                 try { hlCachePut(companyId, category, { v, data, at: Date.now() }); } catch (e2) { /* ignoré */ }
               } catch (e) {}
             }

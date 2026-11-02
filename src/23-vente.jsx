@@ -1014,8 +1014,9 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
   };
 
   const deleteProduct = (id) => {
-    if (!window.confirm("Supprimer définitivement cet article du catalogue ?")) return;
     const p = products.find((x) => x.id === id);
+    const restant = p && p.type === "marchandise" ? Number(p.stock) || 0 : 0;
+    if (!window.confirm(restant > 0 ? `Il reste ${restant} unité(s) en stock pour « ${p.name} ». La suppression retire l'article du catalogue sans écriture de stock. Supprimer définitivement cet article ?` : "Supprimer définitivement cet article du catalogue ?")) return;
     setProducts((prev) => prev.filter((p) => p.id !== id));
     setProductImages((prev) => { const next = { ...prev }; delete next[id]; return next; });
     if (editingProductId === id) cancelEditProduct();

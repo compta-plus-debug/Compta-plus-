@@ -117,7 +117,7 @@ function computeKpis(accounts, balances) {
 // entrées antérieures à cette convention).
 function unwrapVersioned(parsed) {
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && "v" in parsed && "data" in parsed) {
-    return { v: Number(parsed.v) || 0, data: parsed.data };
+    return { v: Number(parsed.v) || 0, data: parsed.data, reset: parsed.reset || null };
   }
   return { v: 0, data: parsed };
 }
