@@ -151,6 +151,16 @@ for(const [typ,att,interdit,titre] of [['association',/ollecte/,/ffrande|îme/,/
  await g(p,'og-don-montant').fill('12');await g(p,'og-don-enregistrer').click();await p.waitForTimeout(450);
  ok('nom piégé (balise HTML) : affiché comme texte, aucun script exécuté',(await p.evaluate(()=>window.__xss||0))===0&&/<img src=x/.test(await g(p,'og-recu-feuille').first().innerText()));
  await p.close();}
+// ── Petit écran : les montants à 9 ou 11 chiffres restent dans leur carte (cartes du tableau de bord)
+{const gros=(n)=>({type:'don',id:'d'+n,number:'RC-'+n,date:today,kind:'subvention',donorName:'X',fondId:'',amount:98765432109.55,mode:'banque',entryId:'x'+n,status:'valide'});
+ const {p}=await boot(b,{settings:{companyName:'T',currency:'HTG'},primary:true,cats:{ong:[{type:'config',id:'cf',orgType:'ong'},gros(1),{type:'dep',id:'e1',date:today,kind:'activites',label:'x',supplier:'F',amount:45678901234.25,mode:'caisse',fondId:'',status:'valide',settlements:[]}]},pageInit:mk(['ong'],'Administrateur')});
+ await p.setViewportSize({width:360,height:740});
+ const modele=require('fs').readFileSync(require('path').join(__dirname,'..','src','parties','index.modele.html'),'utf8');
+ const css=(modele.match(/<style>([\s\S]*?)<\/style>/)||[0,''])[1].replace(/@font-face[^}]*}/g,'')+'.grid{display:grid}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.gap-3{gap:12px}.tabular{font-variant-numeric:tabular-nums}.text-lg{font-size:18px}';
+ await p.addStyleTag({content:css});await p.waitForTimeout(1500);
+ const r=await p.evaluate(()=>[...document.querySelectorAll('.ec-kpi .tabular')].map(v=>({t:v.textContent,o:v.scrollWidth>v.clientWidth+1})));
+ ok('360 px : 8 cartes du tableau de bord ONG, montants de 11 chiffres sans débordement',r.length===8&&r.every(x=>!x.o),r.filter(x=>x.o));
+ await p.close();}
 // ── Église : mots et natures de recettes
 {const {p}=await boot(b,{settings:{companyName:'Église',currency:'HTG'},primary:true,cats:{ong:[{type:'config',id:'cf',orgType:'eglise'},...seed()]},pageInit:mk(['ong'],'Administrateur')});await p.waitForTimeout(1600);
  await g(p,'og-tab-dons').click();await p.waitForTimeout(300);
