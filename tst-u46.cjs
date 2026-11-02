@@ -15,4 +15,4 @@ await p.waitForTimeout(30000);
 const srv=await p.evaluate(()=>window.__srv.getCat('services')||[]);
 ok('les 6 lignes sont bien enregistrées côté serveur',srv.filter(r=>r.type==='prest').length===6,srv.filter(r=>r.type==='prest').length);
 ok('toujours 6 lignes à l\'écran après stabilisation',(await g(p,'sv-prest-ligne').count())===6);
-await b.close();process.exit(fails?1:0)})();
+await b.close();console.log(fails?('ÉCHECS '+fails):'TOUT PASSE');process.exit(fails?1:0)})();
