@@ -802,7 +802,7 @@ function AdminModule({
     if (sel.movements) setMovements([]);
     if (sel.templates) { setEntryTemplates([]); setPendingApprovals([]); }
     if (sel.products) { setProducts(DEFAULT_PRODUCTS); setProductImages({}); }
-    else if (opts && opts.zeroStock) setProducts((prev) => prev.map((p) => (p.type === "marchandise" ? { ...p, stock: 0 } : p)));
+    else if (opts && opts.zeroStock) setProducts((prev) => prev.map((p) => (p.type === "marchandise" || (p.stock !== undefined && p.stock !== null && p.stock !== "") ? { ...p, stock: 0 } : p)));
     if (sel.clients) setClients(DEFAULT_CLIENTS);
     if (sel.suppliers) setSuppliers(DEFAULT_SUPPLIERS);
     if (sel.employees) setEmployees([]);
