@@ -1,0 +1,24 @@
+// v319 — Historique des ventes dans une carte repliable ; champs de texte : défilement horizontal libre dès que le champ a le focus.
+const {chromium}=require('playwright');const {boot}=require('./tst-harness.cjs');
+let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.stringify(i)));if(!c)fails++};
+(async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
+ const {p}=await boot(b,{settings:{companyName:'X',currency:'HTG'},primary:true,cats:{products:[{id:1,code:'P1',name:'Article',price:10,type:'service',account:'706'}],invoices:[{id:'i1',number:'F0001',date:'2026-11-01',client:'Alice',total:100,status:'payée',paymentMode:'caisse',lines:[]}]}});
+ await p.waitForTimeout(1500);
+ await p.getByText('Vente',{exact:false}).first().click();await p.waitForTimeout(900);
+ const card=p.locator('[data-testid="pos-history-card"]');
+ ok('historique dans une carte',(await card.count())===1);
+ ok('la carte affiche la facture',(await card.innerText()).includes('F0001'));
+ const bg=await card.evaluate(e=>e.className+'|'+getComputedStyle(e).borderTopWidth);
+ ok('carte (fond blanc, coins arrondis) avec bordure',/bg-white/.test(bg)&&/rounded-lg/.test(bg)&&/1px/.test(bg),bg);
+ await p.locator('[data-testid="pos-history-toggle"]').click();await p.waitForTimeout(200);
+ ok('repliée : facture masquée, titre visible',!(await card.innerText()).includes('F0001')&&(await card.innerText()).includes('Historique des ventes'));
+ await p.locator('[data-testid="pos-history-toggle"]').click();await p.waitForTimeout(200);
+ ok('dépliée de nouveau',(await card.innerText()).includes('F0001'));
+ const ta=()=>p.evaluate(()=>getComputedStyle(document.querySelector('.swipe-zone')).touchAction);
+ await p.locator('body').click({position:{x:5,y:5}});await p.evaluate(()=>document.activeElement&&document.activeElement.blur());
+ const avant=await ta();
+ await p.locator('[data-testid="vente-client-nom"]').click();await p.waitForTimeout(200);
+ const apres=await ta();
+ ok('hors saisie : défilement vertical seulement',avant==='pan-y',avant);
+ ok('champ actif : défilement horizontal libre',apres==='manipulation',apres);
+ await b.close();console.log(fails?('ÉCHECS '+fails):'TOUT PASSE');process.exit(fails?1:0)})();
