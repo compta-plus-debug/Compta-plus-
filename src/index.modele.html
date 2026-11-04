@@ -27,6 +27,8 @@
          d'entrer en conflit avec le tiroir de navigation de l'application, qui utilise le
          même geste horizontal depuis le bord gauche. */
       html, body { touch-action: pan-y; }
+      /* Dès qu'un champ de texte a le focus, le défilement horizontal du texte dans le champ est libre. */
+      html:has(input:focus, textarea:focus), body:has(input:focus, textarea:focus) { touch-action: manipulation; }
       /* Petits écrans : aucun montant, liste déroulante ni tableau ne doit dépasser de sa carte ou de l'écran
          (comme la page ne défile pas de côté, ce qui dépasse serait coupé). */
       select, input, textarea { max-width: 100%; min-width: 0; }

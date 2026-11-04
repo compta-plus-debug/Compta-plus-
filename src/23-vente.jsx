@@ -114,6 +114,7 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
   // périmés avant que l'écran n'ait fini de se mettre à jour après la première.
   const submittingSaleRef = React.useRef(false);
   const [posHistoryOpenId, setPosHistoryOpenId] = useState(null);
+  const [posHistoryCollapsed, setPosHistoryCollapsed] = useState(false);
   const [printInvoice, setPrintInvoice] = useState(null);
   React.useEffect(() => {
     if (!printInvoice) return;
@@ -1121,11 +1122,14 @@ function VenteModule({ clients, setClients, setCheques, accounts, entries, setEn
               })}
             </div>
 
-            <div className="mt-6">
-              <div className="flex items-center gap-2 mb-3" style={{ color: "#152238" }}>
+            <div className="mt-6 bg-white rounded-lg p-5" style={{ border: "1px solid #E4DFD1" }} data-testid="pos-history-card">
+              <button type="button" onClick={() => setPosHistoryCollapsed((c) => !c)} aria-expanded={!posHistoryCollapsed} data-testid="pos-history-toggle"
+                className="w-full flex items-center gap-2 text-left" style={{ color: "#152238", marginBottom: posHistoryCollapsed ? 0 : 12 }}>
                 <History size={16} /><span className="font-medium text-sm">Historique des ventes</span>
-              </div>
-              {invoices.length === 0 ? (
+                <span className="text-xs tabular" style={{ color: "#8A8370" }}>({invoices.length})</span>
+                <span className="ml-auto text-xs" style={{ color: "#8A8370" }}>{posHistoryCollapsed ? "Afficher ▼" : "Masquer ▲"}</span>
+              </button>
+              {posHistoryCollapsed ? null : invoices.length === 0 ? (
                 <div className="text-xs py-4 text-center" style={{ color: "#A39C87" }}>Aucune vente enregistrée pour le moment.</div>
               ) : (
                 <div className="overflow-y-auto max-h-[40vh] border rounded" style={{ borderColor: "#EEE9DA" }}>

@@ -2419,6 +2419,10 @@ function App() {
         /* Le texte affiché ne se sélectionne pas, ne se glisse pas et ne se dépose pas dans les champs : seuls les champs de saisie restent éditables. */
         body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
         input, textarea, select, [contenteditable="true"], .selectable { -webkit-user-select: text; user-select: text; }
+        /* Geste vertical seulement hors saisie ; dès qu'un champ de texte a le focus, le défilement horizontal est libre
+           (faire glisser le texte dans le champ pour atteindre la lettre à corriger, déplacer le curseur au doigt). */
+        .swipe-zone { touch-action: pan-y; }
+        html:has(input:focus, textarea:focus), body:has(input:focus, textarea:focus), .swipe-zone:has(input:focus, textarea:focus) { touch-action: manipulation; }
         img, a { -webkit-user-drag: none; }
         @page ticket-page-80 { size: 80mm auto; margin: 3mm; }
         @page ticket-page-58 { size: 58mm auto; margin: 2mm; }
@@ -2514,8 +2518,8 @@ function App() {
       )}
 
       <div
-        className="flex flex-col md:flex-row flex-1 min-h-0"
-        style={{ touchAction: "pan-y", overscrollBehaviorX: "none" }}
+        className="swipe-zone flex flex-col md:flex-row flex-1 min-h-0"
+        style={{ overscrollBehaviorX: "none" }}
         onTouchStart={(active === "superadmin" || active === "centredegestion" || active === "groupdashboard") ? undefined : (ev) => { swipeTouchRef.current = { x: ev.touches[0].clientX, y: ev.touches[0].clientY }; }}
         onTouchEnd={(active === "superadmin" || active === "centredegestion" || active === "groupdashboard") ? undefined : (ev) => {
           const start = swipeTouchRef.current;
