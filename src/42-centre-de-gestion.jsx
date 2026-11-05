@@ -1,8 +1,9 @@
 // ═══ MODULE ═══
 // @module Centre de gestion
 // @depends AnnouncementsAdminPanel, BadgeDollar, CabinetBillingPanel, CabinetRequestsPanel, GroupedTabNav
-//   SecteursGestionPanel, SimpleGroupedBarChart, SupervisionPanel, SupportInbox, X, friendlyError
-//   invokeEdgeFunction, logClientError, roleLabel, supabase, useEffect, useState
+//   ProceduresPanel, SecteursGestionPanel, SimpleGroupedBarChart, SupervisionPanel, SupportInbox
+//   TeamMessagingPanel, X, friendlyError, invokeEdgeFunction, logClientError, roleLabel, supabase
+//   useEffect, useState, useTeamUnread
 // @exports CentreDeGestionModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin }) {
@@ -69,7 +70,9 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
   const basePerms = isPlatformAdmin
     ? { entreprises: true, offres: true, statistiques: true, collaborateurs: true, supervision: true }
     : (myRecord?.permissions || { entreprises: true, offres: true, statistiques: true, collaborateurs: false });
-  const perms = { ...basePerms, aide: isPlatformAdmin ? true : basePerms.aide !== false, cabinets: isPlatformAdmin ? true : !!basePerms.offres, annonces: isPlatformAdmin ? true : !!basePerms.offres };
+  const perms = { ...basePerms, aide: isPlatformAdmin ? true : basePerms.aide !== false, cabinets: isPlatformAdmin ? true : !!basePerms.offres, annonces: isPlatformAdmin ? true : !!basePerms.offres, messagerie: true, procedures: isPlatformAdmin ? true : !!basePerms.procedures };
+  // Messagerie interne : nombre de fils non lus, pour l'afficher sur l'onglet.
+  const teamUnread = useTeamUnread(true, currentUserEmail);
 
   // Nombre de messages d'utilisateurs pas encore lus — affiché sur l'onglet
   // et rafraîchi régulièrement pour ne jamais manquer une demande d'aide.
@@ -471,7 +474,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
           ...(perms.statistiques ? [{ label: "Statistiques", color: { bg: "#0F6B5C", text: "#fff", light: "#E6F1EE", lightText: "#0F6B5C" }, tabs: [["statistiques", "Statistiques"]] }] : []),
           ...(perms.supervision ? [{ label: "Supervision", color: { bg: "#3B5C1F", text: "#fff", light: "#EEF4E2", lightText: "#3B5C1F" }, tabs: [["supervision", "Supervision"]] }] : []),
           ...(perms.aide ? [{ label: "Centre d'aide", color: { bg: "#A6432F", text: "#fff", light: "#F7E9E3", lightText: "#A6432F" }, tabs: [["aide", `Messages${inboxUnread ? ` (${inboxUnread})` : ""}`]] }] : []),
-          ...(perms.collaborateurs ? [{ label: "Équipe", color: { bg: "#152238", text: "#fff", light: "#E8EAF0", lightText: "#152238" }, tabs: [["collaborateurs", "Collaborateurs"]] }] : []),
+          { label: "Équipe", color: { bg: "#152238", text: "#fff", light: "#E8EAF0", lightText: "#152238" }, tabs: [["messagerie", `Messagerie interne${teamUnread ? ` (${teamUnread})` : ""}`], ...(perms.procedures ? [["procedures", "Procédures"]] : []), ...(perms.collaborateurs ? [["collaborateurs", "Collaborateurs"]] : [])] },
         ]}
       />
 
@@ -1125,6 +1128,10 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
         <SupervisionPanel companies={companies} activity={activity} payments={payments} />
       ) : tab === "aide" ? (
         <SupportInbox companies={companies} currentUserEmail={currentUserEmail} logActivity={logActivity} onUnreadChange={refreshInboxUnread} />
+      ) : tab === "messagerie" ? (
+        <TeamMessagingPanel showToast={showToast} currentUserEmail={currentUserEmail} isPlatformAdmin={isPlatformAdmin} />
+      ) : tab === "procedures" ? (
+        <ProceduresPanel showToast={showToast} currentUserEmail={currentUserEmail} />
       ) : tab === "collaborateurs" ? (
         <div>
           <div className="bg-white rounded-lg p-6 mb-4" style={{ border: "1px solid #E4DFD1" }}>
@@ -1148,7 +1155,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
                   </div>
                   {isPlatformAdmin && (
                     <div className="flex flex-wrap gap-3 mt-2 pt-2" style={{ borderTop: "1px solid #F3EFE3" }}>
-                      {[["entreprises", "Entreprises"], ["offres", "Offres"], ["statistiques", "Statistiques"], ["supervision", "Supervision"], ["aide", "Centre d'aide"], ["collaborateurs", "Collaborateurs"]].map(([key, label]) => (
+                      {[["entreprises", "Entreprises"], ["offres", "Offres"], ["statistiques", "Statistiques"], ["supervision", "Supervision"], ["aide", "Centre d'aide"], ["procedures", "Procédures (2FA, clôtures)"], ["collaborateurs", "Collaborateurs"]].map(([key, label]) => (
                         <label key={key} className="flex items-center gap-1.5 text-xs" style={{ color: "#7A7460" }}>
                           <input type="checkbox" checked={key === "aide" ? cPerms.aide !== false : !!cPerms[key]} onChange={(e) => updatePermission(c.id, key, e.target.checked)} />
                           {label}

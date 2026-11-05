@@ -1,13 +1,15 @@
 // ═══ MODULE ═══
 // @module Super admin
 // @depends BillingAdminPanel, FALLBACK_HTG_PER_USD, FB_WA_MODELES, NET_MSG, PAYMENT_METHODS
-//   SimpleDonutChart, SimpleLineChart, _membership, fbTelValide, fbWaLien, fbWaTexte
-//   fetchHtgPerUsd, friendlyError, isFutureDate, monthLabel, periodLabel, supabase, todayStr
-//   useEffect, useState
+//   ProceduresPanel, SimpleDonutChart, SimpleLineChart, TeamMessagingPanel, _membership
+//   fbTelValide, fbWaLien, fbWaTexte, fetchHtgPerUsd, friendlyError, isFutureDate, monthLabel
+//   periodLabel, supabase, todayStr, useEffect, useState, useTeamUnread
 // @exports SuperAdminModule
 // ═══ FIN DE L'EN-TÊTE ═══
 function SuperAdminModule({ showToast }) {
   const [tab, setTab] = useState("dashboard"); // dashboard | entreprises | rapports | erreurs
+  const currentUserEmail = (typeof _membership !== "undefined" && _membership && _membership.email) || "";
+  const teamUnreadSA = useTeamUnread(true, currentUserEmail);
   const [errorLogs, setErrorLogs] = useState(null); // null = pas encore chargé
   const [perf, setPerf] = useState(null); // null = pas chargé ; {loading} | {data} | {error}
   const [perfDays, setPerfDays] = useState(7);
@@ -409,6 +411,7 @@ function SuperAdminModule({ showToast }) {
             { id: "facturation", label: "Facturation", tabs: [["fact_factures", "Factures"], ["fact_relances", "Relances"], ["fact_reglages", "Réglages de facturation"]] },
             { id: "essais", label: "Essais et inscriptions", tabs: [["suivi", "Suivi des essais"], ["inscriptions", "Inscriptions et essais"]] },
             { id: "controle", label: "Contrôle et sécurité", tabs: [["journal", "Journal"], ["erreurs", "Erreurs"], ["perf", "Performances"], ["integrite", "Intégrité des données"]] },
+            { id: "equipe", label: "Équipe", tabs: [["equipe_messages", `Messagerie interne${teamUnreadSA ? ` (${teamUnreadSA})` : ""}`], ["equipe_procedures", "Procédures"]] },
           ];
           const grp = SA_GROUPS.find((g) => g.tabs.some(([id]) => id === tab)) || SA_GROUPS[0];
           return (
@@ -1021,6 +1024,8 @@ function SuperAdminModule({ showToast }) {
           );
         })()}
 
+        {tab === "equipe_messages" && <TeamMessagingPanel showToast={showToast} currentUserEmail={currentUserEmail} isPlatformAdmin={true} />}
+        {tab === "equipe_procedures" && <ProceduresPanel showToast={showToast} currentUserEmail={currentUserEmail} />}
         {tab === "fact_factures" && <BillingAdminPanel view="factures" showToast={showToast} currentUserEmail={(typeof _membership !== "undefined" && _membership && _membership.email) || ""} />}
         {tab === "fact_relances" && <BillingAdminPanel view="relances" showToast={showToast} currentUserEmail={(typeof _membership !== "undefined" && _membership && _membership.email) || ""} />}
         {tab === "fact_reglages" && <BillingAdminPanel view="reglages" showToast={showToast} currentUserEmail={(typeof _membership !== "undefined" && _membership && _membership.email) || ""} />}

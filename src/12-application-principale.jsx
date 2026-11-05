@@ -415,6 +415,17 @@ function App() {
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
   const [pinChecking, setPinChecking] = useState(false);
+  // Blocage volontaire après 5 mauvais essais : on retient l'heure de fin pour désactiver
+  // le bouton et rappeler que ce n'est pas une panne (sinon l'utilisateur réessaie en boucle).
+  const [pinLockUntil, setPinLockUntil] = useState(0);
+  const [, setPinTick] = useState(0);
+  useEffect(() => {
+    if (!pinLockUntil) return undefined;
+    const ms = pinLockUntil - Date.now();
+    if (ms <= 0) { setPinLockUntil(0); return undefined; }
+    const t = setTimeout(() => { setPinLockUntil(0); setPinError(""); setPinTick((x) => x + 1); }, ms + 300);
+    return () => clearTimeout(t);
+  }, [pinLockUntil]);
   const [showSecurityPanel, setShowSecurityPanel] = useState(false);
   // Centre d'aide : fenêtre de discussion avec le support + pastilles de messages non
   // lus (réponses du support pour l'utilisateur ; nouvelles demandes pour l'équipe
@@ -2225,7 +2236,19 @@ function App() {
           hlPinMark(companyPinCompanyId, _membership && _membership.email);
           setPinVerified(true);
         } else {
-          setPinError("Code incorrect. Redemandez-le à votre administrateur si besoin.");
+          // Mauvais code (ou code bloqué) : on demande au serveur combien d'essais restent,
+          // pour dire clairement à la personne ce qui se passe.
+          let st = null;
+          try { const r2 = await supabase.rpc("pin_status", { target_company_id: companyPinCompanyId }); if (!r2.error) st = r2.data; } catch (e2) {}
+          if (st && (st.locked || st.left === 0)) {
+            const mins = Math.max(1, Number(st.minutes) || 15);
+            setPinLockUntil(Date.now() + mins * 60000);
+            setPinError(`Trop d'essais incorrects. Par sécurité, le code de cette entreprise est bloqué pendant ${mins} minute${mins > 1 ? "s" : ""}. Ce blocage est voulu (protection contre les tentatives répétées) : ce n'est pas une panne, inutile de réessayer avant la fin du délai. Vous pouvez aussi redemander le code à votre administrateur.`);
+          } else if (st && typeof st.left === "number") {
+            setPinError(`Code incorrect. Il vous reste ${st.left} essai${st.left > 1 ? "s" : ""} avant un blocage de 15 minutes. Redemandez le code à votre administrateur si besoin.`);
+          } else {
+            setPinError("Code incorrect. Redemandez-le à votre administrateur si besoin.");
+          }
         }
       } catch (e) {
         setPinError("Impossible de vérifier le code pour l'instant. Réessayez.");
@@ -2244,10 +2267,10 @@ function App() {
             onKeyDown={(e) => e.key === "Enter" && verifyPin()}
             placeholder="Code de sécurité" autoFocus
             className="w-full border rounded px-3 py-2 text-sm mb-3 text-center tabular" style={{ borderColor: "#DDD6C4" }} />
-          {pinError && <p className="text-xs mb-3" style={{ color: "#A6432F" }}>{pinError}</p>}
-          <button onClick={verifyPin} disabled={pinChecking}
-            className="w-full py-2.5 rounded text-sm text-white mb-3" style={{ background: "#152238" }}>
-            {pinChecking ? "Vérification…" : "Valider"}
+          {pinError && <p className="text-xs mb-3" data-testid="pin-error" style={{ color: "#A6432F" }}>{pinError}</p>}
+          <button onClick={verifyPin} disabled={pinChecking || (pinLockUntil > Date.now())} data-testid="pin-valider"
+            className="w-full py-2.5 rounded text-sm text-white mb-3" style={{ background: "#152238", opacity: pinLockUntil > Date.now() ? 0.5 : 1 }}>
+            {pinChecking ? "Vérification…" : pinLockUntil > Date.now() ? "Bloqué temporairement" : "Valider"}
           </button>
           <button onClick={() => { clearMembershipCache(); supabase.auth.signOut(); }}
             className="text-xs underline" style={{ color: "#8A8370" }}>
