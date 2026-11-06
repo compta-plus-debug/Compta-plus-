@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Authentification
-// @depends LandingPage, clearMembershipCache, friendlyError, hlMeta, hlOffline, hlOfflineSession
-//   hlOfflineWhyNot, sanitizeUserMessage, supabase, useEffect, useState
+// @depends CAPTCHA_SITEKEY, LandingPage, clearMembershipCache, friendlyError, hlMeta, hlOffline
+//   hlOfflineSession, hlOfflineWhyNot, sanitizeUserMessage, supabase, useEffect, useState
 // @exports AdminMfaEnforcer, AuthGate, SecurityPanel
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Écran de connexion (lien magique par email) ---
@@ -9,6 +9,8 @@ function AuthGate({ children }) {
   const [session, setSession] = useState(undefined);
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaReset, setCaptchaReset] = useState(0);
   const [error, setError] = useState("");
   const [showLogin, setShowLogin] = useState(() => new URLSearchParams(window.location.search).get("login") === "1");
   // Niveau d'authentification MFA de la session en cours : null = pas encore vérifié,
@@ -151,9 +153,14 @@ function AuthGate({ children }) {
     const basePath = window.location.href.split(/[?#]/)[0];
     const inviteParam = new URLSearchParams(window.location.search).get("invite");
     const redirectTo = inviteParam ? `${basePath}?invite=${encodeURIComponent(inviteParam)}` : basePath;
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
-    if (error) setError(friendlyError(error));
-    else setSent(true);
+    if (CAPTCHA_SITEKEY && !captchaToken) { setError("Cochez la case de vérification (« Vérification anti-robot ») avant de continuer."); return; }
+    const options = { emailRedirectTo: redirectTo };
+    if (CAPTCHA_SITEKEY) options.captchaToken = captchaToken;
+    const { error } = await supabase.auth.signInWithOtp({ email, options });
+    if (error) {
+      setError(friendlyError(error));
+      if (CAPTCHA_SITEKEY) { setCaptchaToken(""); setCaptchaReset((n) => n + 1); } // un jeton ne sert qu'une fois
+    } else setSent(true);
   };
 
 
@@ -205,6 +212,7 @@ function AuthGate({ children }) {
             <>
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="votre@email.com"
                 style={{ width: "100%", padding: 8, marginBottom: 12, border: "1px solid #DDD6C4", borderRadius: 4, boxSizing: "border-box" }} />
+              {CAPTCHA_SITEKEY && <CaptchaBox onToken={setCaptchaToken} resetKey={captchaReset} />}
               <button type="submit" style={{ width: "100%", padding: 10, background: "#152238", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
                 Recevoir le lien de connexion
               </button>
@@ -235,6 +243,67 @@ function AuthGate({ children }) {
 // si le compte a un facteur TOTP enregistré. Bloque l'accès à l'application tant que le
 // code n'est pas validé. Propose aussi un code de secours à usage unique en repli, pour
 // le cas où l'appareil habituel (avec l'application d'authentification) est perdu.
+// ─── Captcha (Cloudflare Turnstile) ─── actif seulement si CAPTCHA_SITEKEY est renseignée dans 00-config.
+function loadTurnstile() {
+  return new Promise((resolve, reject) => {
+    if (window.turnstile) return resolve(window.turnstile);
+    let sc = document.querySelector("script[data-turnstile]");
+    if (!sc) {
+      sc = document.createElement("script");
+      sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      sc.async = true; sc.defer = true; sc.setAttribute("data-turnstile", "1");
+      document.head.appendChild(sc);
+    }
+    sc.addEventListener("load", () => resolve(window.turnstile));
+    sc.addEventListener("error", () => reject(new Error("captcha")));
+  });
+}
+function CaptchaBox({ onToken, resetKey }) {
+  const ref = React.useRef(null);
+  const wid = React.useRef(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    loadTurnstile().then((t) => {
+      if (!alive || !ref.current || wid.current !== null) return;
+      wid.current = t.render(ref.current, {
+        sitekey: CAPTCHA_SITEKEY, language: "fr",
+        callback: (tok) => onToken(tok),
+        "expired-callback": () => onToken(""),
+        "error-callback": () => onToken(""),
+      });
+    }).catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (resetKey && wid.current !== null && window.turnstile) { try { window.turnstile.reset(wid.current); } catch (e) {} }
+  }, [resetKey]);
+  return (
+    <div style={{ marginBottom: 12 }} data-testid="captcha-box">
+      <div ref={ref} />
+      {failed && <p style={{ color: "#A6432F", fontSize: 12 }}>La vérification anti-robot n'a pas pu se charger. Vérifiez votre connexion (ou désactivez le bloqueur de publicités) puis rechargez la page.</p>}
+    </div>
+  );
+}
+
+// Message d'erreur 2FA : texte clair pour la personne + « référence » technique discrète
+// (code et message du service d'authentification) pour que le support puisse trouver la vraie cause.
+function mfaErr(err, fallback) {
+  let d = "";
+  try { d = [err && (err.code || err.status), err && err.message].filter(Boolean).join(" — ").slice(0, 160); } catch (e) {}
+  return friendlyError(err, fallback) + (d ? "\n§" + d : "");
+}
+function MfaErrorText({ error }) {
+  const i = String(error).indexOf("\n§");
+  const msg = i >= 0 ? String(error).slice(0, i) : String(error);
+  const ref = i >= 0 ? String(error).slice(i + 2) : "";
+  return (
+    <div style={{ marginTop: 8 }}>
+      <p style={{ color: "#A6432F", fontSize: 12 }}>{sanitizeUserMessage(msg)}</p>
+      {ref && <p data-testid="mfa-ref" style={{ color: "#8A8370", fontSize: 11, marginTop: 4 }}>Référence : {ref}</p>}
+    </div>
+  );
+}
 function MfaChallengeScreen({ onVerified, onSignOut }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -257,7 +326,7 @@ function MfaChallengeScreen({ onVerified, onSignOut }) {
       if (verifyErr) throw verifyErr;
       await onVerified();
     } catch (err) {
-      setError(friendlyError(err, "Code invalide."));
+      setError(mfaErr(err, "Code invalide."));
     } finally {
       setVerifying(false);
     }
@@ -297,7 +366,7 @@ function MfaChallengeScreen({ onVerified, onSignOut }) {
           <button type="submit" disabled={verifying || !backupCode.trim()} style={{ width: "100%", padding: 10, background: "#152238", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", opacity: verifying || !backupCode.trim() ? 0.6 : 1 }}>
             {verifying ? "Vérification…" : "Valider"}
           </button>
-          {error && <p style={{ color: "#A6432F", fontSize: 12, marginTop: 8 }}>{sanitizeUserMessage(error)}</p>}
+          {error && <MfaErrorText error={error} />}
           <button type="button" onClick={() => { setUseBackup(false); setError(""); }} style={{ background: "none", border: "none", color: "#8A8370", fontSize: 12, marginTop: 16, cursor: "pointer", padding: 0, display: "block" }}>
             ← Revenir au code à 6 chiffres
           </button>
@@ -323,7 +392,7 @@ function MfaChallengeScreen({ onVerified, onSignOut }) {
         <button type="submit" disabled={verifying || code.length !== 6} style={{ width: "100%", padding: 10, background: "#152238", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", opacity: verifying || code.length !== 6 ? 0.6 : 1 }}>
           {verifying ? "Vérification…" : "Vérifier"}
         </button>
-        {error && <p style={{ color: "#A6432F", fontSize: 12, marginTop: 8 }}>{sanitizeUserMessage(error)}</p>}
+        {error && <MfaErrorText error={error} />}
         <button type="button" onClick={() => { setUseBackup(true); setError(""); }} style={{ background: "none", border: "none", color: "#5C6B8C", fontSize: 12, marginTop: 16, cursor: "pointer", padding: 0, display: "block" }}>
           Appareil habituel perdu ? Utiliser un code de secours
         </button>
@@ -377,15 +446,17 @@ function SecurityPanel({ onClose, showToast, forced, onEnrolled }) {
       // serveur et bloque toute nouvelle tentative avec l'erreur "factor already
       // exists" — on le retire silencieusement avant de réessayer.
       const { data: existingFactors } = await supabase.auth.mfa.listFactors();
-      const unverified = (existingFactors?.totp || []).filter((f) => f.status !== "verified");
+      // Attention : listFactors().totp ne contient QUE les facteurs vérifiés ; les facteurs
+      // orphelins (non vérifiés) ne sont visibles que dans .all.
+      const unverified = (existingFactors?.all || existingFactors?.totp || []).filter((f) => f.status !== "verified");
       for (const f of unverified) {
         await supabase.auth.mfa.unenroll({ factorId: f.id }).catch(() => {});
       }
-      const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: "Compta+ " + new Date().toISOString().slice(0, 19) });
       if (error) throw error;
       setEnrolling({ factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
     } catch (err) {
-      setError(friendlyError(err, "Impossible de démarrer l'activation."));
+      setError(mfaErr(err, "Impossible de démarrer l'activation."));
     } finally {
       setBusy(false);
     }
@@ -406,7 +477,7 @@ function SecurityPanel({ onClose, showToast, forced, onEnrolled }) {
       loadFactors();
       await generateBackupCodes();
     } catch (err) {
-      setError(friendlyError(err, "Code invalide, réessayez."));
+      setError(mfaErr(err, "Code invalide, réessayez."));
     } finally {
       setBusy(false);
     }
@@ -502,7 +573,7 @@ function SecurityPanel({ onClose, showToast, forced, onEnrolled }) {
                 Activer la double authentification
               </button>
             )}
-            {error && <p style={{ color: "#A6432F", fontSize: 12, marginTop: 8 }}>{sanitizeUserMessage(error)}</p>}
+            {error && <MfaErrorText error={error} />}
             {!verifiedFactor && (
               <p style={{ fontSize: 11, color: "#A39C87", marginTop: 16 }}>
                 Des codes de secours à usage unique vous seront proposés juste après l'activation, pour le cas où vous perdriez l'appareil habituel.
@@ -535,7 +606,7 @@ function SecurityPanel({ onClose, showToast, forced, onEnrolled }) {
             <button type="button" onClick={cancelEnroll} className="mt-2 underline block" style={{ color: "#8A8370", fontSize: 12, background: "none", border: "none", cursor: "pointer", marginTop: 8 }}>
               Annuler
             </button>
-            {error && <p style={{ color: "#A6432F", fontSize: 12, marginTop: 8 }}>{sanitizeUserMessage(error)}</p>}
+            {error && <MfaErrorText error={error} />}
           </form>
         )}
       </div>
