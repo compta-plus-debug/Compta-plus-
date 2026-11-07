@@ -158,7 +158,7 @@ function AuthGate({ children }) {
     if (CAPTCHA_SITEKEY) options.captchaToken = captchaToken;
     const { error } = await supabase.auth.signInWithOtp({ email, options });
     if (error) {
-      setError(friendlyError(error));
+      setError(mfaErr(error, /captcha/i.test(String(error && (error.code || error.message))) ? "La vérification anti-robot a échoué. Rechargez la page, cochez la case et réessayez (sous Brave, désactivez les boucliers pour ce site)." : undefined));
       if (CAPTCHA_SITEKEY) { setCaptchaToken(""); setCaptchaReset((n) => n + 1); } // un jeton ne sert qu'une fois
     } else setSent(true);
   };
@@ -216,7 +216,7 @@ function AuthGate({ children }) {
               <button type="submit" style={{ width: "100%", padding: 10, background: "#152238", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
                 Recevoir le lien de connexion
               </button>
-              {error && <p style={{ color: "#A6432F", fontSize: 12, marginTop: 8 }}>{sanitizeUserMessage(error)}</p>}
+              {error && <MfaErrorText error={error} />}
             </>
           )}
         </form>
