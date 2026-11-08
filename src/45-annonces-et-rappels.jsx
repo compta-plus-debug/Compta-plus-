@@ -81,9 +81,33 @@ function AnnouncementsAdminPanel({ showToast, currentUserEmail }) {
     showToast("Annonce publiée : chaque utilisateur la verra à sa prochaine ouverture.");
     load();
   };
-  const toggle = async (a) => {
-    const { error } = await supabase.from("announcements").update({ active: !a.active }).eq("id", a.id);
+  const [reviveId, setReviveId] = useState(null);   // annonce en cours de remise en ligne
+  const [reviveDate, setReviveDate] = useState("");   // nouvelle date de fin (facultative)
+  const [confirmDelId, setConfirmDelId] = useState(null); // annonce dont la suppression attend confirmation
+  const isExpired = (a) => !!a.ends_at && Date.parse(a.ends_at) <= Date.now();
+  // Retirer : l'annonce disparaît chez les utilisateurs mais reste dans la liste (on peut la remettre).
+  const withdraw = async (a) => {
+    const { error } = await supabase.from("announcements").update({ active: false }).eq("id", a.id);
     if (error) { showToast("La modification n'a pas pu être enregistrée."); return; }
+    load();
+  };
+  // Remettre en ligne : active l'annonce ET remplace sa date de fin (vide = sans date de fin),
+  // sinon une annonce expirée resterait invisible même « remise ».
+  const revive = async (a) => {
+    const patch = { active: true, ends_at: reviveDate ? new Date(reviveDate + "T23:59:59").toISOString() : null };
+    if (reviveDate && Date.parse(patch.ends_at) <= Date.now()) { showToast("Choisissez une date de fin dans le futur, ou laissez vide."); return; }
+    const { error } = await supabase.from("announcements").update(patch).eq("id", a.id);
+    if (error) { showToast("La modification n'a pas pu être enregistrée."); return; }
+    setReviveId(null); setReviveDate("");
+    showToast("Annonce remise en ligne.");
+    load();
+  };
+  // Supprimer : définitif, après une confirmation dans la page.
+  const remove = async (a) => {
+    const { data, error } = await supabase.from("announcements").delete().eq("id", a.id).select("id");
+    if (error || !Array.isArray(data) || data.length === 0) { showToast("L'annonce n'a pas pu être supprimée."); setConfirmDelId(null); return; }
+    setConfirmDelId(null);
+    showToast("Annonce supprimée définitivement.");
     load();
   };
   const fmtD = (s) => { try { return new Date(s).toLocaleDateString("fr-FR"); } catch (e) { return ""; } };
@@ -115,10 +139,33 @@ function AnnouncementsAdminPanel({ showToast, currentUserEmail }) {
               <div key={a.id} data-testid="ann-row" className="flex items-start justify-between gap-3 text-sm" style={{ borderBottom: "1px solid #EEE9DA", paddingBottom: 8 }}>
                 <div>
                   <div style={{ color: "#152238", fontWeight: 600 }}>{a.title} {a.level === "important" && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "#FBF1DC", color: "#9A7B1E" }}>Important</span>}</div>
-                  <div className="text-xs" style={{ color: "#8A8370" }}>{fmtD(a.created_at)}{a.ends_at ? " · jusqu'au " + fmtD(a.ends_at) : ""} · {a.active ? "affichée" : "retirée"}</div>
+                  <div className="text-xs" style={{ color: "#8A8370" }}>{fmtD(a.created_at)}{a.ends_at ? " · jusqu'au " + fmtD(a.ends_at) : ""} · {!a.active ? "retirée" : isExpired(a) ? "expirée" : "affichée"}</div>
                   <div style={{ color: "#4A4636", whiteSpace: "pre-wrap" }}>{a.body}</div>
                 </div>
-                <button data-testid="ann-toggle" onClick={() => toggle(a)} className="text-xs px-3 py-1.5 rounded border shrink-0" style={{ borderColor: "#DDD6C4", color: "#152238" }}>{a.active ? "Retirer" : "Remettre"}</button>
+                <div className="shrink-0 flex flex-col items-end gap-2">
+                  {confirmDelId === a.id ? (
+                    <div data-testid="ann-delete-confirm" className="text-xs text-right" style={{ color: "#A6432F" }}>
+                      <div className="mb-1">Supprimer définitivement cette annonce ?</div>
+                      <button data-testid="ann-delete-yes" onClick={() => remove(a)} className="text-xs px-3 py-1.5 rounded text-white mr-2" style={{ background: "#A6432F" }}>Oui, supprimer</button>
+                      <button data-testid="ann-delete-no" onClick={() => setConfirmDelId(null)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Annuler</button>
+                    </div>
+                  ) : reviveId === a.id ? (
+                    <div data-testid="ann-revive-box" className="text-xs text-right" style={{ color: "#152238" }}>
+                      <label className="block mb-1">Afficher jusqu'au (facultatif) :{" "}
+                        <input data-testid="ann-revive-date" type="date" value={reviveDate} onChange={(e) => setReviveDate(e.target.value)} className="border rounded px-2 py-1" style={{ borderColor: "#DDD6C4" }} />
+                      </label>
+                      <button data-testid="ann-revive-ok" onClick={() => revive(a)} className="text-xs px-3 py-1.5 rounded text-white mr-2" style={{ background: "#152238" }}>Remettre en ligne</button>
+                      <button data-testid="ann-revive-cancel" onClick={() => { setReviveId(null); setReviveDate(""); }} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4" }}>Annuler</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      {a.active && !isExpired(a)
+                        ? <button data-testid="ann-toggle" onClick={() => withdraw(a)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Retirer</button>
+                        : <button data-testid="ann-toggle" onClick={() => { setReviveId(a.id); setReviveDate(""); }} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Remettre en ligne</button>}
+                      <button data-testid="ann-delete" onClick={() => setConfirmDelId(a.id)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#E0B0A5", color: "#A6432F" }}>Supprimer</button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
