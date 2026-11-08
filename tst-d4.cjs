@@ -17,7 +17,8 @@ ok('annonce enregistrée',rows.length===1&&rows[0].title==='Maintenance samedi'&
 ok('annonce listée à l\'écran',(await p.locator('[data-testid="ann-row"]').count())===1);
 await p.locator('[data-testid="ann-toggle"]').first().click();await p.waitForTimeout(700);
 ok('annonce retirée',(await p.evaluate(()=>window.__srv.tables.announcements[0].active))===false);
-await p.locator('[data-testid="ann-toggle"]').first().click();await p.waitForTimeout(700);
+await p.locator('[data-testid="ann-toggle"]').first().click();await p.waitForTimeout(400);
+await p.locator('[data-testid="ann-revive-ok"]').click();await p.waitForTimeout(700);
 ok('annonce remise',(await p.evaluate(()=>window.__srv.tables.announcements[0].active))===true);
 ok('aucune erreur JS',errs.length===0,errs.slice(0,3));
 await b.close();console.log('fails='+fails);process.exit(fails?1:0)})();
