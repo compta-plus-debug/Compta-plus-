@@ -136,29 +136,29 @@ function AnnouncementsAdminPanel({ showToast, currentUserEmail }) {
         {loading ? <div className="text-sm" style={{ color: "#A39C87" }}>Chargement…</div> : list.length === 0 ? <div className="text-sm" style={{ color: "#A39C87" }}>Aucune annonce pour le moment.</div> : (
           <div className="space-y-3">
             {list.map((a) => (
-              <div key={a.id} data-testid="ann-row" className="flex items-start justify-between gap-3 text-sm" style={{ borderBottom: "1px solid #EEE9DA", paddingBottom: 8 }}>
-                <div>
+              <div key={a.id} data-testid="ann-row" className="flex flex-col gap-2 text-sm" style={{ borderBottom: "1px solid #EEE9DA", paddingBottom: 8 }}>
+                <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
                   <div style={{ color: "#152238", fontWeight: 600 }}>{a.title} {a.level === "important" && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "#FBF1DC", color: "#9A7B1E" }}>Important</span>}</div>
                   <div className="text-xs" style={{ color: "#8A8370" }}>{fmtD(a.created_at)}{a.ends_at ? " · jusqu'au " + fmtD(a.ends_at) : ""} · {!a.active ? "retirée" : isExpired(a) ? "expirée" : "affichée"}</div>
                   <div style={{ color: "#4A4636", whiteSpace: "pre-wrap" }}>{a.body}</div>
                 </div>
-                <div className="shrink-0 flex flex-col items-end gap-2">
+                <div className="flex flex-col items-start gap-2" style={{ maxWidth: "100%" }}>
                   {confirmDelId === a.id ? (
-                    <div data-testid="ann-delete-confirm" className="text-xs text-right" style={{ color: "#A6432F" }}>
+                    <div data-testid="ann-delete-confirm" className="text-xs" style={{ color: "#A6432F" }}>
                       <div className="mb-1">Supprimer définitivement cette annonce ?</div>
-                      <button data-testid="ann-delete-yes" onClick={() => remove(a)} className="text-xs px-3 py-1.5 rounded text-white mr-2" style={{ background: "#A6432F" }}>Oui, supprimer</button>
+                      <button data-testid="ann-delete-yes" onClick={() => remove(a)} className="text-xs px-3 py-1.5 rounded text-white mr-2 mb-1" style={{ background: "#A6432F" }}>Oui, supprimer</button>
                       <button data-testid="ann-delete-no" onClick={() => setConfirmDelId(null)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Annuler</button>
                     </div>
                   ) : reviveId === a.id ? (
-                    <div data-testid="ann-revive-box" className="text-xs text-right" style={{ color: "#152238" }}>
-                      <label className="block mb-1">Afficher jusqu'au (facultatif) :{" "}
+                    <div data-testid="ann-revive-box" className="text-xs" style={{ color: "#152238" }}>
+                      <label className="block mb-2">Afficher jusqu'au (facultatif) :{" "}
                         <input data-testid="ann-revive-date" type="date" value={reviveDate} onChange={(e) => setReviveDate(e.target.value)} className="border rounded px-2 py-1" style={{ borderColor: "#DDD6C4" }} />
                       </label>
-                      <button data-testid="ann-revive-ok" onClick={() => revive(a)} className="text-xs px-3 py-1.5 rounded text-white mr-2" style={{ background: "#152238" }}>Remettre en ligne</button>
+                      <button data-testid="ann-revive-ok" onClick={() => revive(a)} className="text-xs px-3 py-1.5 rounded text-white mr-2 mb-1" style={{ background: "#152238" }}>Remettre en ligne</button>
                       <button data-testid="ann-revive-cancel" onClick={() => { setReviveId(null); setReviveDate(""); }} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4" }}>Annuler</button>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {a.active && !isExpired(a)
                         ? <button data-testid="ann-toggle" onClick={() => withdraw(a)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Retirer</button>
                         : <button data-testid="ann-toggle" onClick={() => { setReviveId(a.id); setReviveDate(""); }} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Remettre en ligne</button>}
