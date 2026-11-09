@@ -48,19 +48,26 @@ function secteursDroits(info, ctx) {
   return { inclus, actifs };
 }
 
+// Case à cocher dessinée à la main (appearance:none) : même taille et même aspect pour TOUTES les activités et sur
+// tous les navigateurs (les cases natives se rétrécissaient ou disparaissaient quand le texte de l'activité était long).
+const SECTEUR_COCHE = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.8' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")";
 function SecteursListe({ sel, onToggle, disabled }) {
   return (
-    <div className="space-y-2">
+    <div data-testid="secteurs-grille" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
       {SECTEURS_CATALOGUE.map((s) => {
         const on = sel.includes(s.id);
         const bloque = !on && sel.length >= SECTEURS_MAX;
         return (
-          <label key={s.id} className="flex items-start gap-3 p-3 rounded cursor-pointer"
-            style={{ border: "1px solid " + (on ? "#0F6B5C" : "#E4DFD1"), background: on ? "#E6F1EE" : "#fff", opacity: bloque || disabled ? 0.55 : 1 }}>
-            <input type="checkbox" checked={on} disabled={bloque || disabled} onChange={() => onToggle(s.id)} data-testid={"secteur-" + s.id} className="mt-1" />
-            <span className="text-sm" style={{ color: "#152238" }}>
-              <span className="font-medium">{s.label}</span>
-              <span className="block text-xs" style={{ color: "#7A7460" }}>{s.desc}{s.dispo ? "" : " — bloc en préparation"}</span>
+          <label key={s.id} data-testid={"secteur-carte-" + s.id}
+            style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 12, borderRadius: 8, cursor: bloque || disabled ? "default" : "pointer",
+              border: "1.5px solid " + (on ? "#0F6B5C" : "#E4DFD1"), background: on ? "#E6F1EE" : "#fff", opacity: bloque || disabled ? 0.55 : 1, minWidth: 0 }}>
+            <input type="checkbox" checked={on} disabled={bloque || disabled} onChange={() => onToggle(s.id)} data-testid={"secteur-" + s.id}
+              style={{ WebkitAppearance: "none", appearance: "none", flex: "0 0 22px", width: 22, height: 22, minWidth: 22, margin: 0, marginTop: 1,
+                borderRadius: 6, border: "2px solid " + (on ? "#0F6B5C" : "#9A957F"), background: on ? "#0F6B5C " + SECTEUR_COCHE + " center / 15px 15px no-repeat" : "#fff",
+                cursor: "inherit", outline: "none" }} />
+            <span className="text-sm" style={{ color: "#152238", minWidth: 0, flex: "1 1 auto", overflowWrap: "anywhere" }}>
+              <span className="font-medium" style={{ display: "block" }}>{s.label}{on ? <span style={{ color: "#0F6B5C", fontWeight: 600 }}>{" — ✓ choisi"}</span> : null}</span>
+              <span className="block text-xs" style={{ color: "#7A7460", marginTop: 2 }}>{s.desc}{s.dispo ? "" : " — bloc en préparation"}</span>
             </span>
           </label>
         );
