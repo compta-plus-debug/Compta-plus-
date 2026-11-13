@@ -15,6 +15,11 @@ await p.locator('[data-testid="ann-publish"]').click();await p.waitForTimeout(90
 const rows=await p.evaluate(()=>window.__srv.tables.announcements);
 ok('annonce enregistrée',rows.length===1&&rows[0].title==='Maintenance samedi'&&rows[0].level==='important'&&rows[0].active===true,rows);
 ok('annonce listée à l\'écran',(await p.locator('[data-testid="ann-row"]').count())===1);
+await p.locator('[data-testid="ann-edit"]').first().click();await p.waitForTimeout(300);
+await p.locator('[data-testid="ann-edit-title"]').fill('Maintenance dimanche');
+await p.locator('[data-testid="ann-edit-save"]').click();await p.waitForTimeout(800);
+const mod=await p.evaluate(()=>window.__srv.tables.announcements);
+ok('annonce modifiée sans être retirée ni supprimée',mod.length===1&&mod[0].title==='Maintenance dimanche'&&mod[0].active===true,mod);
 await p.locator('[data-testid="ann-toggle"]').first().click();await p.waitForTimeout(700);
 ok('annonce retirée',(await p.evaluate(()=>window.__srv.tables.announcements[0].active))===false);
 await p.locator('[data-testid="ann-toggle"]').first().click();await p.waitForTimeout(400);
