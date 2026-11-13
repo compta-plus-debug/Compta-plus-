@@ -1,6 +1,6 @@
 // @module V332-GuichetsVendeur
-// @depends VENDEUR_WRITABLE_CATEGORIES, hlPendMark, hlKeys, hlDelK, hlNotify, _membership
-// @exports (aucun)
+// @depends VENDEUR_WRITABLE_CATEGORIES, _membership, hlKeys, hlPendDel, hlPendMark
+// @exports —
 // v332 — aligne la liste des catégories qu'un Vendeur tente d'enregistrer sur la règle serveur
 // (policies "Insert/Update own company data" de kv_store, voir SQL 1-E) : produits, factures, mouvements,
 // écritures + les 6 secteurs de guichet (école, santé, restaurant, hôtel, transport, services).
@@ -25,9 +25,7 @@
         clearInterval(timer);
         if (m.role !== "Vendeur") return;
         const pre = `pend:${m.companyId}:`;
-        let n = 0;
-        for (const k of await hlKeys(pre)) { if (!arr.includes(k.slice(pre.length))) { await hlDelK(k); n++; } }
-        if (n > 0) hlNotify();
+        for (const k of await hlKeys(pre)) { const cat = k.slice(pre.length); if (!arr.includes(cat)) await hlPendDel(m.companyId, cat); }
       } else if (tries > 90) clearInterval(timer);
     } catch (e) { clearInterval(timer); }
   }, 1000);
