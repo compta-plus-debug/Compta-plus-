@@ -84,6 +84,27 @@ function AnnouncementsAdminPanel({ showToast, currentUserEmail }) {
   const [reviveId, setReviveId] = useState(null);   // annonce en cours de remise en ligne
   const [reviveDate, setReviveDate] = useState("");   // nouvelle date de fin (facultative)
   const [confirmDelId, setConfirmDelId] = useState(null); // annonce dont la suppression attend confirmation
+  // Modifier : change le titre, le message, l'importance et la date de fin SANS retirer ni supprimer l'annonce
+  // (son état « affichée / retirée » et sa date de création ne changent pas).
+  const [editId, setEditId] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [editLevel, setEditLevel] = useState("info");
+  const [editEnds, setEditEnds] = useState("");
+  const toDateInput = (s) => { try { const d = new Date(s); const p = (n) => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); } catch (e) { return ""; } };
+  const startEdit = (a) => { setConfirmDelId(null); setReviveId(null); setEditId(a.id); setEditTitle(a.title || ""); setEditBody(a.body || ""); setEditLevel(a.level === "important" ? "important" : "info"); setEditEnds(a.ends_at ? toDateInput(a.ends_at) : ""); };
+  const cancelEdit = () => { setEditId(null); };
+  const saveEdit = async (a) => {
+    const t = editTitle.trim(), b = editBody.trim();
+    if (!t || !b) { showToast("Écrivez un titre et un message."); return; }
+    const patch = { title: t, body: b, level: editLevel, ends_at: editEnds ? new Date(editEnds + "T23:59:59").toISOString() : null };
+    if (editEnds && Date.parse(patch.ends_at) <= Date.now() && a.active !== false && !isExpired(a)) { showToast("Choisissez une date de fin dans le futur, ou laissez vide."); return; }
+    const { data, error } = await supabase.from("announcements").update(patch).eq("id", a.id).select("id");
+    if (error || !Array.isArray(data) || data.length === 0) { showToast("La modification n'a pas pu être enregistrée."); return; }
+    setEditId(null);
+    showToast("Annonce modifiée.");
+    load();
+  };
   const isExpired = (a) => !!a.ends_at && Date.parse(a.ends_at) <= Date.now();
   // Retirer : l'annonce disparaît chez les utilisateurs mais reste dans la liste (on peut la remettre).
   const withdraw = async (a) => {
@@ -143,7 +164,25 @@ function AnnouncementsAdminPanel({ showToast, currentUserEmail }) {
                   <div style={{ color: "#4A4636", whiteSpace: "pre-wrap" }}>{a.body}</div>
                 </div>
                 <div className="flex flex-col items-start gap-2" style={{ maxWidth: "100%" }}>
-                  {confirmDelId === a.id ? (
+                  {editId === a.id ? (
+                    <div data-testid="ann-edit-box" className="w-full text-xs" style={{ color: "#152238" }}>
+                      <input data-testid="ann-edit-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full border rounded px-3 py-2 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />
+                      <textarea data-testid="ann-edit-body" value={editBody} onChange={(e) => setEditBody(e.target.value)} rows={4} className="w-full border rounded px-3 py-2 text-sm mb-2" style={{ borderColor: "#DDD6C4" }} />
+                      <div className="flex flex-wrap gap-3 items-center mb-2">
+                        <label>Importance :{" "}
+                          <select data-testid="ann-edit-level" value={editLevel} onChange={(e) => setEditLevel(e.target.value)} className="border rounded px-2 py-1" style={{ borderColor: "#DDD6C4" }}>
+                            <option value="info">Information</option>
+                            <option value="important">Important</option>
+                          </select>
+                        </label>
+                        <label>Afficher jusqu'au (facultatif) :{" "}
+                          <input data-testid="ann-edit-date" type="date" value={editEnds} onChange={(e) => setEditEnds(e.target.value)} className="border rounded px-2 py-1" style={{ borderColor: "#DDD6C4" }} />
+                        </label>
+                      </div>
+                      <button data-testid="ann-edit-save" onClick={() => saveEdit(a)} className="text-xs px-3 py-1.5 rounded text-white mr-2 mb-1" style={{ background: "#152238" }}>Enregistrer les modifications</button>
+                      <button data-testid="ann-edit-cancel" onClick={cancelEdit} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4" }}>Annuler</button>
+                    </div>
+                  ) : confirmDelId === a.id ? (
                     <div data-testid="ann-delete-confirm" className="text-xs" style={{ color: "#A6432F" }}>
                       <div className="mb-1">Supprimer définitivement cette annonce ?</div>
                       <button data-testid="ann-delete-yes" onClick={() => remove(a)} className="text-xs px-3 py-1.5 rounded text-white mr-2 mb-1" style={{ background: "#A6432F" }}>Oui, supprimer</button>
@@ -162,6 +201,7 @@ function AnnouncementsAdminPanel({ showToast, currentUserEmail }) {
                       {a.active && !isExpired(a)
                         ? <button data-testid="ann-toggle" onClick={() => withdraw(a)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Retirer</button>
                         : <button data-testid="ann-toggle" onClick={() => { setReviveId(a.id); setReviveDate(""); }} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Remettre en ligne</button>}
+                      <button data-testid="ann-edit" onClick={() => startEdit(a)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#DDD6C4", color: "#152238" }}>Modifier</button>
                       <button data-testid="ann-delete" onClick={() => setConfirmDelId(a.id)} className="text-xs px-3 py-1.5 rounded border" style={{ borderColor: "#E0B0A5", color: "#A6432F" }}>Supprimer</button>
                     </div>
                   )}

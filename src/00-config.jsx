@@ -15,7 +15,7 @@ const SUPABASE_URL = "https://cnmmxpwlgovzbcfqaxqm.supabase.co";
 // livraison, en même temps que le cache-buster ?v=... d'index.html, pour pouvoir
 // vérifier en un coup d'œil dans l'app elle-même quelle version tourne réellement,
 // sans avoir besoin des outils développeur (peu pratiques sur mobile).
-const APP_VERSION = "20261109-330";
+const APP_VERSION = "20261112-331";
 // Clé publique Cloudflare Turnstile (« site key », visible par tous, ce n'est PAS un secret). Vide = pas de captcha.
 // Ne la renseigner qu'une fois la protection Captcha activée côté Supabase (Authentication > Attack Protection).
 const CAPTCHA_SITEKEY = "0x4AAAAAAF2rrBALEg0sR-C1";
