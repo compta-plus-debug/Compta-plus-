@@ -2731,6 +2731,11 @@ function App() {
               Abonnement — {trialDaysLeft} jour{trialDaysLeft > 1 ? "s" : ""} restant{trialDaysLeft > 1 ? "s" : ""} : veuillez payer dans le délai pour éviter la suspension du compte.
             </div>
           )}
+          {role === "Administrateur" && !groupId && (planStatus === "trial" || (planStatus === "active" && trialDaysLeft !== null && trialDaysLeft <= 7)) && (
+            <button onClick={() => setShowUpgradeModal("payer")} data-testid="side-payer-maintenant" className="mt-1 underline block font-medium" style={{ color: "#7FD1BD" }}>
+              Payer mon forfait maintenant
+            </button>
+          )}
           {isPlatformAdmin && (
             <button onClick={() => setPlatformLanding(true)} className="mt-2 underline block font-medium" style={{ color: "#C9A24B" }}>
               ← Tableau de bord général
@@ -2755,7 +2760,7 @@ function App() {
             )}
           </button>
           {role === "Administrateur" && (
-            <button onClick={() => setShowUpgradeModal(true)} className="mt-1 underline flex items-center gap-1.5" style={{ color: "#8A97B5" }}>
+            <button onClick={() => setShowUpgradeModal("upgrade")} data-testid="side-mise-a-niveau" className="mt-1 underline flex items-center gap-1.5" style={{ color: "#8A97B5" }}>
               <Boxes size={13} /> Mise à niveau
             </button>
           )}
@@ -2782,7 +2787,7 @@ function App() {
       {role === "Administrateur" && secteurs.ok && !secteurs.locked && !secteursSkip && !needsWelcome && !isBlocked && secteursDroits(secteurs, { planTier, groupId, planStatus }).inclus && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" && (
         <SecteursChoixModal companyId={secteurs.companyId} showToast={showToast} onClose={() => setSecteursSkip(true)} onSaved={() => loadSecteursInfo(secteurs.companyId).then(setSecteurs)} />
       )}
-      {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} planTier={planTier} groupId={groupId} groupName={groupName} showToast={showToast} />}
+      {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} planTier={planTier} groupId={groupId} groupName={groupName} showToast={showToast} planStatus={planStatus} trialEndsAt={trialEndsAt} mode={showUpgradeModal === "payer" ? "payer" : "upgrade"} />}
 
       {/* Main */}
       <main className="flex-1 min-w-0">

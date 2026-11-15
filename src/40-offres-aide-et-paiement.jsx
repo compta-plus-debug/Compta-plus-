@@ -50,8 +50,11 @@ const PAYMENT_METHODS = [
 // progression (Groupe) quelle que soit la valeur de son propre plan_tier — ce
 // champ ne décrit que le niveau de fonctionnalités de CETTE entreprise
 // (Standard/Assisté), indépendant de son appartenance à un groupe.
-function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
-  const [loading, setLoading] = useState(false);
+// v336 — mode : "payer" (lien « Payer mon forfait maintenant » : forfait en cours seulement)
+//               ou "upgrade" (lien « Mise à niveau » : forfait supérieur / rétrogradation seulement).
+function UpgradeModal({ onClose, planTier, groupId, groupName, showToast, planStatus, trialEndsAt, mode }) {
+  const modePayer = mode === "payer";
+  const [loading, setLoading] = useState(""); // "" | "payer" | "upgrade" | "downgrade" : seul le bouton cliqué affiche « Redirection »
   const [error, setError] = useState("");
   const [htgRate, setHtgRate] = useState(null);
   const [tarif, setTarif] = useState({ rate: null, prices: {} });
@@ -68,7 +71,7 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
 
   const upgrade = async () => {
     if (!nextTier) return;
-    setLoading(true);
+    setLoading("upgrade");
     setError("");
     try {
       const { companyId } = await resolveMembership();
@@ -86,13 +89,40 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
       window.location.href = data.redirectUrl;
     } catch (e) {
       setError(friendlyError(e));
-      setLoading(false);
+      setLoading("");
+    }
+  };
+
+  // v335 — payer son forfait actuel sans attendre la fin de l'essai (ou les derniers jours de l'abonnement).
+  // Sans forfait cible : le serveur applique le prix du forfait en cours et fait partir 30 jours de la date de paiement.
+  const joursRestants = trialEndsAt ? Math.max(0, Math.ceil((new Date(trialEndsAt) - new Date()) / 86400000)) : null;
+  const peutPayerMaintenant = !inGroup && (planStatus === "trial" || (planStatus === "active" && joursRestants !== null && joursRestants <= 7));
+  const payerMaintenant = async () => {
+    setLoading("payer");
+    setError("");
+    try {
+      const { companyId } = await resolveMembership();
+      const tf = await fetchBillingTarif();
+      const amount = Math.round((tarifPrixUsd(tf, planTier) * (tf.rate || htgRate || FALLBACK_HTG_PER_USD)) / 10) * 10;
+      try { sessionStorage.removeItem("compta-plus-upgrade-target"); } catch (e) {}
+      const { data: { session: s } } = await supabase.auth.getSession();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/moncash?action=create`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${s.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, amount }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.redirectUrl) throw new Error(data.error || "Réponse invalide du service de paiement");
+      window.location.href = data.redirectUrl;
+    } catch (e) {
+      setError(friendlyError(e));
+      setLoading("");
     }
   };
 
   const downgrade = async () => {
     if (!window.confirm(`Repasser au forfait ${prevInfo.label} ? Vous perdrez l'accès aux fonctionnalités réservées au forfait ${currentInfo.label}.`)) return;
-    setLoading(true);
+    setLoading("downgrade");
     setError("");
     try {
       const { companyId } = await resolveMembership();
@@ -109,7 +139,7 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
       window.location.reload();
     } catch (e) {
       setError(friendlyError(e));
-      setLoading(false);
+      setLoading("");
     }
   };
 
@@ -117,7 +147,7 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(21,34,56,0.5)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 10, width: 480, maxWidth: "100%", maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ background: "#152238", color: "#fff", padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Mise à niveau de forfait</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{modePayer ? "Payer mon forfait" : "Mise à niveau de forfait"}</div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer" }}>×</button>
         </div>
         <div style={{ padding: 20 }}>
@@ -140,8 +170,26 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
             </div>
           ) : (
             <>
-              {nextInfo && (
-                <div style={{ border: "1px solid #E4DFD1", borderRadius: 8, padding: 16, marginBottom: 14 }}>
+              {modePayer && peutPayerMaintenant && (
+                <div data-testid="upg-payer-carte" style={{ border: "1px solid #CFE3DC", background: "#F3FAF7", borderRadius: 8, padding: 16, marginBottom: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#152238", marginBottom: 4 }}>Payer mon forfait {currentInfo.label} maintenant</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: "#0F6B5C", marginBottom: 8 }}>{tarifPrixUsd(tarif, planTier)} $/mois</div>
+                  <p style={{ fontSize: 12, color: "#7A7460", marginBottom: 10 }}>
+                    {planStatus === "trial" ? "Votre essai gratuit" : "Votre abonnement"}{joursRestants !== null ? ` se termine dans ${joursRestants} jour${joursRestants > 1 ? "s" : ""}` : " est en cours"}. En payant maintenant, votre abonnement de 30 jours démarre aujourd'hui : les jours restants ne s'ajoutent pas.
+                  </p>
+                  <button onClick={payerMaintenant} disabled={!!loading} data-testid="upg-payer-maintenant"
+                    style={{ background: "#0F6B5C", color: "#fff", border: "none", borderRadius: 6, padding: "10px 16px", fontSize: 14, cursor: loading ? "default" : "pointer", width: "100%", opacity: loading ? 0.6 : 1 }}>
+                    {loading === "payer" ? "Redirection…" : `Payer ${toHtg(tarifPrixUsd(tarif, planTier)).toLocaleString("fr-FR")} HTG avec MonCash`}
+                  </button>
+                </div>
+              )}
+              {modePayer && !peutPayerMaintenant && (
+                <div data-testid="upg-payer-indispo" style={{ border: "1px solid #E4DFD1", borderRadius: 8, padding: 16, fontSize: 13, color: "#7A7460" }}>
+                  Votre abonnement est à jour : le paiement anticipé est proposé pendant l'essai et pendant les 7 derniers jours de l'abonnement.
+                </div>
+              )}
+              {!modePayer && nextInfo && (
+                <div data-testid="upg-carte-superieur" style={{ border: "1px solid #E4DFD1", borderRadius: 8, padding: 16, marginBottom: 14 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#152238", marginBottom: 4 }}>Passer au forfait {nextInfo.label}</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: "#0F6B5C", marginBottom: 8 }}>{tarifPrixUsd(tarif, nextTier)} $/mois</div>
                   {nextTier === "group" && (
@@ -149,17 +197,17 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
                       Regroupez jusqu'à 5 entreprises sous un seul abonnement — tableau de bord consolidé et comparatifs, chacune gardant sa propre gestion séparée.
                     </p>
                   )}
-                  <button onClick={upgrade} disabled={loading}
+                  <button onClick={upgrade} disabled={!!loading} data-testid="upg-mise-a-niveau"
                     style={{ background: "#152238", color: "#fff", border: "none", borderRadius: 6, padding: "10px 18px", fontSize: 13, cursor: "pointer", opacity: loading ? 0.5 : 1, width: "100%" }}>
-                    {loading ? "Redirection en cours…" : `Payer ${toHtg(tarifPrixUsd(tarif, nextTier)).toLocaleString("fr-FR")} HTG avec MonCash`}
+                    {loading === "upgrade" ? "Redirection en cours…" : `Payer ${toHtg(tarifPrixUsd(tarif, nextTier)).toLocaleString("fr-FR")} HTG avec MonCash`}
                   </button>
                 </div>
               )}
 
-              {prevInfo && (
+              {!modePayer && prevInfo && (
                 <div style={{ border: "1px solid #E4DFD1", borderRadius: 8, padding: 16 }}>
                   <div style={{ fontSize: 13, color: "#7A7460", marginBottom: 8 }}>Repasser au forfait {prevInfo.label}</div>
-                  <button onClick={downgrade} disabled={loading}
+                  <button onClick={downgrade} disabled={!!loading}
                     style={{ background: "none", border: "1px solid #DDD6C4", color: "#7A7460", borderRadius: 6, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
                     Repasser en {prevInfo.label}
                   </button>
