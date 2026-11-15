@@ -1,11 +1,11 @@
 // ═══ MODULE ═══
 // @module Assistance et anomalies
-// @depends fmt, useEffect, useState
+// @depends PLAN_TIER_INFO, fmt, supabase, useEffect, useState
 // @exports AssistedPrincipleReminder, PendingRecommendationsBanner, _backNavStack
 //   buildReversedCorrectedLines, buildReversedCorrection, cleanSuggestionLabel
 //   detectAmountAnomaly, detectDuplicateAnomaly, detectRareAccountAnomaly, detectReversedAnomaly
-//   detectTaxAnomaly, fetchHtgPerUsd, suggestAccountFromHistory, suggestSimilarTiers
-//   useAssistedAnomalyGate, useBackNav
+//   detectTaxAnomaly, fetchBillingTarif, fetchHtgPerUsd, suggestAccountFromHistory
+//   suggestSimilarTiers, tarifPrixUsd, useAssistedAnomalyGate, useBackNav
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Rappel du principe comptable (forfait Assisté uniquement) ---
 // Affiché systématiquement à chaque saisie (pas seulement la première fois),
@@ -296,6 +296,22 @@ function detectDuplicateAnomaly(newItem, recentItems) {
   });
   if (dup) return "Une opération très proche (même montant, date proche, libellé similaire) existe déjà — vérifiez qu'il ne s'agit pas d'un doublon.";
   return null;
+}
+// Tarif des abonnements fixé dans Super Admin > Facturation > Réglages de facturation :
+// prix en dollars par forfait et taux « gourdes pour 1 USD ». C'est la référence commune de l'application
+// et de la fonction serveur moncash. rate = null si le taux n'est pas renseigné (repli : taux du marché).
+async function fetchBillingTarif() {
+  try {
+    const { data } = await supabase.from("billing_settings").select("prices, rate_htg_per_usd").eq("id", 1).maybeSingle();
+    if (data) { const r = Number(data.rate_htg_per_usd); return { rate: r > 0 ? r : null, prices: data.prices || {} }; }
+  } catch (e) { /* hors ligne ou lecture impossible : repli */ }
+  return { rate: null, prices: {} };
+}
+// Prix en dollars d'un forfait : réglages de facturation d'abord, valeur intégrée sinon.
+function tarifPrixUsd(tarif, tier) {
+  const p = Number(tarif && tarif.prices && tarif.prices[tier]);
+  if (p > 0) return p;
+  return (PLAN_TIER_INFO[tier] || PLAN_TIER_INFO.standard).priceUSD;
 }
 async function fetchHtgPerUsd() {
   try {

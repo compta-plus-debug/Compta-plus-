@@ -1,8 +1,8 @@
 // ═══ MODULE ═══
 // @module Offres aide et paiement
 // @depends ChevronRight, FALLBACK_HTG_PER_USD, Icon, NET_MSG, PLAN_TIER_INFO, SUPABASE_URL, Send
-//   _membership, clearMembershipCache, fetchHtgPerUsd, fmt, friendlyError, resolveMembership
-//   sanitizeUserMessage, supabase, uid, useEffect, useState
+//   _membership, clearMembershipCache, fetchBillingTarif, fetchHtgPerUsd, fmt, friendlyError
+//   resolveMembership, sanitizeUserMessage, supabase, tarifPrixUsd, uid, useEffect, useState
 // @exports ComingSoon, HelpCenterChat, PAYMENT_METHODS, UpgradeModal
 // ═══ FIN DE L'EN-TÊTE ═══
 function ComingSoon({ module }) {
@@ -54,8 +54,9 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [htgRate, setHtgRate] = useState(null);
-  useEffect(() => { fetchHtgPerUsd().then((r) => setHtgRate(r)); }, []);
-  const rate = htgRate || FALLBACK_HTG_PER_USD;
+  const [tarif, setTarif] = useState({ rate: null, prices: {} });
+  useEffect(() => { fetchHtgPerUsd().then((r) => setHtgRate(r)); fetchBillingTarif().then((t) => setTarif(t)); }, []);
+  const rate = tarif.rate || htgRate || FALLBACK_HTG_PER_USD; // v334 — taux des réglages de facturation d'abord
   const toHtg = (usd) => Math.round((usd * rate) / 10) * 10;
 
   const currentInfo = PLAN_TIER_INFO[planTier] || PLAN_TIER_INFO.standard;
@@ -71,7 +72,8 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
     setError("");
     try {
       const { companyId } = await resolveMembership();
-      const amount = toHtg(nextInfo.priceUSD);
+      const tf = await fetchBillingTarif(); // relu au moment de payer : même référence que le serveur
+      const amount = Math.round((tarifPrixUsd(tf, nextTier) * (tf.rate || htgRate || FALLBACK_HTG_PER_USD)) / 10) * 10;
       try { sessionStorage.setItem("compta-plus-upgrade-target", nextTier); } catch (e) {}
       const { data: { session: s } } = await supabase.auth.getSession();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/moncash?action=create`, {
@@ -141,7 +143,7 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
               {nextInfo && (
                 <div style={{ border: "1px solid #E4DFD1", borderRadius: 8, padding: 16, marginBottom: 14 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#152238", marginBottom: 4 }}>Passer au forfait {nextInfo.label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: "#0F6B5C", marginBottom: 8 }}>{nextInfo.priceUSD} $/mois</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: "#0F6B5C", marginBottom: 8 }}>{tarifPrixUsd(tarif, nextTier)} $/mois</div>
                   {nextTier === "group" && (
                     <p style={{ fontSize: 12, color: "#7A7460", marginBottom: 10 }}>
                       Regroupez jusqu'à 5 entreprises sous un seul abonnement — tableau de bord consolidé et comparatifs, chacune gardant sa propre gestion séparée.
@@ -149,7 +151,7 @@ function UpgradeModal({ onClose, planTier, groupId, groupName, showToast }) {
                   )}
                   <button onClick={upgrade} disabled={loading}
                     style={{ background: "#152238", color: "#fff", border: "none", borderRadius: 6, padding: "10px 18px", fontSize: 13, cursor: "pointer", opacity: loading ? 0.5 : 1, width: "100%" }}>
-                    {loading ? "Redirection en cours…" : `Payer ${toHtg(nextInfo.priceUSD).toLocaleString("fr-FR")} HTG avec MonCash`}
+                    {loading ? "Redirection en cours…" : `Payer ${toHtg(tarifPrixUsd(tarif, nextTier)).toLocaleString("fr-FR")} HTG avec MonCash`}
                   </button>
                 </div>
               )}

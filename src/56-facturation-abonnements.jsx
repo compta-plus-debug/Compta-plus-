@@ -29,6 +29,7 @@ const fbConfig = (row) => {
     issuer_name: r.issuer_name || "Compta+", issuer_address: r.issuer_address || "", issuer_phone: r.issuer_phone || "", issuer_email: r.issuer_email || "", issuer_nif: r.issuer_nif || "",
     logo: r.logo || "", thanks: r.thanks || "Merci de votre confiance !", payment_info: r.payment_info || "",
     vat_enabled: !!r.vat_enabled, vat_rate: r.vat_rate != null ? Number(r.vat_rate) : 10, rate_htg_per_usd: Number(r.rate_htg_per_usd) || 0,
+    brh_rate: Number(r.brh_rate) || 0, brh_rate_date: r.brh_rate_date || "",
     prices: { ...FB_PRIX_DEFAUT, ...(r.prices || {}) }, grid: { ...FB_GRILLE_DEFAUT, ...(r.grid || {}) },
     rem_subject: r.reminder_email_subject || FB_MSG_DEFAUT.subject, rem_body: r.reminder_email_body || FB_MSG_DEFAUT.body, rem_wa: r.reminder_whatsapp_body || FB_MSG_DEFAUT.wa,
   };
@@ -223,6 +224,34 @@ async function fbChargerConfig() {
 }
 
 // ───────── Cartes graphiques (même présentation que le reste de l'application) ─────────
+// v334 — espace de comparaison : taux appliqué, taux du marché du jour, taux de référence BRH.
+const fbEcartTaux = (applique, ref) => (applique > 0 && ref > 0 ? Math.round(((applique - ref) / ref) * 1000) / 10 : null);
+function FbTauxCompare({ applique, marche, brh, brhDate }) {
+  const lignes = [
+    { k: "applique", label: "Taux appliqué (factures et paiements MonCash)", v: applique, e: null },
+    { k: "marche", label: "Taux du marché du jour", v: marche || 0, e: fbEcartTaux(applique, marche || 0) },
+    { k: "brh", label: "Taux de référence BRH" + (brh && brhDate ? " du " + fbDateFr(brhDate) : ""), v: brh, e: fbEcartTaux(applique, brh) },
+  ];
+  const alerte = lignes.some((l) => l.e !== null && Math.abs(l.e) > 2);
+  const vieux = brh > 0 && brhDate && fbEntreJours(brhDate, todayStr()) > 3;
+  return (
+    <div className="mt-4" data-testid="fb-taux-compare" style={{ border: "1px solid #E4DFD1", borderRadius: 10, padding: "10px 12px", background: "#FBF9F3" }}>
+      <div className="text-xs font-semibold mb-2" style={{ color: "#152238" }}>Comparaison des taux (gourdes pour 1 USD)</div>
+      {lignes.map((l) => (
+        <div key={l.k} className="flex items-center justify-between text-sm py-1" data-testid={"fb-taux-" + l.k} style={{ borderTop: l.k === "applique" ? "none" : "1px solid #EEE9DA" }}>
+          <span style={{ color: "#5C5747" }}>{l.label}</span>
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#152238" }}>
+            {l.v > 0 ? l.v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "non renseigné"}
+            {l.e !== null && <span style={{ marginLeft: 8, color: Math.abs(l.e) > 2 ? "#A6432F" : "#0F6B5C" }}>{(l.e > 0 ? "+" : "") + l.e.toLocaleString("fr-FR") + " %"}</span>}
+          </span>
+        </div>
+      ))}
+      {!(applique > 0) && <div className="text-xs mt-2" data-testid="fb-taux-vide" style={{ color: "#A6432F" }}>Aucun taux appliqué n'est enregistré : les paiements MonCash utilisent alors le taux du marché du jour.</div>}
+      {alerte && <div className="text-xs mt-2" data-testid="fb-taux-alerte" style={{ color: "#A6432F" }}>Votre taux appliqué s'écarte de plus de 2 % d'un taux de comparaison : pensez à le mettre à jour.</div>}
+      {vieux && <div className="text-xs mt-2" data-testid="fb-taux-vieux" style={{ color: "#8A6D1F" }}>Le taux BRH saisi date de plus de 3 jours.</div>}
+    </div>
+  );
+}
 const fbCarte = { background: "#fff", border: "1px solid #E4DFD1", borderRadius: 14, padding: "18px 20px", boxShadow: "0 1px 3px rgba(21,34,56,0.06)", boxSizing: "border-box", maxWidth: "100%", minWidth: 0 };
 function FbTitre({ couleur, titre, sous, droite }) {
   return (
@@ -341,6 +370,9 @@ function BillingAdminPanel({ view, showToast, currentUserEmail }) {
     setEm((e) => ({ ...e, rate: e.rate || (c.rate_htg_per_usd ? String(c.rate_htg_per_usd) : ""), vat: e.vat === null ? c.vat_enabled : e.vat }));
   };
   useEffect(() => { charger(); }, []);
+  // v334 — taux du marché du jour, pour l'espace de comparaison des taux (Réglages de facturation).
+  const [marche, setMarche] = useState(null);
+  useEffect(() => { if (view === "reglages") fetchHtgPerUsd().then((r) => setMarche(r)); }, [view]);
   if (!cfg || rows === null) return <div className="text-sm" style={{ color: "#8A8370" }}>Chargement…</div>;
 
   // ── Réglages ──
@@ -363,11 +395,20 @@ function BillingAdminPanel({ view, showToast, currentUserEmail }) {
     const row = { id: 1, issuer_name: String(edit.issuer_name || "Compta+").trim(), issuer_address: edit.issuer_address || "", issuer_phone: edit.issuer_phone || "", issuer_email: edit.issuer_email || "", issuer_nif: edit.issuer_nif || "", logo: edit.logo || "", thanks: edit.thanks || "Merci de votre confiance !", payment_info: edit.payment_info || "",
       reminder_email_subject: edit.rem_subject || "", reminder_email_body: edit.rem_body || "", reminder_whatsapp_body: edit.rem_wa || "",
       vat_enabled: !!edit.vat_enabled, vat_rate: vr, rate_htg_per_usd: Number(edit.rate_htg_per_usd) || 0, prices, grid: cfg.grid, updated_at: new Date().toISOString() };
+    // v334 — taux de référence BRH (saisi à la main, avec sa date) : colonnes ajoutées par le script SQL 4-A.
+    const brh = Number(edit.brh_rate) || 0;
+    if (brh && !(brh >= 20 && brh <= 1000)) { showToast("Le taux BRH saisi est invraisemblable : vérifiez-le."); return; }
+    const rowBrh = { ...row, brh_rate: brh || null, brh_rate_date: brh ? (edit.brh_rate_date || todayStr()) : null };
     setBusy(true);
-    const { error } = await supabase.from("billing_settings").upsert(row);
+    let { error } = await supabase.from("billing_settings").upsert(rowBrh);
+    let brhNonEnregistre = false;
+    if (error && (error.code === "42703" || error.code === "PGRST204")) {   // colonnes BRH pas encore créées : on enregistre le reste
+      ({ error } = await supabase.from("billing_settings").upsert(row)); brhNonEnregistre = true;
+    }
     setBusy(false);
     if (error) { showToast(friendlyError(error)); return; }
-    setCfg(fbConfig(row)); setEdit(fbConfig(row)); setEm((e) => ({ ...e, rate: row.rate_htg_per_usd ? String(row.rate_htg_per_usd) : e.rate }));
+    if (brhNonEnregistre) { setCfg(fbConfig(row)); setEdit(fbConfig(row)); setEm((e) => ({ ...e, rate: row.rate_htg_per_usd ? String(row.rate_htg_per_usd) : e.rate })); showToast("Réglages enregistrés, sauf le taux BRH : exécutez d'abord le script SQL 4-A."); return; }
+    setCfg(fbConfig(rowBrh)); setEdit(fbConfig(rowBrh)); setEm((e) => ({ ...e, rate: row.rate_htg_per_usd ? String(row.rate_htg_per_usd) : e.rate }));
     showToast("Réglages de facturation enregistrés.");
   };
   if (view === "reglages") {
@@ -384,7 +425,14 @@ function BillingAdminPanel({ view, showToast, currentUserEmail }) {
         <div style={fbCarte}>
           <FbTitre couleur="#C9A24B" titre="Prix mensuels et taux de change" sous="Prix en dollars ; la facture est établie en gourdes au taux affiché. TCA en option." />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{prixChamp("standard", "Forfait Standard")}{prixChamp("assisted", "Forfait Assisté")}{prixChamp("group", "Forfait Extension")}{prixChamp("pack", "Pack 3 secteurs")}{prixChamp("A", "Bloc grille A")}{prixChamp("B", "Bloc grille B")}{prixChamp("C", "Bloc grille C")}</div>
-          <div className="grid md:grid-cols-3 gap-3 mt-3 items-end">{champ("rate_htg_per_usd", "Taux affiché : gourdes pour 1 USD", "number")}<button onClick={actualiserTaux} style={fbBtn} data-testid="fb-reg-taux-auto">Taux du jour</button></div>
+          <div className="grid md:grid-cols-3 gap-3 mt-3 items-end">{champ("rate_htg_per_usd", "Taux affiché : gourdes pour 1 USD", "number")}<button onClick={actualiserTaux} style={fbBtn} data-testid="fb-reg-taux-auto">Taux du marché du jour</button></div>
+          <FbTauxCompare applique={Number(edit.rate_htg_per_usd) || 0} marche={marche} brh={Number(edit.brh_rate) || 0} brhDate={edit.brh_rate_date} />
+          <div className="grid md:grid-cols-3 gap-3 mt-3 items-end">
+            <div><label className="text-xs" style={{ color: "#8A8370" }}>Taux de référence BRH (gourdes pour 1 USD)</label><input type="number" min="0" step="0.01" value={edit.brh_rate || ""} onChange={(e) => setEdit({ ...edit, brh_rate: e.target.value, brh_rate_date: edit.brh_rate_date || todayStr() })} data-testid="fb-reg-brh_rate" style={fbCell} /></div>
+            <div><label className="text-xs" style={{ color: "#8A8370" }}>Date de ce taux BRH</label><input type="date" max={todayStr()} value={edit.brh_rate_date || ""} onChange={(e) => setEdit({ ...edit, brh_rate_date: e.target.value })} data-testid="fb-reg-brh_rate_date" style={fbCell} /></div>
+            <button onClick={() => { const b = Number(edit.brh_rate) || 0; if (!b) { showToast("Saisissez d'abord le taux BRH."); return; } setEdit({ ...edit, rate_htg_per_usd: String(Math.round(b * 100) / 100) }); showToast("Taux BRH repris comme taux appliqué. Pensez à enregistrer."); }} style={fbBtn} data-testid="fb-reg-brh-appliquer">Appliquer le taux BRH</button>
+          </div>
+          <div className="text-xs mt-2" style={{ color: "#7A7460" }}>Le taux BRH est publié chaque jour ouvrable sur <a href="https://www.brh.ht" target="_blank" rel="noopener noreferrer" className="underline">www.brh.ht</a> : recopiez-le ici avec sa date. Le « taux appliqué » ci-dessus est celui utilisé pour les factures <b>et</b> pour les paiements MonCash des forfaits.</div>
           <label className="flex items-center gap-2 text-sm mt-4"><input type="checkbox" checked={!!edit.vat_enabled} onChange={(e) => setEdit({ ...edit, vat_enabled: e.target.checked })} data-testid="fb-reg-vat_enabled" /> Appliquer la TCA sur les factures (option)</label>
           <div className="grid md:grid-cols-3 gap-3 mt-2">{champ("vat_rate", "Taux de TCA (%)", "number")}</div>
           <div className="text-xs mt-2" style={{ color: "#7A7460" }}>La TCA sur les abonnements est à confirmer avec l'expert-comptable. Elle reste désactivée tant que vous ne cochez pas la case ; vous pouvez aussi la décider à chaque émission.</div>

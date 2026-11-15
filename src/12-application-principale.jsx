@@ -11,14 +11,14 @@
 //   ServicesModule, Smartphone, StockModule, SuperAdminModule, TransportModule, UpgradeModal
 //   VENDEUR_WRITABLE_CATEGORIES, VenteModule, X, _backNavStack, _membership, allowedModulesFor
 //   asstScan, asstScanBlocs, bkBuildFile, bkDownload, chooseCompany, clearMembershipCache
-//   computeBalances, computeKpis, dlog, fbEnregistrerContact, fbTelValide, fetchHtgPerUsd
-//   forgetCompanyChoice, friendlyError, genInviteToken, hlCacheAll, hlCachePut, hlKeys, hlMeta
-//   hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark, hlPinValid
-//   hlSaveMeta, invoicePrefix, invokeEdgeFunction, loadSecteursInfo, logClientError, monthLabel
-//   oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady, pjTraceText
-//   resolveMembership, roleLabel, ruleRefusalMessage, sanitizeUserMessage, sealEntries
-//   secteursDroits, supabase, todayStr, uid, unwrapVersioned, useBackNav, useEffect, useMemo
-//   useState
+//   computeBalances, computeKpis, dlog, fbEnregistrerContact, fbTelValide, fetchBillingTarif
+//   fetchHtgPerUsd, forgetCompanyChoice, friendlyError, genInviteToken, hlCacheAll, hlCachePut
+//   hlKeys, hlMeta, hlNetDown, hlOffline, hlOverlay, hlPendAll, hlPendDel, hlPendMark, hlPinMark
+//   hlPinValid, hlSaveMeta, invoicePrefix, invokeEdgeFunction, loadSecteursInfo, logClientError
+//   monthLabel, oflIsNetworkError, oflLoad, oflSyncAll, oflTimeout, perfMarkMount, perfMarkReady
+//   pjTraceText, resolveMembership, roleLabel, ruleRefusalMessage, sanitizeUserMessage
+//   sealEntries, secteursDroits, supabase, tarifPrixUsd, todayStr, uid, unwrapVersioned
+//   useBackNav, useEffect, useMemo, useState
 // @exports App
 // ═══ FIN DE L'EN-TÊTE ═══
 // Protection légère de l'affichage : on ne peut ni glisser un texte de l'écran, ni le déposer dans un champ.
@@ -1635,13 +1635,16 @@ function App() {
   const [monCashError, setMonCashError] = useState("");
   const [unavailablePayment, setUnavailablePayment] = useState("");
   const [htgRate, setHtgRate] = useState(null);
+  const [billTarif, setBillTarif] = useState({ rate: null, prices: {} });
   useEffect(() => {
     if (!isBlocked) return;
     fetchHtgPerUsd().then((rate) => setHtgRate(rate)); // null si indisponible : on utilisera le repli
+    fetchBillingTarif().then((t) => setBillTarif(t));   // prix et taux fixés dans les réglages de facturation
   }, [isBlocked]);
-  const monCashAmount = settings.subscriptionPriceUSD
-    ? Math.round((Number(settings.subscriptionPriceUSD) * (htgRate || FALLBACK_HTG_PER_USD)) / 10) * 10
-    : (settings.subscriptionPriceHTG || 2600);
+  // v334 — le prix suit le forfait réel de l'entreprise et le taux des réglages de facturation (repli : taux du marché).
+  const tarifRate = billTarif.rate || htgRate || FALLBACK_HTG_PER_USD;
+  const renewUsd = tarifPrixUsd(billTarif, planTier);
+  const monCashAmount = Math.round((renewUsd * tarifRate) / 10) * 10;
   // targetTier absent = simple renouvellement du forfait en cours (comportement
   // inchangé) ; précisé = mise à niveau/rétrogradation vers ce forfait, appliquée
   // côté serveur par la fonction moncash une fois le paiement confirmé.
@@ -1650,9 +1653,8 @@ function App() {
     setMonCashError("");
     try {
       const { companyId } = await resolveMembership();
-      const amount = targetTier
-        ? Math.round((PLAN_TIER_INFO[targetTier].priceUSD * (htgRate || FALLBACK_HTG_PER_USD)) / 10) * 10
-        : monCashAmount;
+      const tf = await fetchBillingTarif(); // relu au moment de payer : même référence que le serveur
+      const amount = Math.round((tarifPrixUsd(tf, targetTier || planTier) * (tf.rate || htgRate || FALLBACK_HTG_PER_USD)) / 10) * 10;
       const { data: { session: s } } = await supabase.auth.getSession();
       const res = await fetch(`${SUPABASE_URL}/functions/v1/moncash?action=create`, {
         method: "POST",
@@ -2196,7 +2198,7 @@ function App() {
             </button>
             {monCashError && <p className="text-xs mt-2" style={{ color: "#A6432F" }}>{monCashError}</p>}
             <p className="text-xs mt-2 mb-4" style={{ color: "#A39C87" }}>
-              Équivalent de {settings.subscriptionPriceUSD || 20} USD, converti au taux du jour. Vous serez redirigé vers la page sécurisée MonCash pour finaliser le paiement, puis ramené automatiquement ici.
+              Équivalent de {renewUsd} USD (1 USD = {tarifRate.toFixed(2)} G). Vous serez redirigé vers la page sécurisée MonCash pour finaliser le paiement, puis ramené automatiquement ici.
             </p>
 
             {unavailablePayment && (
@@ -2801,7 +2803,7 @@ function App() {
               </button>
               {monCashError && <p className="text-xs mb-2" style={{ color: "#A6432F" }}>{monCashError}</p>}
               <p className="text-xs" style={{ color: "#A39C87" }}>
-                Équivalent de {settings.subscriptionPriceUSD || 20} USD, converti au taux du jour.
+                Équivalent de {renewUsd} USD (1 USD = {tarifRate.toFixed(2)} G).
               </p>
             </div>
           </div>
