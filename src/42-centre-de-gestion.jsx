@@ -330,16 +330,18 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
   // de l'application et dans l'email réellement envoyé.
   // Bannière façon flyer, générée en HTML pour être identique dans l'aperçu
   // de l'application et dans l'email réellement envoyé.
+  // v337 — tout texte saisi (titre, légende, description, lien) est échappé avant d'entrer dans le HTML des offres et des e-mails.
+  const ccHtmlEsc = (v) => String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   const buildOfferBannerHtml = (offer) => {
     const images = normalizeImages(offer.image_urls && offer.image_urls.length > 0 ? offer.image_urls : (offer.image_url ? [offer.image_url] : []));
     if (images.length > 0) {
-      return images.map((img) => `<img src="${img.url}" alt="${offer.title}" style="width:100%;max-width:100%;border-radius:12px;display:block;margin-bottom:${img.caption ? "4px" : "10px"};" />${img.caption ? `<p style="text-align:center;font-size:13px;color:#7A7460;margin:0 0 10px;">${img.caption}</p>` : ""}`).join("");
+      return images.map((img) => `<img src="${ccHtmlEsc(img.url)}" alt="${ccHtmlEsc(offer.title)}" style="width:100%;max-width:100%;border-radius:12px;display:block;margin-bottom:${img.caption ? "4px" : "10px"};" />${img.caption ? `<p style="text-align:center;font-size:13px;color:#7A7460;margin:0 0 10px;">${ccHtmlEsc(img.caption)}</p>` : ""}`).join("");
     }
     const p = OFFER_PALETTES[offer.palette] || OFFER_PALETTES.or;
     return `
       <div style="background:${p.bg};border-radius:12px;padding:28px 24px;text-align:center;color:${p.text};">
-        ${offer.discount_pct ? `<div style="font-size:40px;font-weight:800;line-height:1;">-${offer.discount_pct}%</div>` : ""}
-        <div style="font-size:20px;font-weight:700;margin-top:${offer.discount_pct ? "8px" : "0"};">${offer.title}</div>
+        ${offer.discount_pct ? `<div style="font-size:40px;font-weight:800;line-height:1;">-${ccHtmlEsc(offer.discount_pct)}%</div>` : ""}
+        <div style="font-size:20px;font-weight:700;margin-top:${offer.discount_pct ? "8px" : "0"};">${ccHtmlEsc(offer.title)}</div>
       </div>`;
   };
 
@@ -438,7 +440,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
     const emails = targets.map((t) => emailForTarget(t)).filter((e) => e && e !== "—");
     if (emails.length === 0) { showToast("Aucune entreprise à contacter pour cette offre."); return; }
     setSendingOfferId(offer.id);
-    const html = `${buildOfferBannerHtml(offer)}<p style="margin-top:16px;">${(offer.description || "").replace(/\n/g, "<br>")}</p>${offer.include_showcase ? FEATURE_SHOWCASE_HTML : ""}${buildOfferCtaHtml(offer)}`;
+    const html = `${buildOfferBannerHtml(offer)}<p style="margin-top:16px;">${ccHtmlEsc(offer.description || "").replace(/\n/g, "<br>")}</p>${offer.include_showcase ? FEATURE_SHOWCASE_HTML : ""}${buildOfferCtaHtml(offer)}`;
     const { error } = await invokeEdgeFunction("send-offer-email", { to: emails, subject: offer.title, html });
     setSendingOfferId(null);
     if (error) { showToast(friendlyError(error)); return; }

@@ -327,42 +327,26 @@ function App() {
   const createAdditionalCompany = async () => {
     if (!newCompanyName.trim()) { showToast("Entrez un nom d'entreprise."); return; }
     setCreatingCompany(true);
-    let createdCompanyId = null;
     try {
       const trimmedName = newCompanyName.trim();
-      const { data: clash } = await supabase.from("companies").select("id").ilike("name", trimmedName).maybeSingle();
-      if (clash) {
-        showToast(`Le nom « ${trimmedName} » est déjà utilisé par une autre entreprise — choisissez-en un autre.`);
+      // v337 — la création passe désormais par la fonction serveur create-company (règles de nom,
+      // unicité sans tenir compte de la casse, limite d'essais), jamais directement depuis le navigateur.
+      let deviceId = null;
+      try {
+        deviceId = localStorage.getItem("compta-plus-device-id");
+        if (!deviceId) { deviceId = genInviteToken(); localStorage.setItem("compta-plus-device-id", deviceId); }
+      } catch (e) {}
+      const { data: created, error: createErr } = await invokeEdgeFunction("create-company", { deviceId, companyName: trimmedName, additional: true });
+      if (createErr) {
+        const msg = String(createErr);
+        showToast(msg);
+        window.alert("Échec de la création de l'entreprise.\n\n" + msg);
         return;
       }
-      const { data: { user } } = await supabase.auth.getUser();
-      // Même principe que pour l'inscription normale : générer l'id nous-mêmes
-      // pour ne jamais avoir besoin de relire la ligne juste après (voir le
-      // commentaire détaillé sur resolveMembership plus haut dans ce fichier).
-      const newCompanyId = crypto.randomUUID();
-      const { error: companyErr } = await supabase.from("companies").insert({ id: newCompanyId, name: trimmedName });
-      if (companyErr) throw new Error("La création de l'entreprise n'a pas pu aboutir. " + NET_MSG);
-      createdCompanyId = newCompanyId;
-      const { error: memberErr } = await supabase.from("company_members").insert({
-        company_id: newCompanyId, user_id: user.id, email: user.email, role: "Administrateur", is_primary_admin: true,
-      });
-      if (memberErr) {
-        // L'entreprise a bien été créée mais le rattachement a échoué — on la
-        // supprime aussitôt plutôt que de laisser une entreprise orpheline, sans
-        // aucun membre, invisible depuis nulle part sauf la liste brute de Super
-        // Admin (exactement ce qui s'est produit la première fois : "Toris & co."
-        // est resté créé mais totalement inaccessible).
-        await supabase.from("companies").delete().eq("id", newCompanyId);
-        throw new Error("La création de l'entreprise n'a pas pu aboutir (rien n'a été conservé). " + NET_MSG);
-      }
-      // Pré-remplit le nom dans les paramètres de l'entreprise (kv_store) avec celui
-      // saisi ici — sans ça, le nom n'existe QUE dans companies.name (visible
-      // seulement depuis Super Admin) ; le reste de l'app (barre latérale, factures,
-      // Administration) lit settings.companyName, une donnée totalement séparée qui
-      // resterait bloquée sur la valeur générique "Mon Entreprise" par défaut tant
-      // que personne ne passe par l'écran de bienvenue (qui ne se déclenche pas ici).
-      // Écrit directement pour CETTE entreprise précise (newCompanyId) plutôt que via
-      // window.storage.set(), qui résoudrait encore l'ancienne entreprise en cache.
+      const newCompanyId = created && created.companyId;
+      if (!newCompanyId) { showToast("La création n'a pas abouti. Réessayez plus tard."); return; }
+      // Pré-remplit le nom dans les paramètres de la nouvelle entreprise (sinon la barre latérale
+      // et les factures afficheraient le nom générique par défaut).
       try {
         await supabase.from("kv_store").upsert({
           company_id: newCompanyId, key: "compta-settings",
@@ -1893,7 +1877,7 @@ function App() {
         } catch (e) {}
         const { data: createResult, error: createError } = await invokeEdgeFunction("create-company", { deviceId, companyName: name });
         if (createError) {
-          if (/essai|support@|d[ée]j[àa] utilis/i.test(String(createError))) {
+          if (/essai|support@|d[ée]j[àa] utilis|adresse email|au moins 2 caract|administrateur|nom de l'entreprise/i.test(String(createError))) {
             // Refus volontaire du serveur (limite d'essais, adresse temporaire…) : message clair et durable.
             setWelcomeError(String(createError));
           } else {
@@ -2317,11 +2301,11 @@ function App() {
             </div>
           )}
 
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3 min-w-0 w-full">
             {isPlatformAdmin && (
               <button onClick={() => { setPlatformLanding(false); setActive("superadmin"); }}
-                className="text-left rounded-lg p-5 flex items-center justify-between" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)" }}>
-                <div>
+                className="w-full min-w-0 text-left rounded-lg p-5 flex items-center justify-between gap-3" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)" }}>
+                <div className="min-w-0">
                   <div className="font-semibold" style={{ color: "#152238" }}>Plateforme — Super Admin</div>
                   <div className="text-xs mt-0.5" style={{ color: "#5C6B4A" }}>Abonnements, revenus, historique global, rapports</div>
                 </div>
@@ -2331,8 +2315,8 @@ function App() {
 
             {isGroupOwner && (
               <button onClick={() => { setPlatformLanding(false); setActive("groupdashboard"); }}
-                className="text-left rounded-lg p-5 flex items-center justify-between" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)" }}>
-                <div>
+                className="w-full min-w-0 text-left rounded-lg p-5 flex items-center justify-between gap-3" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)" }}>
+                <div className="min-w-0">
                   <div className="font-semibold flex items-center gap-2" style={{ color: "#152238" }}>
                     Groupe — {groupName}
                     {pendingGroupRequests > 0 && (
@@ -2349,8 +2333,8 @@ function App() {
 
             {isManagementCollaborator && (
               <button onClick={() => { setPlatformLanding(false); setActive("centredegestion"); }}
-                className="text-left rounded-lg p-5 flex items-center justify-between" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)" }}>
-                <div>
+                className="w-full min-w-0 text-left rounded-lg p-5 flex items-center justify-between gap-3" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)" }}>
+                <div className="min-w-0">
                   <div className="font-semibold flex items-center gap-2" style={{ color: "#152238" }}>
                     Centre de gestion
                     {inboxUnreadApp > 0 && (
@@ -2375,9 +2359,9 @@ function App() {
               try { sessionStorage.setItem("compta_skip_landing", "1"); } catch (e) {}
               window.location.reload();
             }}
-              className="text-left rounded-lg p-5 flex items-center justify-between" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)" }}>
-              <div>
-                <div className="font-semibold" style={{ color: "#152238" }}>Ouvrir mon entreprise{settings.companyName ? " — " + settings.companyName : ""}</div>
+              className="w-full min-w-0 text-left rounded-lg p-5 flex items-center justify-between gap-3" style={{ background: "linear-gradient(160deg, #F4FBE8 0%, #DFF0BE 55%, #C7E296 100%)" }}>
+              <div className="min-w-0">
+                <div className="font-semibold break-all" style={{ color: "#152238" }}>Ouvrir mon entreprise{settings.companyName ? " — " + settings.companyName : ""}</div>
                 <div className="text-xs mt-0.5" style={{ color: "#5C6B4A" }}>Comptabilité, ventes, stock — les 9 modules habituels</div>
               </div>
               <span style={{ color: "#3B5C1F" }}>→</span>
