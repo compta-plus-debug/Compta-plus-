@@ -140,6 +140,12 @@ function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlan
     if (!email) { showToast("L'email du collaborateur est requis."); return; }
     const targetIds = Object.keys(newCollabCompanies).filter((id) => newCollabCompanies[id]);
     if (targetIds.length === 0) { showToast("Choisissez au moins une entreprise."); return; }
+    // v340 — le propriétaire ne modifie pas son propre accès depuis ce formulaire.
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser && (currentUser.email || "").toLowerCase() === email) {
+      showToast("Vous êtes le propriétaire du groupe : votre accès aux entreprises ne se modifie pas depuis ce formulaire.");
+      return;
+    }
 
     setSavingCollab(true);
     const links = [];

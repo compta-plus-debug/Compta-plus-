@@ -69,7 +69,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
   // est le cœur du rôle Support. Le propriétaire peut le retirer en le décochant.
   const basePerms = isPlatformAdmin
     ? { entreprises: true, offres: true, statistiques: true, collaborateurs: true, supervision: true }
-    : (myRecord?.permissions || { entreprises: true, offres: true, statistiques: true, collaborateurs: false });
+    : (myRecord?.permissions || { entreprises: true, offres: false, statistiques: true, collaborateurs: false });  // étape 51 : Offres refusé par défaut
   const perms = { ...basePerms, aide: isPlatformAdmin ? true : basePerms.aide !== false, cabinets: isPlatformAdmin ? true : !!basePerms.offres, annonces: isPlatformAdmin ? true : !!basePerms.offres, messagerie: true, procedures: isPlatformAdmin ? true : !!basePerms.procedures };
   // Messagerie interne : nombre de fils non lus, pour l'afficher sur l'onglet.
   const teamUnread = useTeamUnread(true, currentUserEmail);
@@ -1142,7 +1142,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
               {collaborators.length === 0 ? (
                 <div className="text-xs" style={{ color: "#A39C87" }}>Aucun collaborateur ajouté pour le moment — vous seul y avez accès en tant qu'administrateur de plateforme.</div>
               ) : collaborators.map((c) => {
-                const cPerms = c.permissions || { entreprises: true, offres: true, statistiques: true, collaborateurs: false };
+                const cPerms = c.permissions || { entreprises: true, offres: false, statistiques: true, collaborateurs: false };  // étape 51 : Offres refusé par défaut
                 return (
                 <div key={c.id} className="p-2 rounded" style={{ border: "1px solid #F0EDE3" }}>
                   <div className="flex items-center justify-between gap-2 flex-wrap">

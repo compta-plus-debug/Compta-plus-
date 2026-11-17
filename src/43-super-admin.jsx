@@ -2,7 +2,7 @@
 // @module Super admin
 // @depends BillingAdminPanel, FALLBACK_HTG_PER_USD, FB_WA_MODELES, NET_MSG, PAYMENT_METHODS
 //   ProceduresPanel, SimpleDonutChart, SimpleLineChart, TeamMessagingPanel, _membership
-//   fbTelValide, fbWaLien, fbWaTexte, fetchHtgPerUsd, friendlyError, isFutureDate, monthLabel
+//   fbTelValide, fbWaLien, fbWaTexte, fetchHtgPerUsd, friendlyError, invokeEdgeFunction, isFutureDate, monthLabel
 //   periodLabel, supabase, todayStr, useEffect, useState, useTeamUnread
 // @exports SuperAdminModule
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -226,17 +226,11 @@ function SuperAdminModule({ showToast }) {
   const createGroupForCompany = async (co) => {
     const name = window.prompt(`Nom du groupe pour « ${co.name} » :`, `Groupe ${co.name}`);
     if (!name || !name.trim()) return;
-    const owner = members.find((m) => m.company_id === co.id && m.is_primary_admin);
-    if (!owner || !owner.user_id) { showToast("Administrateur principal introuvable pour cette entreprise — impossible de définir le propriétaire du groupe."); return; }
-    const groupEntry = {
-      id: crypto.randomUUID(), owner_user_id: owner.user_id, owner_email: owner.email, name: name.trim(),
-      plan_status: "active", max_companies: 5,
-    };
-    const { error: grpErr } = await supabase.from("company_groups").insert(groupEntry);
-    if (grpErr) { showToast(friendlyError(grpErr)); return; }
-    const { error: linkErr } = await supabase.from("companies").update({ group_id: groupEntry.id }).eq("id", co.id);
-    if (linkErr) { showToast("Le groupe a été créé, mais le rattachement a échoué. " + NET_MSG); return; }
-    setCompanies((prev) => prev.map((c) => (c.id === co.id ? { ...c, group_id: groupEntry.id } : c)));
+    // v339 : création et rattachement faits ensemble côté serveur (Edge Function create-group, action create-for-company).
+    const { data: created, error: grpErr } = await invokeEdgeFunction("create-group", { action: "create-for-company", name: name.trim(), companyId: co.id });
+    if (grpErr || !created?.groupId) { showToast(grpErr || NET_MSG); return; }
+    const newGroupId = created.groupId;
+    setCompanies((prev) => prev.map((c) => (c.id === co.id ? { ...c, group_id: newGroupId } : c)));
     logSA("groupe_cree", co, `Groupe « ${name.trim()} »`);
     showToast(`Groupe « ${name.trim()} » créé pour ${co.name}.`);
   };

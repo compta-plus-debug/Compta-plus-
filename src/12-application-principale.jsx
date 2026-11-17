@@ -1750,22 +1750,15 @@ function App() {
   // l'entreprise elle-même, déjà acquise à ce stade.
   const createGroupForNewCompany = async (companyId, baseName) => {
     try {
-      const { data: { user: newUser } } = await supabase.auth.getUser();
-      if (!newUser) return null;
-      const newGroupId = crypto.randomUUID();
+      // v339 : création et rattachement faits ensemble côté serveur (Edge Function create-group).
       const groupName = `Groupe ${baseName}`;
-      const { error: grpErr } = await supabase.from("company_groups").insert({
-        id: newGroupId, owner_user_id: newUser.id, owner_email: newUser.email,
-        name: groupName, plan_status: "trial",
-        trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), max_companies: 5,
-      });
-      if (grpErr) {
+      const { data: created, error: grpErr } = await invokeEdgeFunction("create-group", { action: "create-own", name: groupName, attachCompanyId: companyId });
+      if (grpErr || !created?.groupId) {
         showToast("Entreprise créée, mais le groupe n'a pas pu être mis en place pour le moment. Contactez le support — votre essai Extension reste acquis.");
-        logClientError("welcome_group_insert_failed: " + grpErr.message, JSON.stringify(grpErr), window.location.href);
+        logClientError("welcome_group_insert_failed: " + String(grpErr), String(grpErr), window.location.href);
         return null;
       }
-      await supabase.from("companies").update({ group_id: newGroupId }).eq("id", companyId);
-      return { groupId: newGroupId, groupName, groupMaxCompanies: 5 };
+      return { groupId: created.groupId, groupName, groupMaxCompanies: 5 };
     } catch (grpEx) {
       showToast("Entreprise créée, mais le groupe n'a pas pu être mis en place — contactez le support, votre essai Extension reste acquis.");
       logClientError("welcome_group_creation_exception: " + String(grpEx), String(grpEx && grpEx.stack || ""), window.location.href);
@@ -1779,20 +1772,14 @@ function App() {
   // lui-même (mécanisme déjà existant et éprouvé), jamais automatiquement ici.
   const createStandaloneGroup = async (groupName) => {
     try {
-      const { data: { user: newUser } } = await supabase.auth.getUser();
-      if (!newUser) return null;
-      const newGroupId = crypto.randomUUID();
-      const { error: grpErr } = await supabase.from("company_groups").insert({
-        id: newGroupId, owner_user_id: newUser.id, owner_email: newUser.email,
-        name: groupName, plan_status: "trial",
-        trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), max_companies: 5,
-      });
-      if (grpErr) {
+      // v339 : création faite côté serveur (Edge Function create-group).
+      const { data: created, error: grpErr } = await invokeEdgeFunction("create-group", { action: "create-own", name: groupName });
+      if (grpErr || !created?.groupId) {
         showToast("Le groupe n'a pas pu être créé pour le moment. " + NET_MSG);
-        logClientError("welcome_standalone_group_insert_failed: " + grpErr.message, JSON.stringify(grpErr), window.location.href);
+        logClientError("welcome_standalone_group_insert_failed: " + String(grpErr), String(grpErr), window.location.href);
         return null;
       }
-      return { groupId: newGroupId, groupName, groupMaxCompanies: 5 };
+      return { groupId: created.groupId, groupName, groupMaxCompanies: 5 };
     } catch (grpEx) {
       showToast("Le groupe n'a pas pu être créé — contactez le support.");
       logClientError("welcome_standalone_group_exception: " + String(grpEx), String(grpEx && grpEx.stack || ""), window.location.href);
