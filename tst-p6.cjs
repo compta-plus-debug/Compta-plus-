@@ -3,7 +3,7 @@ let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.
 const txt=p=>p.evaluate(()=>document.body.innerText);
 const noMember=(extra)=>new Function("(function(){if(!crypto.randomUUID)crypto.randomUUID=function(){return 'g'+Math.random().toString(36).slice(2)};var S=window.__srv;S.tables.company_members=[];S.tables.companies=[];"+(extra||"")+"})();");
 const blockedFn="S.fnH={'create-company':async function(o){return {data:null,error:{message:'x',context:{json:async function(){return {error:'Cette adresse email a déjà bénéficié de 2 essais gratuits. Pour continuer, choisissez un forfait ou écrivez-nous à support@comptaplus.app : nous vous aiderons.',code:'trial_limit'}}}}}}};";
-const allowFn="S.fnH={'create-company':async function(o){S.lastCheck=o.body;return {data:{success:true,allowed:true},error:null}}};";
+const allowFn="S.fnH={'create-company':async function(o){S.lastCheck=o.body;return {data:{success:true,allowed:true},error:null}},'create-group':async function(o){S.tables.company_groups.push({id:'g1',name:o.body.name,owner_user_id:'u1'});return {data:{groupId:'g1'},error:null}}};";
 (async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
 // A) Groupe : refus serveur -> bannière, aucun groupe créé
 {const {p,errs}=await boot(b,{skipSeed:true,pageInit:noMember(blockedFn+"S.tables.company_groups=[];")});
