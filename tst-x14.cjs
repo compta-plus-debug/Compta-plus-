@@ -1,0 +1,28 @@
+// v358 — hôtellerie : bouton « Facturer le départ » depuis la liste des réservations arrivées ; export Rapports sans débordement (360 px).
+const {chromium}=require('playwright');const {boot}=require('./tst-harness.cjs');
+let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.stringify(i)));if(!c)fails++};
+const g=(p,t)=>p.locator('[data-testid="'+t+'"]');
+const fmt=(d)=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const add=(n)=>{const d=new Date();d.setHours(12);d.setDate(d.getDate()+n);return fmt(d)};
+const init=new Function("(function(){try{localStorage.clear()}catch(e){}var c=window.__srv.tables.companies[0];c.plan_tier='assisted';c.sectors=['restauration'];c.sectors_locked=true;})();");
+const hotel=[{type:'roomtype',id:'t1',name:'Double',capacity:2,price:2000},{type:'room',id:'r1',number:'102',typeId:'t1',menage:'propre'},{type:'room',id:'r2',number:'103',typeId:'t1',menage:'propre'},{type:'guest',id:'g1',name:'Marie Dupont',phone:'3700'},{type:'booking',id:'b2',number:'RS-2026-0002',guestId:'g1',roomId:'r2',from:add(-3),to:add(1),adults:2,children:0,rate:2000,status:'arrivee',extras:[],deposits:[],createdAt:new Date().toISOString()}];
+(async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
+const {p,errs}=await boot(b,{settings:{companyName:'Hôtel Test',currency:'HTG'},primary:true,cats:{hotel},pageInit:init});
+await p.setViewportSize({width:360,height:800});
+await p.getByText('Hôtellerie',{exact:true}).last().click();await p.waitForTimeout(800);
+await g(p,'hotel-tab-resa').click();await p.waitForTimeout(400);
+ok('bouton Facturer le départ présent sur la ligne arrivée',(await g(p,'hotel-resa-facturer').count())===1);
+await g(p,'hotel-resa-facturer').click();await p.waitForTimeout(500);
+ok('bloc Départ et facturation affiché',(await g(p,'hotel-depart').count())===1);
+ok('bouton Enregistrer le départ et facturer présent',(await g(p,'hotel-partir').count())===1);
+await g(p,'hotel-partir').click();await p.waitForTimeout(700);
+ok('facture créée : bouton Voir la facture',(await g(p,'hotel-voir-facture').count())===1);
+ok('plus de bouton Facturer pour le séjour soldé',(await g(p,'hotel-resa-facturer').count())===0);
+await g(p,'hotel-tab-factures').click();await p.waitForTimeout(400);
+ok('facture visible dans l\'onglet Factures',(await g(p,'hotel-fact-ligne').count())===1);
+await g(p,'hotel-tab-rapports').click();await p.waitForTimeout(400);
+const bx=[];for (const id of ['hotel-rapport-export','hotel-journal-excel','hotel-journal-word']) bx.push(await g(p,id).boundingBox());
+const vw=await p.evaluate(()=>document.documentElement.clientWidth);
+ok('boutons export dans la largeur de l\'écran (360 px)',bx.every(r=>r&&r.x>=0&&r.x+r.width<=vw+1),{vw,bx});
+ok('aucune erreur JS',errs.length===0,errs);
+await b.close();console.log('fails='+fails);process.exit(fails?1:0)})();
