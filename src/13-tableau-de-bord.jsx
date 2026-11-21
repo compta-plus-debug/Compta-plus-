@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Tableau de bord
-// @depends Download, SimpleGroupedBarChart, SimpleGrowthBarChart, balanceDue, fmt, normalizeClientName
+// @depends Download, SimpleDonutChart, SimpleGroupedBarChart, SimpleGrowthBarChart, balanceDue, fmt, normalizeClientName
 //   useState
 // @exports Card, Dashboard
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -206,8 +206,63 @@ function GettingStartedCard({ setActive, settings, setSettings, products, client
 }
 // K:ONB:END
 
-function Dashboard({ kpis, chartData, growthData, latestGrowth, entriesCount, installPrompt, onInstallClick, setActive, settings, setSettings, products, clients, planTier, invoices, role }) {
+function Dashboard({ kpis, chartData, growthData, latestGrowth, entriesCount, installPrompt, onInstallClick, setActive, settings, setSettings, products, clients, planTier, invoices, role, recentEntries = [], chargesRepartition = [], tresorerieJour = [], ventesJour = [] }) {
   const [showIosHelp, setShowIosHelp] = useState(false);
+  const [periode, setPeriode] = useState("mois");
+  // Lot 2c : courbe de trésorerie. Mois = 30 jours (pas d'un jour), Trimestre = 90 jours (pas d'une semaine),
+  // Année = 12 mois (pas de 30 jours). Le solde affiché à une date est le dernier solde connu à cette date.
+  const PERIODES = { mois: { jours: 30, pas: 1, libelle: "30 derniers jours" }, trimestre: { jours: 90, pas: 7, libelle: "3 derniers mois" }, annee: { jours: 360, pas: 30, libelle: "12 derniers mois" } };
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const isoLocal = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const aujourdhuiIso = isoLocal(new Date());
+  const serieTreso = (() => {
+    const cfg = PERIODES[periode] || PERIODES.mois;
+    const points = [];
+    for (let i = cfg.jours; i >= 0; i -= cfg.pas) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const iso = isoLocal(d);
+      let solde = 0;
+      for (const p of tresorerieJour) { if (p.jour <= iso) solde = p.solde; else break; }
+      points.push({ iso, label: cfg.pas >= 30 ? `${pad2(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}` : `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`, solde });
+    }
+    return points;
+  })();
+  const soldeMin = Math.min(0, ...serieTreso.map((p) => p.solde));
+  const soldeMax = Math.max(0, ...serieTreso.map((p) => p.solde));
+  const plage = soldeMax - soldeMin || 1;
+  // Courbe lissée, même style que la maquette « Market » (aire en dégradé, trait ardoise, point or).
+  const pts = serieTreso.map((p, i) => [
+    serieTreso.length > 1 ? (i / (serieTreso.length - 1)) * 594 : 0,
+    170 - ((p.solde - soldeMin) / plage) * 150,
+  ]);
+  const cheminLisse = (q) => {
+    if (q.length < 2) return "";
+    let d = `M${q[0][0].toFixed(1)},${q[0][1].toFixed(1)}`;
+    for (let i = 0; i < q.length - 1; i++) {
+      const p0 = q[i - 1] || q[i], p1 = q[i], p2 = q[i + 1], p3 = q[i + 2] || p2;
+      const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      const borne = (y) => Math.min(170, Math.max(10, y)); // le lissage ne doit pas dépasser les bornes du graphique
+      d += ` C${c1x.toFixed(1)},${borne(c1y).toFixed(1)} ${c2x.toFixed(1)},${borne(c2y).toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+    }
+    return d;
+  };
+  const traitTreso = cheminLisse(pts);
+  const aireTreso = pts.length > 1 ? `${traitTreso} L600,180 L0,180 Z` : "";
+  const repereTreso = [0, 1, 2, 3, 4].map((k) => serieTreso[Math.round((k * (serieTreso.length - 1)) / 4)]).filter(Boolean);
+  const dernierPoint = pts[pts.length - 1];
+  // Une couleur par jour de la semaine (palette de la maquette, distincte d'un jour à l'autre).
+  const COULEURS_JOURS = ["#152238", "#3F5A85", "#7F94B6", "#C9A24B", "#1FA97A", "#A9BFE3", "#A6432F"];
+  const ventes30 = (() => {
+    const out = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const iso = isoLocal(d);
+      const hit = ventesJour.find((v) => v.jour === iso);
+      out.push({ mois: `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`, produits: hit ? hit.produits : 0, jourSem: d.getDay() });
+    }
+    return out;
+  })();
   const alreadyInstalled = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
   return (
     <div className="p-4 md:p-8 max-w-6xl compta-accueil">
@@ -248,6 +303,20 @@ function Dashboard({ kpis, chartData, growthData, latestGrowth, entriesCount, in
         )}
       </header>
 
+      <div className="rounded-2xl p-6 mb-6 flex items-center justify-between gap-4 flex-wrap" style={{ background: "linear-gradient(120deg,#152238,#1F4E9A)" }} data-testid="accueil-une">
+          <div>
+            <div className="text-xs uppercase tracking-widest" style={{ color: "#E8C97A" }}>À la une{latestGrowth ? " · " + latestGrowth.mois : ""}</div>
+            <div className="display text-2xl mt-1" style={{ color: "#fff" }}>
+              {!latestGrowth || latestGrowth.pct === null
+                ? `Votre journal compte ${entriesCount} écriture${entriesCount > 1 ? "s" : ""} enregistrée${entriesCount > 1 ? "s" : ""}.`
+                : latestGrowth.croissance >= 0
+                  ? `Votre activité du mois est en avance de ${latestGrowth.pct.toFixed(1)} %`
+                  : `Votre activité du mois est en retrait de ${Math.abs(latestGrowth.pct).toFixed(1)} %`}
+            </div>
+          </div>
+          <button onClick={() => setActive?.("compta")} className="px-5 py-2 rounded-lg text-sm font-semibold" style={{ background: "#C9A24B", color: "#152238" }}>Voir le détail</button>
+      </div>
+
       <GettingStartedCard setActive={setActive} settings={settings} setSettings={setSettings} products={products} clients={clients} invoices={invoices} role={role} />
       <FiscalDeadlinesCard setActive={setActive} taxSystem={settings.taxSystem} planTier={planTier} />
       <LowStockAlertCard setActive={setActive} products={products} planTier={planTier} />
@@ -279,6 +348,44 @@ function Dashboard({ kpis, chartData, growthData, latestGrowth, entriesCount, in
         </div>
       )}
 
+      <div className="bg-white rounded-lg p-6 mb-8 min-w-0" style={{ border: "1px solid #E4DFD1" }} data-testid="accueil-tresorerie">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <div>
+            <div className="text-sm font-semibold" style={{ color: "#152238" }}>Évolution de la trésorerie</div>
+            <div className="text-xs" style={{ color: "#A39C87" }}>Banque + caisse, solde cumulé · {PERIODES[periode].libelle}</div>
+          </div>
+          <div className="inline-flex rounded-lg overflow-hidden" style={{ border: "1px solid #DDD6C4" }} data-testid="accueil-periode" role="group" aria-label="Période">
+            {[["mois", "Mois"], ["trimestre", "Trimestre"], ["annee", "Année"]].map(([k, lib]) => (
+              <button key={k} onClick={() => setPeriode(k)} aria-pressed={periode === k}
+                className="px-3 py-1.5 text-xs"
+                style={{ background: periode === k ? "#152238" : "#fff", color: periode === k ? "#EFE9DD" : "#152238" }}>{lib}</button>
+            ))}
+          </div>
+        </div>
+        {tresorerieJour.length === 0 ? (
+          <div className="text-sm py-16 text-center" style={{ color: "#A39C87" }}>Aucun mouvement de banque ou de caisse pour le moment.</div>
+        ) : (
+          <svg viewBox="0 0 600 180" preserveAspectRatio="none" className="w-full h-48" role="img" aria-label="Courbe du solde de trésorerie" style={{ display: "block", overflow: "visible" }}>
+            <defs>
+              <linearGradient id="grad-tresorerie" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0" stopColor="#152238" stopOpacity=".34" />
+                <stop offset="1" stopColor="#152238" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <line x1="0" x2="600" y1="45" y2="45" stroke="#E6EDF7" />
+            <line x1="0" x2="600" y1="90" y2="90" stroke="#E6EDF7" />
+            <line x1="0" x2="600" y1="135" y2="135" stroke="#E6EDF7" />
+            <path d={aireTreso} fill="url(#grad-tresorerie)" />
+            <path d={traitTreso} fill="none" stroke="#3F5A85" strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            {dernierPoint && <circle cx={dernierPoint[0]} cy={dernierPoint[1]} r="6" fill="#C9A24B" stroke="#fff" strokeWidth="3" />}
+          </svg>
+        )}
+        <div className="text-xs mt-1 tabular" style={{ color: "#152238" }}>Solde actuel : {fmt(serieTreso.length ? serieTreso[serieTreso.length - 1].solde : 0)}</div>
+        <div className="flex justify-between text-xs mt-1" style={{ color: "#5B6B7F" }}>
+          {repereTreso.map((r, i) => <span key={i}>{r.label}</span>)}
+        </div>
+      </div>
+
       <div className="bg-white rounded-lg p-6 mb-8" style={{ border: "1px solid #E4DFD1" }}>
         <div className="text-sm font-semibold mb-4" style={{ color: "#152238" }}>Produits vs Charges par mois</div>
         {chartData.length === 0 ? (
@@ -290,10 +397,97 @@ function Dashboard({ kpis, chartData, growthData, latestGrowth, entriesCount, in
             data={chartData}
             xKey="mois"
             series={[
-              { key: "produits", name: "Produits", color: "#0F6B5C" },
-              { key: "charges", name: "Charges", color: "#A6432F" },
+              { key: "produits", name: "Produits", color: "#3F5A85" },
+              { key: "charges", name: "Charges", color: "#C9A24B" },
             ]}
           />
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white rounded-lg p-6 min-w-0" style={{ border: "1px solid #E4DFD1" }} data-testid="accueil-repartition">
+          <div className="text-sm font-semibold mb-4" style={{ color: "#152238" }}>Répartition des charges</div>
+          {chargesRepartition.length === 0 ? (
+            <div className="text-sm py-10 text-center" style={{ color: "#A39C87" }}>Aucune charge enregistrée.</div>
+          ) : (
+            <SimpleDonutChart data={chargesRepartition} nameKey="name" valueKey="value" colors={["#152238", "#7F94B6", "#C9A24B", "#3F5A85", "#A9BFE3"]} />
+          )}
+        </div>
+        <div className="bg-white rounded-lg p-6 min-w-0 md:col-span-2 overflow-x-auto" style={{ border: "1px solid #E4DFD1" }} data-testid="accueil-ecritures">
+          <div className="text-sm font-semibold mb-3" style={{ color: "#152238" }}>Dernières écritures</div>
+          {recentEntries.length === 0 ? (
+            <div className="text-sm py-10 text-center" style={{ color: "#A39C87" }}>Aucune écriture pour le moment.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ color: "#152238", background: "#EEF2F8" }} className="text-left">
+                  <th className="px-3 py-2" style={{ color: "#152238" }}>Date</th><th className="px-3 py-2" style={{ color: "#152238" }}>Libellé</th><th className="px-3 py-2" style={{ color: "#152238" }}>Statut</th><th className="px-3 py-2 text-right" style={{ color: "#152238" }}>Montant</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentEntries.map((e) => (
+                  <tr key={e.id} style={{ borderTop: "1px solid #EEE9DA" }}>
+                    <td className="px-3 py-2 whitespace-nowrap">{/^\d{4}-\d{2}-\d{2}$/.test(e.date || "") ? e.date.split("-").reverse().join("/") : (e.date || "")}</td>
+                    <td className="px-3 py-2">{e.label}</td>
+                    <td className="px-3 py-2">{e.corrigee ? "Corrigée" : "Enregistrée"}</td>
+                    <td className="px-3 py-2 text-right tabular">{fmt(e.montant)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {(() => {
+        const aujourdhui = new Date();
+        const retards = (invoices || []).filter((inv) => {
+          if (["payée", "annulée", "don", "perte"].includes(inv.status)) return false;
+          if (balanceDue(inv) <= 0.01) return false;
+          return Math.floor((aujourdhui - new Date(inv.date)) / 86400000) > 30;
+        }).length;
+        const stockBas = (products || []).filter((p) => p.type === "marchandise" && Number(p.seuil) > 0 && Number(p.stock || 0) <= Number(p.seuil)).length;
+        const items = [];
+        if (retards > 0) items.push({ texte: `Relancer ${retards} facture${retards > 1 ? "s" : ""} en retard`, module: "crm" });
+        if (stockBas > 0) items.push({ texte: `Stock bas : ${stockBas} produit${stockBas > 1 ? "s" : ""} à réapprovisionner`, module: "stock" });
+        return (
+          <div className="bg-white rounded-lg p-6 mb-8" style={{ border: "1px solid #E4DFD1" }} data-testid="accueil-a-traiter">
+            <div className="text-sm font-semibold mb-3" style={{ color: "#152238" }}>À traiter</div>
+            {items.length === 0 ? (
+              <div className="text-sm" style={{ color: "#A39C87" }}>Rien à traiter pour le moment.</div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {items.map((it) => (
+                  <button key={it.texte} onClick={() => setActive?.(it.module)} className="text-left text-sm px-3 py-2 rounded-lg" style={{ background: "#FBF1DC", color: "#152238" }}>{it.texte}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      <div className="bg-white rounded-lg p-6 mb-8 min-w-0" style={{ border: "1px solid #E4DFD1" }} data-testid="accueil-ventes-jour">
+        <div className="text-sm font-semibold mb-1" style={{ color: "#152238" }}>Ventes par jour</div>
+        <p className="text-xs mb-4" style={{ color: "#A39C87" }}>Produits du journal, 30 derniers jours (aujourd'hui : {aujourdhuiIso.split("-").reverse().join("/")}).</p>
+        {ventesJour.length === 0 ? (
+          <div className="text-sm py-12 text-center" style={{ color: "#A39C87" }}>Aucune vente enregistrée.</div>
+        ) : (
+          <>
+          <svg viewBox="0 0 600 220" preserveAspectRatio="none" className="w-full h-56" role="img" aria-label="Ventes par jour">
+            <line x1="0" x2="600" y1="200" y2="200" stroke="#E4DFD1" strokeWidth="1" />
+            {(() => {
+              const max = Math.max(1, ...ventes30.map((v) => v.produits));
+              const step = 600 / ventes30.length;
+              return ventes30.map((v, i) => {
+                const h = (v.produits / max) * 180;
+                return <rect key={i} x={i * step + step * 0.2} y={200 - h} width={step * 0.6} height={h} fill={COULEURS_JOURS[v.jourSem]}><title>{v.mois} : {fmt(v.produits)}</title></rect>;
+              });
+            })()}
+          </svg>
+          <div className="flex justify-between text-xs mt-1" style={{ color: "#A39C87" }}>
+            <span>{ventes30[0].mois}</span><span>{ventes30[15].mois}</span><span>{ventes30[29].mois}</span>
+          </div>
+          </>
         )}
       </div>
 
