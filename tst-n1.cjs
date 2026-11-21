@@ -59,7 +59,8 @@ const menu=async(P,label)=>{await P.getByText(label,{exact:true}).first().click(
     const P=A.p;
     await P.waitForTimeout(9000);
     const n=await P.evaluate(()=>Object.keys(window.__cpc||{}).length);
-    ok('préchargement : les 22 fichiers sont arrivés',n===22,{n,reqs});
+    const nChunks=require('fs').readdirSync(cdir).filter(f=>f.endsWith('.js')).length; // même dossier que celui servi au test
+    ok('préchargement : les '+nChunks+' fichiers de chunks sont arrivés',n===nChunks,{n,nChunks,reqs});
     await A.ctx.setOffline(true);
     await menu(P,'Stock et inventaire');
     ok('hors ligne : l\'écran Stock s\'ouvre quand même',(await P.locator('[data-testid="chunk-error"]').count())===0&&(await P.locator('[data-testid="chunk-loading"]').count())===0);
