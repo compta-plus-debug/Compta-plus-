@@ -51,7 +51,10 @@ source = appliquerCible(source);
 // et rend l'écran principal. Les variables « let » modifiées au fil du temps (ex. _membership) sont lues en direct.
 // CHUNKS=off : tout reste dans un seul fichier (secours).
 const CHUNKS_ON = (process.env.CHUNKS || "on") !== "off";
+// Chunks de service : pas d'écran d'entrée ; ils exposent des fonctions appelées à la demande (cpLoadChunk).
+const SERVICE_CHUNKS = { office: ["officeDocx", "officeEntreprise", "officeEntetePage", "officeLogo", "officeTelecharger", "officeXlsx"] };
 const CHUNK_DEFS = {   // identifiant -> numéros des blocs (fichiers NN-….jsx)
+  office: ["71"], vente: ["23", "24"],
   admin: ["39"], superadmin: ["43"], centre: ["42"], paie: ["27"], gestion: ["31", "32", "33", "34"],
   compta: ["14", "18", "19", "47"], groupe: ["37"], stock: ["25"], creances: ["26"], caisse: ["21"], sante: ["54"], impex: ["53"], resto: ["58"], hotel: ["59"], transport: ["61"], immo: ["62"], btp: ["63"], indus: ["64"], agri: ["65"], ong: ["66"], services: ["67"], ecole: ["51", "52"],
 };
@@ -87,8 +90,10 @@ if (CHUNKS_ON) {
       besoins.add(n);
     }
     // ce que l'application de départ utilise de ce chunk (doit être l'écran principal, et lui seul)
-    const entree = [...propres].filter((n) => utilise(coreCode, n)).sort();
-    if (!entree.length) { console.error("BLOQUÉ — chunk « " + id + " » : aucun écran n'est utilisé par l'application de départ."); process.exit(1); }
+    const estService = Object.prototype.hasOwnProperty.call(SERVICE_CHUNKS, id);
+    const entree = estService ? SERVICE_CHUNKS[id] : [...propres].filter((n) => utilise(coreCode, n)).sort();
+    if (estService) for (const n of entree) if (!propres.has(n)) { console.error("BLOQUÉ — chunk de service « " + id + " » n'exporte pas « " + n + " »."); process.exit(1); }
+    if (!estService && !entree.length) { console.error("BLOQUÉ — chunk « " + id + " » : aucun écran n'est utilisé par l'application de départ."); process.exit(1); }
     console.log("  chunk " + id + " : écran(s) d'entrée " + entree.join(", ") + " ; emprunte " + besoins.size + " noms");
     for (const n of besoins) if (vivantes.has(n)) liveUtilisees.add(n); else scopeNoms.add(n);
     let code = texteChunk;
@@ -100,7 +105,7 @@ if (CHUNKS_ON) {
     const enveloppe = '(window.__cpc=window.__cpc||{})[' + JSON.stringify(id) + ']={v:' + JSON.stringify(version0) + ',f:function(__c){const {' + liste.join(",") + '}=__c;const __live=__c.__live;\n' + code + '\nreturn {' + entree.join(",") + '};}};';
     const mini = esbuild.transformSync(appliquerCible(enveloppe), { loader: "jsx", target: "es2019", minify: true, charset: "ascii" }).code;
     chunkFiles[id] = mini;
-    entree.forEach((n) => stubs.push("const " + n + " = cpLazy(" + JSON.stringify(id) + ", " + JSON.stringify(n) + ");"));
+    if (!estService) entree.forEach((n) => stubs.push("const " + n + " = cpLazy(" + JSON.stringify(id) + ", " + JSON.stringify(n) + ");"));
   }
   const tete = "const __CP_IDS = " + JSON.stringify(Object.keys(CHUNK_DEFS)) + ";\n";
   const queue = "\nfunction __cpScope() {\n  const __L = {};\n" + [...liveUtilisees].sort().map((n) => "  Object.defineProperty(__L, " + JSON.stringify(n) + ", { get: () => " + n + ", enumerable: true });\n").join("") +
