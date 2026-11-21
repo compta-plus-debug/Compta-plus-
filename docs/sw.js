@@ -7,7 +7,7 @@
 // (React, Supabase, Tailwind, jsPDF…) afin que l'application puisse S'OUVRIR sans réseau
 // après une première ouverture en ligne. Jamais pour Supabase lui-même (données/API).
 
-const CACHE_NAME = "compta-plus-cache-v4";
+const CACHE_NAME = "compta-plus-cache-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
