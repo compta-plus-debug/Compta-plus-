@@ -210,7 +210,7 @@ function Dashboard({ kpis, chartData, growthData, latestGrowth, entriesCount, in
   const [showIosHelp, setShowIosHelp] = useState(false);
   const alreadyInstalled = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-8 max-w-6xl compta-accueil">
       <header className="mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div className="display text-3xl" style={{ color: "#152238" }}>Centre de contrôle</div>

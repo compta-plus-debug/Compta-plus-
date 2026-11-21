@@ -1,0 +1,42 @@
+/* ==========================================================================
+   Compta+ — Refonte visuelle, LOT 2b : TABLEAU DE BORD (Centre de contrôle)
+   --------------------------------------------------------------------------
+   Version corrigée : règles limitées à .compta-accueil. Les modules Import-Export,
+   Comptabilité, etc. ne sont plus touchés (leurs grilles de cartes à 2 et 4
+   colonnes gardent leur mise en forme d'origine).
+   Retour arrière : supprimer la ligne <link ... refonte-lot2b.css>.
+   ========================================================================== */
+
+/* Indicateurs (Produits, Charges, Résultat, Trésorerie) : tuiles avec filet coloré */
+main .compta-accueil .grid.grid-cols-2.md\:grid-cols-4 > div {
+  border-radius: 16px !important;
+  box-shadow: 0 2px 12px rgba(20, 69, 143, .09) !important;
+  padding: 18px 20px !important;
+  border-top: 4px solid #7F94B6 !important;
+  min-width: 0;
+}
+main .compta-accueil .grid.grid-cols-2.md\:grid-cols-4 > div:nth-child(1) { border-top-color: #0F6B5C !important; }
+main .compta-accueil .grid.grid-cols-2.md\:grid-cols-4 > div:nth-child(2) { border-top-color: #A6432F !important; }
+main .compta-accueil .grid.grid-cols-2.md\:grid-cols-4 > div:nth-child(3) { border-top-color: #C9A24B !important; }
+main .compta-accueil .grid.grid-cols-2.md\:grid-cols-4 > div:nth-child(4) { border-top-color: #3F5A85 !important; }
+main .compta-accueil .grid.grid-cols-2.md\:grid-cols-4 > div > div:first-child {
+  letter-spacing: .08em;
+  font-size: 11px;
+}
+/* Valeurs : taille réduite sur téléphone pour ne pas casser « 8 700 040 HTG » sur deux lignes */
+main .compta-accueil .grid.grid-cols-2.md\:grid-cols-4 > div > div:last-child {
+  font-size: clamp(17px, 4.8vw, 26px);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* Panneaux du tableau de bord : coins plus doux */
+main .compta-accueil .bg-white.rounded-lg.p-6,
+main .compta-accueil .bg-white.rounded-lg.p-4 {
+  border-radius: 18px;
+  box-shadow: 0 2px 10px rgba(20, 69, 143, .07);
+}
+
+/* Graphiques du tableau de bord : couleurs de la maquette */
+main .compta-accueil svg [fill="#0F6B5C"] { fill: #3F5A85 !important; }
+main .compta-accueil svg [fill="#A6432F"] { fill: #C9A24B !important; }
