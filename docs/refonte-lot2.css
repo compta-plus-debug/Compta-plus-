@@ -1,0 +1,50 @@
+/* ==========================================================================
+   Compta+ — Refonte visuelle, LOT 2 : tableaux et cartes du TABLEAU DE BORD
+   --------------------------------------------------------------------------
+   Version corrigée : toutes les règles sont limitées au conteneur
+   .compta-accueil (Centre de contrôle). Les autres modules (Import-Export,
+   Comptabilité, etc.) gardent leur apparence d'origine.
+   Retour arrière : supprimer la ligne <link ... refonte-lot2.css> (voir LISEZ-MOI).
+   ========================================================================== */
+
+/* Tableaux du tableau de bord : en-tête bleu, lignes alternées, survol doux */
+main .compta-accueil table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+main .compta-accueil table thead tr { background: #152238; }
+main .compta-accueil table thead th { background: #152238 !important; color: #EFE9DD !important; }
+main .compta-accueil table thead th {
+  color: #EFE9DD;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 10px 12px;
+}
+main .compta-accueil table tbody td {
+  padding: 9px 12px;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+main .compta-accueil table tbody tr { border-top: 1px solid #EEE9DA; }
+main .compta-accueil table tbody tr:nth-child(even) { background: #FAF8F1; }
+main .compta-accueil table tbody tr:hover { background: #F3EFE0; }
+
+/* Montants : chiffres alignés */
+main .compta-accueil table td.text-right, main .compta-accueil table th.text-right { font-variant-numeric: tabular-nums; }
+
+/* Défilement horizontal du tableau sur téléphone : jamais de page qui déborde */
+main .compta-accueil .overflow-x-auto { -webkit-overflow-scrolling: touch; max-width: 100%; }
+
+/* Cartes blanches du tableau de bord : bordure douce, coins arrondis */
+main .compta-accueil .bg-white.rounded-lg {
+  border: 1px solid #E4DFD1;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(21, 34, 56, .07);
+}
+
+/* Titres de section : séparateur or */
+main .compta-accueil .display.text-base { border-left: 3px solid #C9A24B; padding-left: 10px; }
