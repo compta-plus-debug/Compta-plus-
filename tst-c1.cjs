@@ -25,9 +25,11 @@ scripts.forEach(u=>ok('script autorisé : '+new URL(u).host,permet('script-src',
 [...html.matchAll(/<link[^>]+href="(https:[^"]+)"/g)].forEach(x=>ok('feuille autorisée : '+new URL(x[1]).host,permet('style-src',x[1])||permet('font-src',x[1]),x[1]));
 // réseau utilisé par l'application
 const hotes=[...new Set([...jsAll.matchAll(/https?:\/\/[a-zA-Z0-9.-]+/g)].map(x=>x[0]))];
+const espacesXml=['http://schemas.openxmlformats.org']; // identifiants de format Office (Word, Excel), jamais appelés
 const connus=['https://wa.me','https://comptaplus.app','https://www.brh.ht']; // brh.ht : lien vers le taux de référence (v334), ouvert par l'utilisateur
 hotes.forEach(h=>{if(h===CAPTCHA_HOTE)ok('captcha autorisé (script et cadre) : '+h,permet('script-src',h+'/x')&&permet('frame-src',h+'/x'),h);
  else if(/supabase\.co$/.test(h)||h==='https://open.er-api.com')ok('réseau autorisé : '+h,permet('connect-src',h+'/x'),h);
+ else if(espacesXml.includes(h))ok('espace de noms XML (identifiant, aucune requête) : '+h,true,h);
  else ok('adresse connue (lien, pas de requête automatique) : '+h,connus.includes(h),h)});
 ok('aucun objet incorporé',(dir['object-src']||[])[0]==="'none'");
 ok('base et formulaires verrouillés',(dir['base-uri']||[])[0]==="'self'"&&(dir['form-action']||[])[0]==="'self'");
