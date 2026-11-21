@@ -29,6 +29,9 @@
   document.addEventListener("dragstart", (e) => { const t = e.target; if (!(t && t.closest && t.closest("[draggable='true']"))) e.preventDefault(); }, true);
   document.addEventListener("drop", (e) => { const dt = e.dataTransfer; if (dt && dt.files && dt.files.length) return; e.preventDefault(); }, true);
 })();
+// Modules de secteur (blocs d'activité), apparence maquette B. CSS intégré, limité à <main class="compta-bloc">.
+const BLOCS_CSS = String.raw`main.compta-bloc table{width: 100%;border-collapse: collapse;font-size: 13px;}main.compta-bloc table thead tr{background: #152238;}main.compta-bloc table thead th{background: #152238 !important;color: #EFE9DD !important;font-size: 11px;font-weight: 600;letter-spacing: .04em;text-transform: uppercase;white-space: nowrap;padding: 10px 12px;}main.compta-bloc table tbody td{padding: 9px 12px;line-height: 1.45;vertical-align: middle;white-space: normal;overflow-wrap: break-word;}main.compta-bloc table tbody tr{border-top: 1px solid #EEE9DA;}main.compta-bloc table tbody tr:nth-child(even){background: #FAF8F1;}main.compta-bloc table tbody tr:hover{background: #F3EFE0;}main.compta-bloc .overflow-x-auto{-webkit-overflow-scrolling: touch;max-width: 100%;}main.compta-bloc .grid.md\:grid-cols-4>div,main.compta-bloc .grid.grid-cols-2.md\:grid-cols-4>div{border-radius: 14px;padding: 16px 18px;border-top: 4px solid #7F94B6;box-shadow: 0 1px 3px rgba(21,34,56,.07);min-width: 0;}main.compta-bloc .grid.md\:grid-cols-4>div:nth-child(1),main.compta-bloc .grid.grid-cols-2.md\:grid-cols-4>div:nth-child(1){border-top-color: #152238;}main.compta-bloc .grid.md\:grid-cols-4>div:nth-child(2),main.compta-bloc .grid.grid-cols-2.md\:grid-cols-4>div:nth-child(2){border-top-color: #C9A24B;}main.compta-bloc .grid.md\:grid-cols-4>div:nth-child(3),main.compta-bloc .grid.grid-cols-2.md\:grid-cols-4>div:nth-child(3){border-top-color: #3F5A85;}main.compta-bloc .grid.md\:grid-cols-4>div:nth-child(4),main.compta-bloc .grid.grid-cols-2.md\:grid-cols-4>div:nth-child(4){border-top-color: #A6432F;}main.compta-bloc .grid.md\:grid-cols-4>div>div:last-child,main.compta-bloc .grid.grid-cols-2.md\:grid-cols-4>div>div:last-child{font-size: clamp(16px,4.4vw,22px);line-height: 1.25;overflow-wrap: anywhere;}main.compta-bloc .bg-white.rounded-lg{border: 1px solid #E4DFD1;border-radius: 14px;box-shadow: 0 1px 3px rgba(21,34,56,.07);}main.compta-bloc .display.text-base{border-left: 3px solid #C9A24B;padding-left: 10px;}main.compta-bloc .ec-table td:last-child,main.compta-bloc .ec-table th:last-child{white-space:nowrap}main.compta-bloc .ec-table td:first-child,main.compta-bloc .ec-table th:first-child{white-space:nowrap}main.compta-bloc .ec-table td.tabular{white-space:nowrap}@media (max-width:767px){main.compta-bloc .ec-table{min-width:0}}`;
+
 function App() {
   const [active, setActive] = useState("dashboard");
   const initialActiveSetRef = React.useRef(false);
@@ -1606,6 +1609,64 @@ function App() {
   }, [chartData]);
   const latestGrowth = growthData.length ? growthData[growthData.length - 1] : null;
 
+  // Accueil (maquette « Market ») : cinq dernières écritures et répartition des charges par compte.
+  const recentEntries = useMemo(() => {
+    return [...entries]
+      .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""))
+      .slice(0, 5)
+      .map((e) => ({
+        id: e.id,
+        date: e.date,
+        label: e.label || "Écriture",
+        montant: (e.lines || []).reduce((sum, l) => sum + Number(l.debit || 0), 0),
+        corrigee: /\(corrigée\)$/.test(e.label || ""),
+      }));
+  }, [entries]);
+
+  const chargesRepartition = useMemo(() => {
+    const parCompte = {};
+    entries.forEach((e) => (e.lines || []).forEach((l) => {
+      const acc = accounts.find((a) => a.code === l.account);
+      if (acc?.type !== "Charge") return;
+      const nom = acc.name || acc.code;
+      parCompte[nom] = (parCompte[nom] || 0) + (Number(l.debit || 0) - Number(l.credit || 0));
+    }));
+    const tries = Object.entries(parCompte).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    const top = tries.slice(0, 4).map(([name, value]) => ({ name, value }));
+    const reste = tries.slice(4).reduce((sum, [, v]) => sum + v, 0);
+    if (reste > 0) top.push({ name: "Autres", value: reste });
+    return top;
+  }, [entries, accounts]);
+
+  // Lot 2c (maquette « Market ») : solde cumulé de trésorerie (comptes 512 et 530) jour par jour,
+  // et ventes (Produits nets) par jour. Calculé à partir des seules écritures existantes.
+  const tresorerieJour = useMemo(() => {
+    const parJour = {};
+    entries.forEach((e) => {
+      const jour = (e.date || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(jour)) return;
+      (e.lines || []).forEach((l) => {
+        if (l.account !== "512" && l.account !== "530") return;
+        parJour[jour] = (parJour[jour] || 0) + Number(l.debit || 0) - Number(l.credit || 0);
+      });
+    });
+    let cumul = 0;
+    return Object.keys(parJour).sort().map((jour) => { cumul += parJour[jour]; return { jour, solde: cumul }; });
+  }, [entries]);
+
+  const ventesJour = useMemo(() => {
+    const parJour = {};
+    entries.forEach((e) => {
+      const jour = (e.date || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(jour)) return;
+      (e.lines || []).forEach((l) => {
+        const acc = accounts.find((a) => a.code === l.account);
+        if (acc?.type === "Produit") parJour[jour] = (parJour[jour] || 0) + Number(l.credit || 0) - Number(l.debit || 0);
+      });
+    });
+    return Object.keys(parJour).sort().map((jour) => ({ jour, produits: parJour[jour] }));
+  }, [entries, accounts]);
+
   // Deux blocs distincts mais cohabitant dans la même application : le bloc
   // "Plateforme" (Super Admin) et le bloc "Entreprise" (les 9 modules comptables).
   // isBlocked ne s'applique JAMAIS au bloc Plateforme, quel que soit le statut
@@ -2535,7 +2596,7 @@ function App() {
           général et la déconnexion. Bloc Entreprise : barre mobile + tiroir
           habituels, inchangés. */}
       {(active === "superadmin" || active === "centredegestion" || active === "groupdashboard") ? (
-        <div className="flex items-center justify-between gap-3 px-4 py-3 no-print" style={{ background: "#152238" }}>
+        <div className={"flex items-center justify-between gap-3 px-4 py-3 no-print" + (active === "groupdashboard" ? " md:hidden" : "")} style={{ background: "#152238" }}>
           <div className="flex items-center gap-3">
             <svg width="30" height="30" viewBox="0 0 512 512" style={{ flexShrink: 0, borderRadius: 7 }}>
               <rect width="512" height="512" rx="112" fill="#14458F" />
@@ -2761,7 +2822,8 @@ function App() {
       {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} planTier={planTier} groupId={groupId} groupName={groupName} showToast={showToast} planStatus={planStatus} trialEndsAt={trialEndsAt} mode={showUpgradeModal === "payer" ? "payer" : "upgrade"} />}
 
       {/* Main */}
-      <main className="flex-1 min-w-0">
+      <main className={"flex-1 min-w-0" + (["resto", "btp", "indus", "services", "ong", "agri", "immo", "transport", "hotel", "sante", "impex", "ecole"].includes(active) ? " compta-bloc" : "")}>
+        {["resto", "btp", "indus", "services", "ong", "agri", "immo", "transport", "hotel", "sante", "impex", "ecole"].includes(active) && <style>{BLOCS_CSS}</style>}
         {isBlocked && active !== "superadmin" && active !== "centredegestion" && active !== "groupdashboard" ? (
           <div className="p-4 md:p-8 max-w-lg">
             <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1" }}>
@@ -2802,6 +2864,10 @@ function App() {
             planTier={planTier}
             invoices={invoices}
             role={role}
+            recentEntries={recentEntries}
+            tresorerieJour={tresorerieJour}
+            ventesJour={ventesJour}
+            chargesRepartition={chargesRepartition}
           />
         )}
         {active === "groupdashboard" && groupId && isGroupOwner && (
@@ -2813,6 +2879,8 @@ function App() {
             onRequestsChanged={loadPendingGroupRequests}
             onEnterCurrentCompany={() => setActive("dashboard")}
             onJumpToModule={(m) => setActive(m)}
+            onBackToPlatform={() => setPlatformLanding(true)}
+            onSignOut={() => { clearMembershipCache(); supabase.auth.signOut(); }}
           />
         )}
         <div

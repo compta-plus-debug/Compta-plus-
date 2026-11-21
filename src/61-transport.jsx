@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Transport
-// @depends EC_CSS, Plus, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
+// @depends EC_CSS, Plus, StatsBloc, cpLoadChunk, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
 //   ecTelecharger, fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon
 //   useState
 // @exports TransportModule
@@ -49,6 +49,29 @@ function trSolde(inv) {
   return { paye, reste: trR2((inv.total || 0) - paye) };
 }
 
+const TR_XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const TR_DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+// Export Word ou Excel de la rentabilité par véhicule (période affichée dans l'onglet Rapports).
+async function trExporterRentabilite(kind, d) {
+  const OF = await cpLoadChunk("office");
+  const st = d.settings || {};
+  const periode = d.du || d.au ? ((d.du ? ecDateFr(d.du) : "début") + " au " + (d.au ? ecDateFr(d.au) : "aujourd'hui")) : "Toute la période";
+  const somme = (f) => trR2(d.parVeh.reduce((t, x) => t + f(x), 0));
+  const lignes = d.parVeh.map((x) => [
+    { t: x.v.plate || "" }, { t: fmt(x.ca), al: "r" }, { t: fmt(x.dep), al: "r" }, { t: fmt(x.marge), al: "r", g: true },
+    { t: String(x.km), al: "r" }, { t: fmt(x.coutKm), al: "r" }]);
+  const pied = [{ t: "TOTAL", g: true }, { t: fmt(somme((x) => x.ca)), al: "r", g: true }, { t: fmt(somme((x) => x.dep)), al: "r", g: true },
+    { t: fmt(somme((x) => x.marge)), al: "r", g: true }, { t: String(somme((x) => x.km)), al: "r", g: true }, { t: "", al: "r" }];
+  const blocs = OF.officeEntreprise(st, "RENTABILITÉ PAR VÉHICULE").concat([
+    { k: "p", s: 9, sp: 80, parts: [{ t: "Période : " }, { t: periode, g: true }, { t: " · établi le " + ecDateFr(d.today) }] },
+    { k: "tbl", style: "ligne", cols: [{ h: "Véhicule", sp: 2, al: "l" }, { h: "Chiffre d'affaires", sp: 2, al: "r" }, { h: "Dépenses", sp: 2, al: "r" }, { h: "Marge", sp: 2, al: "r" }, { h: "Km livrés", sp: 2, al: "r" }, { h: "Coût au km", sp: 2, al: "r" }],
+      lignes, pieds: [pied] },
+  ]);
+  const doc = { fichier: "Rentabilite-vehicules-" + (d.du || "debut") + "_" + (d.au || d.today), sections: [{ nom: "Rentabilité", blocs }] };
+  const logo = await OF.officeLogo(st.companyLogo, 50);
+  if (kind === "xlsx") OF.officeTelecharger(doc.fichier + ".xlsx", OF.officeXlsx(doc.sections, { logo }), TR_XLSX_TYPE);
+  else OF.officeTelecharger(doc.fichier + ".docx", OF.officeDocx(doc.sections, { logo }), TR_DOCX_TYPE);
+}
 function TransportModule({ suppliers, transport, setTransport, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // régulation : voyages, clients, factures et encaissements
@@ -550,7 +573,7 @@ function TransportModule({ suppliers, transport, setTransport, entries, setEntri
           <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{toutFait ? " — toutes faites ✓" : ""}</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="tr-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && <button className="text-xs underline" data-testid="tr-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
-        {vehicles.length + trips.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="tr-vide">Pour commencer : ajoutez vos <b>véhicules</b> et vos <b>chauffeurs</b>, enregistrez vos <b>clients</b>, puis créez votre premier <b>voyage</b>.</div>}
+        {vehicles.length + trips.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#152238" }} data-testid="tr-vide">Pour commencer : ajoutez vos <b>véhicules</b> et vos <b>chauffeurs</b>, enregistrez vos <b>clients</b>, puis créez votre premier <b>voyage</b>.</div>}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>
@@ -592,7 +615,7 @@ function TransportModule({ suppliers, transport, setTransport, entries, setEntri
           {(rd || rf) && <button className="text-xs underline" onClick={() => { setRd(""); setRf(""); }}>Tout afficher</button>}
           <div className="text-xs" style={{ color: "#7A7460" }}>Le filtre porte sur la date des factures, des dépenses et des voyages.</div>
         </div>
-        <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Rentabilité par véhicule</div><button onClick={exporterVeh} className="text-xs underline" data-testid="tr-rapport-export-veh">Exporter</button></div>
+        <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Rentabilité par véhicule</div><button onClick={exporterVeh} className="text-xs underline" data-testid="tr-rapport-export-veh">Exporter</button><button onClick={() => trExporterRentabilite("xlsx", { parVeh, du: rd, au: rf, today, settings }).catch((e) => showToast(e.message || "Export Excel impossible."))} className="text-xs underline ml-3" data-testid="tr-rapport-excel">Excel</button><button onClick={() => trExporterRentabilite("docx", { parVeh, du: rd, au: rf, today, settings }).catch((e) => showToast(e.message || "Export Word impossible."))} className="text-xs underline ml-3" data-testid="tr-rapport-word">Word</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Véhicule</th><th className="text-right">Chiffre d'affaires</th><th className="text-right">Dépenses</th><th className="text-right">Marge</th><th className="text-right">Km livrés</th><th className="text-right">Coût au km</th></tr></thead>
           <tbody>{parVeh.map((x) => (<tr key={x.v.id} data-testid="tr-rapport-veh"><td className="py-1.5">{x.v.plate}</td><td className="text-right tabular">{fmt(x.ca)}</td><td className="text-right tabular">{fmt(x.dep)}</td><td className="text-right tabular">{fmt(x.marge)}</td><td className="text-right tabular">{x.km}</td><td className="text-right tabular">{x.km > 0 ? fmt(x.coutKm) : "—"}</td></tr>))}</tbody>
           {parVeh.length > 0 && <tfoot><tr style={tf} data-testid="tr-rapport-veh-total"><td>Total</td><td className="text-right tabular" data-testid="tr-rapport-veh-tot-ca">{fmt(S(parVeh, (x) => x.ca))}</td><td className="text-right tabular" data-testid="tr-rapport-veh-tot-dep">{fmt(S(parVeh, (x) => x.dep))}</td><td className="text-right tabular" data-testid="tr-rapport-veh-tot-marge">{fmt(S(parVeh, (x) => x.marge))}</td><td className="text-right tabular">{S(parVeh, (x) => x.km)}</td><td></td></tr></tfoot>}</table></div>

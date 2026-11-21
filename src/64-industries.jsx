@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Industries
-// @depends EC_CSS, Plus, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
+// @depends EC_CSS, Plus, StatsBloc, cpLoadChunk, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
 //   ecTelecharger, fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon
 //   useState
 // @exports IndusModule
@@ -78,6 +78,21 @@ const inPaye = (arr) => inR2((arr || []).filter((p) => p.status !== "annulé").r
 function inSolde(f) { const paye = inPaye(f.payments); return { paye, reste: inR2((f.net || 0) - paye) }; }
 const inMontantLignes = (lines) => inR2((lines || []).reduce((s, l) => s + inR2(l.qty * l.pu), 0));
 
+const IN_XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const IN_DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+// Export Word ou Excel d'un tableau de l'onglet Rapports de l'industrie (marge, impayés, stock).
+async function inExporterTableau(kind, d) {
+  const OF = await cpLoadChunk("office");
+  const st = d.settings || {};
+  const blocs = OF.officeEntreprise(st, d.titre).concat([
+    { k: "p", s: 9, sp: 80, parts: [{ t: "Édité le " + ecDateFr(d.today) }] },
+    { k: "tbl", style: "ligne", cols: d.cols, lignes: d.lignes, pieds: d.pieds },
+  ]);
+  const doc = { fichier: d.fichier + "_" + d.today, sections: [{ nom: "Rapport", blocs }] };
+  const logo = await OF.officeLogo(st.companyLogo, 50);
+  if (kind === "xlsx") OF.officeTelecharger(doc.fichier + ".xlsx", OF.officeXlsx(doc.sections, { logo }), IN_XLSX_TYPE);
+  else OF.officeTelecharger(doc.fichier + ".docx", OF.officeDocx(doc.sections, { logo }), IN_DOCX_TYPE);
+}
 function IndusModule({ suppliers, indus, setIndus, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // accueil : clients, commandes, ventes et encaissements
@@ -1010,7 +1025,7 @@ function IndusModule({ suppliers, indus, setIndus, entries, setEntries, accounts
           <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{toutFait ? " — toutes faites ✓" : ""}</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="in-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && !(isVendeur && !["commandes", "ventes"].includes(tb)) && <button className="text-xs underline" data-testid="in-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
-        {mats.length + prods.length + cmds.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="in-vide">Pour commencer : ajoutez vos <b>matières premières</b> et vos <b>produits</b>, achetez des matières, puis enregistrez votre première <b>fabrication</b>.</div>}
+        {mats.length + prods.length + cmds.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#152238" }} data-testid="in-vide">Pour commencer : ajoutez vos <b>matières premières</b> et vos <b>produits</b>, achetez des matières, puis enregistrez votre première <b>fabrication</b>.</div>}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>
@@ -1044,6 +1059,19 @@ function IndusModule({ suppliers, indus, setIndus, entries, setEntries, accounts
     const parCmd = cmds.filter((c) => c.factId).map((c) => { const f = facts.find((x) => x.id === c.factId); return { c, f, cout: inR2(lotsOk.filter((l) => l.orderId === c.id).reduce((s, l) => s + coutLot(l).total, 0)) }; }).filter((x) => x.f && x.f.status !== "annulee" && inP(x.f.date)).map((x) => ({ ...x, marge: inR2(x.f.ht - x.cout) }));
     const imp = clients.map((c) => { const fs = factsOk.filter((f) => f.clientId === c.id && inSolde(f).reste > 0.004); const b = [0, 0, 0, 0]; fs.forEach((f) => { const j = inJours(f.date, today); const r = inSolde(f).reste; b[j <= 30 ? 0 : j <= 60 ? 1 : j <= 90 ? 2 : 3] += r; }); return { c, n: fs.length, b: b.map(inR2), tot: inR2(b.reduce((s, x) => s + x, 0)) }; }).filter((x) => x.tot > 0);
     const S = (a, f) => inR2(a.reduce((s, x) => s + f(x), 0));
+    const expMarge = (kind) => inExporterTableau(kind, { titre: "MARGE PAR PRODUIT", fichier: "Marge-par-produit", today, settings,
+      cols: [{ h: "Produit", sp: 2, al: "l" }, { h: "Qté vendue", sp: 1, al: "r" }, { h: "Ventes HT", sp: 2, al: "r" }, { h: "Coût unit. moyen", sp: 2, al: "r" }, { h: "Coût des ventes", sp: 2, al: "r" }, { h: "Marge", sp: 2, al: "r" }, { h: "Marge %", sp: 1, al: "r" }],
+      lignes: parProd.map((x) => [{ t: x.p.name || "" }, { t: String(x.q), al: "r" }, { t: fmt(x.ca), al: "r" }, { t: fmt(x.cu), al: "r" }, { t: fmt(x.cout), al: "r" }, { t: fmt(x.marge), al: "r", g: true }, { t: String(x.pct) + " %", al: "r" }]),
+      pieds: [[{ t: "TOTAL", g: true }, { t: "", g: true }, { t: fmt(S(parProd, (x) => x.ca)), al: "r", g: true }, { t: "", g: true }, { t: fmt(S(parProd, (x) => x.cout)), al: "r", g: true }, { t: fmt(S(parProd, (x) => x.marge)), al: "r", g: true }, { t: "", g: true }]] }).catch((e) => showToast(e.message || "Export impossible."));
+    const expImp = (kind) => inExporterTableau(kind, { titre: "FACTURES IMPAYÉES PAR ANCIENNETÉ", fichier: "Impayes-clients", today, settings,
+      cols: [{ h: "Client", sp: 2, al: "l" }, { h: "Factures", sp: 1, al: "r" }, { h: "0-30 j", sp: 2, al: "r" }, { h: "31-60 j", sp: 2, al: "r" }, { h: "61-90 j", sp: 2, al: "r" }, { h: "Plus de 90 j", sp: 2, al: "r" }, { h: "Reste dû", sp: 1, al: "r" }],
+      lignes: imp.map((x) => [{ t: x.c.name || "" }, { t: String(x.n), al: "r" }, { t: fmt(x.b[0]), al: "r" }, { t: fmt(x.b[1]), al: "r" }, { t: fmt(x.b[2]), al: "r" }, { t: fmt(x.b[3]), al: "r" }, { t: fmt(x.tot), al: "r", g: true }]),
+      pieds: [[{ t: "TOTAL", g: true }, { t: String(S(imp, (x) => x.n)), al: "r", g: true }, { t: fmt(S(imp, (x) => x.b[0])), al: "r", g: true }, { t: fmt(S(imp, (x) => x.b[1])), al: "r", g: true }, { t: fmt(S(imp, (x) => x.b[2])), al: "r", g: true }, { t: fmt(S(imp, (x) => x.b[3])), al: "r", g: true }, { t: fmt(S(imp, (x) => x.tot)), al: "r", g: true }]] }).catch((e) => showToast(e.message || "Export impossible."));
+    const expStock = (kind) => inExporterTableau(kind, { titre: "ÉTAT DU STOCK", fichier: "Stock", today, settings,
+      cols: [{ h: "Type", sp: 2, al: "l" }, { h: "Nom", sp: 3, al: "l" }, { h: "Unité", sp: 1, al: "l" }, { h: "En stock", sp: 2, al: "r" }, { h: "Prix moyen d'achat", sp: 2, al: "r" }, { h: "Valeur", sp: 2, al: "r" }],
+      lignes: [...mats.map((m) => [{ t: "Matière" }, { t: m.name || "" }, { t: m.unit || "" }, { t: String(stockMat(m.id)), al: "r" }, { t: fmt(prixMoyen(m.id)), al: "r" }, { t: fmt(inR2(stockMat(m.id) * prixMoyen(m.id))), al: "r", g: true }]),
+        ...prods.map((p) => [{ t: "Produit fini" }, { t: p.name || "" }, { t: p.unit || "" }, { t: String(stockProd(p.id)), al: "r" }, { t: fmt(coutUnitProd(p.id)), al: "r" }, { t: fmt(inR2(stockProd(p.id) * coutUnitProd(p.id))), al: "r", g: true }])],
+      pieds: [] }).catch((e) => showToast(e.message || "Export impossible."));
     const exporterMarge = () => ecTelecharger("marge-par-produit-" + today + ".csv", [["Produit", "Quantité vendue", "Ventes HT", "Coût unitaire moyen", "Coût des ventes", "Marge", "Marge %"], ...parProd.map((x) => [x.p.name, x.q, x.ca, x.cu, x.cout, x.marge, x.pct]), ["Total", "", S(parProd, (x) => x.ca), "", S(parProd, (x) => x.cout), S(parProd, (x) => x.marge), ""]]);
     const exporterStock = () => ecTelecharger("stock-" + today + ".csv", [["Type", "Nom", "Unité", "En stock", "Prix moyen d'achat", "Valeur"], ...mats.map((m) => ["Matière", m.name, m.unit, stockMat(m.id), prixMoyen(m.id), inR2(stockMat(m.id) * prixMoyen(m.id))]), ...prods.map((p) => ["Produit fini", p.name, p.unit, stockProd(p.id), coutUnitProd(p.id), inR2(stockProd(p.id) * coutUnitProd(p.id))])]);
     const exporterImp = () => ecTelecharger("impayes-clients-" + today + ".csv", [["Client", "Factures", "0-30 j", "31-60 j", "61-90 j", "Plus de 90 j", "Reste dû"], ...imp.map((x) => [x.c.name, x.n, ...x.b, x.tot])]);
@@ -1056,7 +1084,7 @@ function IndusModule({ suppliers, indus, setIndus, entries, setEntries, accounts
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {[["Ventes HT", fmt(S(fP, (f) => f.ht)), "in-rap-ventes"], ["Coût des fabrications", fmt(S(lP, (l) => coutLot(l).total)), "in-rap-fab"], ["Achats de matières", fmt(S(aP, (a) => a.amount)), "in-rap-achats"], ["Dépenses d'atelier", fmt(S(dP, (d) => d.amount)), "in-rap-dep"]].map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>
-        <div className="flex flex-wrap items-center gap-3 mb-2"><div className="display text-base" style={{ color: "#152238" }}>Marge par produit (coût de revient moyen des lots)</div><button onClick={exporterMarge} className="text-xs underline" data-testid="in-rap-exp-marge">Exporter (CSV)</button></div>
+        <div className="flex flex-wrap items-center gap-3 mb-2"><div className="display text-base" style={{ color: "#152238" }}>Marge par produit (coût de revient moyen des lots)</div><button onClick={exporterMarge} className="text-xs underline" data-testid="in-rap-exp-marge">Exporter (CSV)</button><button onClick={() => expMarge("xlsx")} className="text-xs underline ml-3" data-testid="in-rap-exp-marge-excel">Excel</button><button onClick={() => expMarge("docx")} className="text-xs underline ml-3" data-testid="in-rap-exp-marge-word">Word</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Produit</th><th className="text-right">Quantité vendue</th><th className="text-right">Ventes HT</th><th className="text-right">Coût unitaire moyen</th><th className="text-right">Coût des ventes</th><th className="text-right">Marge</th><th className="text-right">Marge %</th></tr></thead>
           <tbody>{parProd.map((x) => (<tr key={x.p.id} data-testid="in-rap-prod-ligne"><td className="py-1.5">{x.p.name}</td><td className="text-right tabular">{x.q}</td><td className="text-right tabular">{fmt(x.ca)}</td><td className="text-right tabular">{fmt(x.cu)}</td><td className="text-right tabular">{fmt(x.cout)}</td><td className="text-right tabular" style={{ color: x.marge < 0 ? "#A6432F" : undefined }}>{fmt(x.marge)}</td><td className="text-right tabular">{x.ca > 0 ? x.pct + " %" : "—"}</td></tr>))}</tbody>
           {parProd.length > 0 && <tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }} data-testid="in-rap-prod-total"><td colSpan={2}>Total</td><td className="text-right tabular" data-testid="in-rap-prod-tot-ca">{fmt(S(parProd, (x) => x.ca))}</td><td></td><td className="text-right tabular">{fmt(S(parProd, (x) => x.cout))}</td><td className="text-right tabular" data-testid="in-rap-prod-tot-marge">{fmt(S(parProd, (x) => x.marge))}</td><td></td></tr></tfoot>}</table></div>
@@ -1070,12 +1098,12 @@ function IndusModule({ suppliers, indus, setIndus, entries, setEntries, accounts
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Commande</th><th>Client</th><th className="text-right">Facturé HT</th><th className="text-right">Coût des lots</th><th className="text-right">Marge</th></tr></thead>
           <tbody>{parCmd.map((x) => (<tr key={x.c.id} data-testid="in-rap-cmd-ligne"><td className="py-1.5 tabular text-xs">{x.c.number}</td><td>{nomClient(x.c.clientId)}</td><td className="text-right tabular">{fmt(x.f.ht)}</td><td className="text-right tabular">{fmt(x.cout)}</td><td className="text-right tabular" style={{ color: x.marge < 0 ? "#A6432F" : undefined }}>{fmt(x.marge)}</td></tr>))}</tbody></table></div>
         {parCmd.length === 0 && <div className="text-sm mb-4" style={{ color: "#8A8370" }}>Aucune commande facturée sur la période.</div>}
-        <div className="flex flex-wrap items-center gap-3 mb-2"><div className="display text-base" style={{ color: "#152238" }}>Factures impayées par ancienneté</div><button onClick={exporterImp} className="text-xs underline" data-testid="in-rap-exp-imp">Exporter (CSV)</button></div>
+        <div className="flex flex-wrap items-center gap-3 mb-2"><div className="display text-base" style={{ color: "#152238" }}>Factures impayées par ancienneté</div><button onClick={exporterImp} className="text-xs underline" data-testid="in-rap-exp-imp">Exporter (CSV)</button><button onClick={() => expImp("xlsx")} className="text-xs underline ml-3" data-testid="in-rap-exp-imp-excel">Excel</button><button onClick={() => expImp("docx")} className="text-xs underline ml-3" data-testid="in-rap-exp-imp-word">Word</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Client</th><th className="text-right">Factures</th><th className="text-right">0 à 30 j</th><th className="text-right">31 à 60 j</th><th className="text-right">61 à 90 j</th><th className="text-right">Plus de 90 j</th><th className="text-right">Reste dû</th></tr></thead>
           <tbody>{imp.map((x) => (<tr key={x.c.id} data-testid="in-rap-imp-ligne"><td className="py-1.5">{x.c.name}</td><td className="text-right tabular">{x.n}</td>{x.b.map((v, i) => <td key={i} className="text-right tabular">{fmt(v)}</td>)}<td className="text-right tabular">{fmt(x.tot)}</td></tr>))}</tbody>
           {imp.length > 0 && <tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }}><td colSpan={6}>Total</td><td className="text-right tabular" data-testid="in-rap-imp-tot">{fmt(S(imp, (x) => x.tot))}</td></tr></tfoot>}</table></div>
         {imp.length === 0 && <div className="text-sm mb-4" style={{ color: "#8A8370" }}>Aucune facture impayée.</div>}
-        <div className="flex flex-wrap items-center gap-3 mb-2"><div className="display text-base" style={{ color: "#152238" }}>État du stock</div><button onClick={exporterStock} className="text-xs underline" data-testid="in-rap-exp-stock">Exporter (CSV)</button></div>
+        <div className="flex flex-wrap items-center gap-3 mb-2"><div className="display text-base" style={{ color: "#152238" }}>État du stock</div><button onClick={exporterStock} className="text-xs underline" data-testid="in-rap-exp-stock">Exporter (CSV)</button><button onClick={() => expStock("xlsx")} className="text-xs underline ml-3" data-testid="in-rap-exp-stock-excel">Excel</button><button onClick={() => expStock("docx")} className="text-xs underline ml-3" data-testid="in-rap-exp-stock-word">Word</button></div>
         <div className="text-sm" style={{ color: "#5B563F" }}>Valeur des matières en stock : <b className="tabular" data-testid="in-rap-val-mat">{fmt(S(mats, (m) => stockMat(m.id) * prixMoyen(m.id)))}</b> · valeur des produits finis (au coût de revient moyen) : <b className="tabular" data-testid="in-rap-val-prod">{fmt(S(prods, (p) => stockProd(p.id) * coutUnitProd(p.id)))}</b>. Ces valeurs sont un suivi de gestion ; l'inventaire de fin d'exercice se fait avec l'expert-comptable.</div>
       </div>
     );

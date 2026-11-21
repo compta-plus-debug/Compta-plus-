@@ -1,7 +1,7 @@
 // ═══ MODULE ═══
 // @module Import export
 // @depends EC_CSS, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille, ecTelecharger
-//   fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon, useState
+//   fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon, useState, cpLoadChunk
 // @exports ImportExportModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc Import-export : dossiers d'importation (coût de revient réel) et dossiers d'exportation.
@@ -106,6 +106,96 @@ function ieExpCalc(d) {
   const cogs = ieR2(lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitCostHTG) || 0), 0));
   const receivedUSD = ieR2((d.receipts || []).filter((r) => r.status !== "annulé").reduce((s, r) => s + r.usd, 0));
   return { totalUSD, ht, tca, totalHTG, costs, cogs, marge: ieR2(ht - cogs - costs), receivedUSD, resteUSD: ieR2(totalUSD - receivedUSD) };
+}
+
+// ───── Documents d'export Word et Excel : mêmes présentations que la fiche de coût et la facture imprimées.
+const dcM = (v) => ({ t: fmt(v), n: Number(v) || 0, nf: "g" });
+const dcU = (v) => ({ t: ieUsd(v), n: ieR2(v), nf: "usd" });
+const dcQ = (v) => ({ t: String(v == null ? "" : v), n: Number(v) || 0 });
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// sections (une par feuille / page) pour un dossier d'importation (fiche de coût) ou d'exportation (facture)
+function ieDocumentDossier(kind, d, settings, OF) {
+  const s = settings || {};
+  const etapes = kind === "imp" ? IE_ETAPES_IMP : IE_ETAPES_EXP;
+  const etape = (etapes.find((e) => e[0] === d.status) || [])[1] || d.status || "";
+  const nomFrais = (k) => (IE_FRAIS.find((x) => x[0] === k) || [])[1] || k;
+  const sections = [];
+  if (kind === "imp") {
+    const c = ieImpCalc(d);
+    const charges = (d.charges || []).filter((x) => x.status !== "annulé");
+    const genre = (k) => (IE_FRAIS.find((x) => x[0] === k) || [])[2] || "cout";
+    const sommeLignes = ieR2(c.lineCosts.reduce((t, l) => t + l.total, 0));
+    const fiche = OF.officeEntetePage(s, ecDateFr(todayStr())).concat([
+      { k: "p", t: "Fiche de coût de revient — " + (d.number || ""), g: true, s: 12, sp: 80 },
+      { k: "p", s: 10, sp: 160, parts: [{ t: "Fournisseur : " }, { t: d.supplier || "", g: true }, { t: (d.country ? " (" + d.country + ")" : "") + (d.ref ? " · Réf. " + d.ref : "") + " · Facture du " + ecDateFr(d.date) + " · Taux " + d.rate + " G pour 1 USD · Étape : " + etape }] },
+      { k: "tbl", style: "ligne",
+        cols: [{ h: "Article", sp: 2, al: "l" }, { h: "Quantité", sp: 2, al: "r" }, { h: "Prix unitaire (USD)", sp: 2, al: "r" }, { h: "Valeur (G)", sp: 2, al: "r" }, { h: "Coût de revient unitaire (G)", sp: 2, al: "r" }, { h: "Coût de revient total (G)", sp: 2, al: "r" }],
+        lignes: c.lineCosts.map((l) => [l.desc || "", dcQ(l.qty), dcU(l.unitUSD), dcM(l.lineHTG), dcM(l.unitCost), dcM(l.total)]),
+        pieds: [[{ t: "Total", g: true }, "", { ...dcU(c.goodsUSD), g: true }, { ...dcM(c.goodsHTG), g: true }, "", { ...dcM(sommeLignes), g: true }]] },
+      { k: "espace", h: 1 },
+      { k: "tbl", style: "ligne",
+        cols: [{ h: "Détail du coût", sp: 6, al: "l" }, { h: "Compté dans le coût ?", sp: 3, al: "l" }, { h: "Montant (G)", sp: 3, al: "r" }],
+        lignes: [["Marchandise (" + ieUsd(c.goodsUSD) + ")", "Oui", dcM(c.goodsHTG)]]
+          .concat(c.fiHTG > 0 ? [["Fret et assurance (" + ieUsd(c.fiUSD) + ")", "Oui", dcM(c.fiHTG)]] : [])
+          .concat(charges.map((x) => [(x.label || "") + " (" + ecDateFr(x.date) + ")", genre(x.kind) === "cout" ? "Oui" : genre(x.kind) === "tca" ? "Non (TCA récupérable)" : "Non (acompte d'impôt)", dcM(x.amount)])),
+        pieds: [[{ t: "Coût de revient total (coefficient " + (c.coef || 0).toFixed(3) + ")", g: true, cs: 2 }, { ...dcM(c.coutRevient), g: true }]] },
+      { k: "espace", h: 1 },
+      { k: "p", s: 10, sp: 80, parts: [{ t: "Facture du fournisseur : " }, { t: ieUsd(c.totalUSD), g: true }, { t: " · Réglé : " + ieUsd(c.paidUSD) + " · Reste dû : " }, { t: d.invoiceEntryId ? ieUsd(c.resteUSD) : "facture pas encore comptabilisée", g: true }] },
+      { k: "p", t: "Les montants de droits et taxes sont ceux saisis d'après la quittance de douane.", s: 7.5, c: "555555" },
+    ]);
+    sections.push({ nom: "Fiche de coût", blocs: fiche });
+    if ((d.payments || []).length) sections.push({ nom: "Paiements", blocs: OF.officeEntetePage(s, ecDateFr(todayStr())).concat([
+      { k: "p", t: "Paiements — " + (d.number || ""), g: true, s: 13, sp: 120 },
+      { k: "tbl", style: "ligne", cols: [{ h: "Date", sp: 3, al: "l" }, { h: "Montant (USD)", sp: 3, al: "r" }, { h: "Écart de change (G)", sp: 3, al: "r" }, { h: "Statut", sp: 3, al: "l" }],
+        lignes: d.payments.map((p) => [ecDateFr(p.date), dcU(p.usd), dcM(p.ecart), p.status || ""]), pieds: [] },
+    ]) });
+    return { fichier: "Dossier-import-" + (d.number || d.id), sections };
+  }
+  const c = ieExpCalc(d);
+  const tcaUSD = ieR2(c.totalUSD * (Number(d.tcaRate) || 0) / 100);
+  const totUSD = ieR2(c.totalUSD + tcaUSD);
+  const recu = ieR2(c.receivedUSD);
+  const pieds = [[{ t: "Total hors taxe", cs: 3 }, dcU(c.totalUSD)]];
+  if (tcaUSD > 0) pieds.push([{ t: "TCA (" + d.tcaRate + " %)", cs: 3 }, dcU(tcaUSD)]);
+  pieds.push([{ t: "Total à payer", cs: 3, g: true }, { ...dcU(totUSD), g: true }]);
+  if (recu > 0) { pieds.push([{ t: "Déjà reçu", cs: 3 }, dcU(recu)]); pieds.push([{ t: "Reste à payer", cs: 3, g: true }, { ...dcU(ieR2(totUSD - recu)), g: true }]); }
+  sections.push({ nom: "Facture d'exportation", blocs: OF.officeEntetePage(s, ecDateFr(todayStr())).concat([
+    { k: "p", t: "Facture d'exportation — " + (d.number || ""), g: true, s: 12, sp: 80 },
+    { k: "p", s: 10, sp: 160, parts: [{ t: "Client : " }, { t: d.customer || "", g: true }, { t: (d.country ? " (" + d.country + ")" : "") + (d.ref ? " · Réf. " + d.ref : "") + " · Date : " + ecDateFr(d.date) + " · Taux : " + d.rate + " G pour 1 USD" }] },
+    { k: "tbl", style: "ligne", cols: [{ h: "Désignation", sp: 6, al: "l" }, { h: "Quantité", sp: 2, al: "r" }, { h: "Prix unitaire (USD)", sp: 2, al: "r" }, { h: "Montant (USD)", sp: 2, al: "r" }],
+      lignes: (d.lines || []).map((l) => [l.desc || "", dcQ(l.qty), dcU(l.unitUSD), dcU(ieR2(l.qty * l.unitUSD))]), pieds },
+    { k: "espace", h: 1 },
+    { k: "p", t: "Équivalent comptable au taux du dossier : " + fmt(c.totalHTG) + ".", s: 10 },
+  ]) });
+  if ((d.costs || []).length) sections.push({ nom: "Frais", blocs: OF.officeEntetePage(s, ecDateFr(todayStr())).concat([
+    { k: "p", t: "Frais du dossier — " + (d.number || ""), g: true, s: 13, sp: 120 },
+    { k: "tbl", style: "ligne", cols: [{ h: "Nature", sp: 4, al: "l" }, { h: "Montant (G)", sp: 2, al: "r" }, { h: "Statut", sp: 2, al: "l" }, { h: "Date", sp: 2, al: "l" }, { h: "Libellé", sp: 2, al: "l" }],
+      lignes: d.costs.map((f) => [nomFrais(f.kind), dcM(f.amount), f.status || "", ecDateFr(f.date), f.label || ""]), pieds: [] },
+  ]) });
+  if ((d.receipts || []).length) sections.push({ nom: "Encaissements", blocs: OF.officeEntetePage(s, ecDateFr(todayStr())).concat([
+    { k: "p", t: "Encaissements — " + (d.number || ""), g: true, s: 13, sp: 120 },
+    { k: "tbl", style: "ligne", cols: [{ h: "Date", sp: 3, al: "l" }, { h: "Montant (USD)", sp: 3, al: "r" }, { h: "Écart de change (G)", sp: 3, al: "r" }, { h: "Statut", sp: 3, al: "l" }],
+      lignes: d.receipts.map((r) => [ecDateFr(r.date), dcU(r.usd), dcM(r.ecart), r.status || ""]), pieds: [] },
+  ]) });
+  return { fichier: "Dossier-export-" + (d.number || d.id), sections };
+}
+
+// Excel : un classeur mis en forme (un onglet par section), logo de l'entreprise en tête.
+async function ieExporterDossier(kind, d, settings) {
+  const OF = await cpLoadChunk("office");
+  const doc = ieDocumentDossier(kind, d, settings, OF);
+  const logo = await OF.officeLogo(settings && settings.companyLogo, 50);
+  OF.officeTelecharger(doc.fichier + ".xlsx", OF.officeXlsx(doc.sections, { logo }), XLSX_TYPE);
+}
+
+// Word : un document mis en forme (une page par section), logo de l'entreprise en tête.
+async function ieExporterDossierWord(kind, d, settings) {
+  const OF = await cpLoadChunk("office");
+  const doc = ieDocumentDossier(kind, d, settings, OF);
+  const logo = await OF.officeLogo(settings && settings.companyLogo, 50);
+  OF.officeTelecharger(doc.fichier + ".docx", OF.officeDocx(doc.sections, { logo }), DOCX_TYPE);
 }
 
 function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, setAccounts, products, setProducts, movements, setMovements, settings, role, showToast, logAudit, currentUserEmail }) {
@@ -388,6 +478,7 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
           {canEdit && figee && !d.receivedToStock && <button onClick={() => recevoirEnStock(d)} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="ie-imp-stock">Recevoir en stock au coût de revient</button>}
           {d.receivedToStock && <span className="text-xs" style={{ color: "#0F6B5C" }} data-testid="ie-imp-recu-stock">✓ Reçu en stock le {ecDateFr(d.receivedAt)}</span>}
           <button onClick={() => setImprimer({ kind: "imp", id: d.id })} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ie-imp-imprimer">Imprimer la fiche de coût de revient</button>
+          <button onClick={() => ieExporterDossier("imp", d, settings).catch((e) => showToast(e.message || "Export Excel impossible."))} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ie-imp-excel">Exporter le dossier (Excel)</button><button onClick={() => ieExporterDossierWord("imp", d, settings).catch((e) => showToast(e.message || "Export Word impossible."))} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ie-imp-word">Exporter le dossier (Word)</button>
           {canEdit && !figee && <button onClick={() => supprimerImp(d)} className="text-xs underline" style={{ color: "#A6432F" }}>Supprimer ce dossier</button>}
         </div>
       </div>
@@ -616,6 +707,7 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
           {canEdit && figee && !d.stockOut && <button onClick={() => sortirDuStock(d)} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="ie-exp-stock">Sortir les marchandises du stock</button>}
           {d.stockOut && <span className="text-xs" style={{ color: "#0F6B5C" }} data-testid="ie-exp-sorti">✓ Sorties du stock le {ecDateFr(d.stockOutAt)}</span>}
           <button onClick={() => setImprimer({ kind: "exp", id: d.id })} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ie-exp-imprimer">Imprimer la facture d'exportation</button>
+          <button onClick={() => ieExporterDossier("exp", d, settings).catch((e) => showToast(e.message || "Export Excel impossible."))} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ie-exp-excel">Exporter le dossier (Excel)</button><button onClick={() => ieExporterDossierWord("exp", d, settings).catch((e) => showToast(e.message || "Export Word impossible."))} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="ie-exp-word">Exporter le dossier (Word)</button>
           {canEdit && !figee && <button onClick={() => supprimerExp(d)} className="text-xs underline" style={{ color: "#A6432F" }}>Supprimer ce dossier</button>}
         </div>
       </div>
@@ -728,7 +820,7 @@ function ImportExportModule({ impex, setImpex, entries, setEntries, accounts, se
           <div className="display text-base mb-2" style={{ color: "#152238" }}>Comment ça marche, en 7 étapes</div>
           <ol className="text-sm" style={{ color: "#152238", paddingLeft: 18, listStyle: "decimal" }}>{etapes.map(([t, d], i) => (<li key={i} data-testid="ie-etape" className="mb-1"><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></li>))}</ol>
         </div>
-        {imps.length + exps.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="ie-vide">Pour commencer : ouvrez l'onglet <b>Importations</b> ou <b>Exportations</b> et créez votre premier dossier. Vérifiez d'abord vos taux dans l'onglet <b>Réglages</b>.</div>}
+        {imps.length + exps.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#152238" }} data-testid="ie-vide">Pour commencer : ouvrez l'onglet <b>Importations</b> ou <b>Exportations</b> et créez votre premier dossier. Vérifiez d'abord vos taux dans l'onglet <b>Réglages</b>.</div>}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           {[["Importations en cours", String(impOuverts), "ie-kpi-imp-ouverts"], ["Dû aux fournisseurs", ieUsd(dettesUSD), "ie-kpi-dettes"], ["Exportations", String(exps.length), "ie-kpi-exp"], ["À recevoir des clients", ieUsd(creancesUSD), "ie-kpi-creances"]].map(([l, v, t]) => (
             <div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}

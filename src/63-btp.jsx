@@ -2,7 +2,7 @@
 // @module Btp
 // @depends EC_CSS, Plus, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
 //   ecTelecharger, fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon
-//   useEffect, useState
+//   useEffect, useState, cpLoadChunk
 // @exports BtpModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // Bloc BTP et construction : clients (maîtres d'ouvrage), chantiers avec bordereau de prix (devis imprimable), avances de démarrage,
@@ -115,6 +115,70 @@ function BtJournalForm({ entry, staff, effectif, canEdit, onSave }) {
       {canEdit && <div className="mt-3"><button onClick={() => onSave(d)} className="px-3 py-2 rounded text-sm" style={ecBtnGold} data-testid="bt-jr-enregistrer">Enregistrer le journal du jour</button></div>}
     </div>
   );
+}
+
+// ───── Documents de chantier Word et Excel : même présentation que le devis imprimé (bordereau de prix).
+const btCelQ = (v) => ({ t: String(v == null ? "" : v), n: Number(v) || 0 });
+const btM = (v) => ({ t: fmt(v), n: btR2(v), nf: "g" });
+const XLSX_TYPE_BT = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const DOCX_TYPE_BT = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+function btDocumentChantier(p, OF) {
+  const s = p.site;
+  const st = p.settings || {};
+  const tcaRate = Number(p.tcaRate) || 0;
+  const nature = (k) => (BT_DEPENSES.find((x) => x[0] === k) || [])[1] || k;
+  const clientNom = p.client ? p.client.name || "—" : "—";
+  const marche = btMarche(s);
+  const sections = [];
+  const devis = OF.officeEntreprise(st, "DEVIS ESTIMATIF — BORDEREAU DE PRIX").concat([
+    { k: "p", s: 9, sp: 80, parts: [{ t: "Chantier : " }, { t: s.name || "", g: true }, { t: " (" + (s.number || "") + ")" + (s.address ? " — " + s.address : "") }] },
+    { k: "p", s: 9, sp: 160, parts: [{ t: "Client : " }, { t: clientNom, g: true }, { t: " · établi le " + ecDateFr(p.today) }] },
+    { k: "tbl", style: "grille",
+      cols: [{ h: "Désignation", sp: 5, al: "l" }, { h: "Unité", sp: 1, al: "c" }, { h: "Quantité", sp: 2, al: "r" }, { h: "Prix unitaire", sp: 2, al: "r" }, { h: "Montant", sp: 2, al: "r" }],
+      lignes: (s.lines || []).map((l) => [l.label || "", { t: l.unit || "", al: "c" }, btCelQ(l.qty), btM(l.pu), btM(btR2((Number(l.qty) || 0) * (Number(l.pu) || 0)))]),
+      pieds: [] },
+    { k: "p", t: "Total hors taxe : " + fmt(marche), al: "r", g: true, s: 11, sp: 60 },
+  ]);
+  if (tcaRate > 0) devis.push({ k: "p", t: "Taxe (" + tcaRate + " %) : " + fmt(btR2(marche * tcaRate / 100)) + " · Total toutes taxes : " + fmt(btR2(marche * (1 + tcaRate / 100))), al: "r", s: 9 });
+  if (Number(s.retPct) > 0) devis.push({ k: "p", t: "Retenue de garantie prévue : " + s.retPct + " % de chaque situation.", s: 8 });
+  devis.push({ k: "espace", h: 3 });
+  devis.push({ k: "tbl", style: "sans", cols: [{ sp: 5 }, { sp: 2 }, { sp: 5 }],
+    lignes: [[{ t: "Pour l'entreprise", bord: "haut", al: "c" }, { t: "", bord: "aucun" }, { t: "Bon pour accord du client (date et signature)", bord: "haut", al: "c" }]], pieds: [] });
+  sections.push({ nom: "Devis", blocs: devis });
+  if ((p.situations || []).length) sections.push({ nom: "Situations", blocs: OF.officeEntreprise(st, null).concat([
+    { k: "p", t: "Situations de travaux — " + (s.name || ""), g: true, s: 13, sp: 120 },
+    { k: "tbl", style: "ligne", cols: [{ h: "N°", sp: 1, al: "c" }, { h: "Date", sp: 1, al: "l" }, { h: "Cumul HT", sp: 2, al: "r" }, { h: "Montant HT", sp: 2, al: "r" }, { h: "Retenue", sp: 2, al: "r" }, { h: "Net à payer", sp: 2, al: "r" }, { h: "Encaissé", sp: 1, al: "r" }, { h: "Reste à payer", sp: 1, al: "r" }],
+      lignes: p.situations.map((x, i) => [{ t: String(x.n || i + 1), al: "c" }, ecDateFr(x.date), btM(x.cumHt), btM(x.ht), btM(x.retenue), btM(x.net), btM(btSolde(x).paye), btM(btSolde(x).reste)]),
+      pieds: [] },
+  ]) });
+  if ((p.depenses || []).length) {
+    const totalDep = btR2(p.depenses.reduce((t, x) => t + (Number(x.amount) || 0), 0));
+    const totalReste = btR2(p.depenses.reduce((t, x) => t + btResteDep(x), 0));
+    sections.push({ nom: "Dépenses", blocs: OF.officeEntreprise(st, null).concat([
+      { k: "p", t: "Dépenses du chantier — " + (s.name || ""), g: true, s: 13, sp: 120 },
+      { k: "tbl", style: "ligne", cols: [{ h: "Date", sp: 2, al: "l" }, { h: "Nature", sp: 3, al: "l" }, { h: "Fournisseur", sp: 2, al: "l" }, { h: "Montant", sp: 2, al: "r" }, { h: "Mode de règlement", sp: 2, al: "l" }, { h: "Reste dû", sp: 1, al: "r" }],
+        lignes: p.depenses.map((x) => [ecDateFr(x.date), nature(x.kind), x.supplier || "", btM(x.amount), ({ caisse: "Caisse", banque: "Banque", apayer: "À payer (dette)" })[x.mode] || x.mode || "", btM(btResteDep(x))]),
+        pieds: [[{ t: "Total", cs: 3, g: true }, { ...btM(totalDep), g: true }, { t: "" }, { ...btM(totalReste), g: true }]] },
+    ]) });
+  }
+  return { fichier: "Devis-" + String(s.number || s.name || s.id || "chantier").replace(/[^\w-]+/g, "_"), sections };
+}
+
+// Excel : un classeur mis en forme (devis, situations, dépenses), logo de l'entreprise en tête.
+async function btExporterChantier(p) {
+  const OF = await cpLoadChunk("office");
+  const doc = btDocumentChantier(p, OF);
+  const logo = await OF.officeLogo(p.settings && p.settings.companyLogo, 50);
+  OF.officeTelecharger(doc.fichier + ".xlsx", OF.officeXlsx(doc.sections, { logo }), XLSX_TYPE_BT);
+}
+
+// Word : un document mis en forme (une page par section), logo de l'entreprise en tête.
+async function btExporterChantierWord(p) {
+  const OF = await cpLoadChunk("office");
+  const doc = btDocumentChantier(p, OF);
+  const logo = await OF.officeLogo(p.settings && p.settings.companyLogo, 50);
+  OF.officeTelecharger(doc.fichier + ".docx", OF.officeDocx(doc.sections, { logo }), DOCX_TYPE_BT);
 }
 
 function BtpModule({ suppliers, btp, setBtp, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail, employees, setEmployees, payslips }) {
@@ -1071,6 +1135,7 @@ function BtpModule({ suppliers, btp, setBtp, entries, setEntries, accounts, setA
           <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Désignation</th><th>Unité</th><th className="text-right">Quantité</th><th className="text-right">Prix unitaire</th><th className="text-right">Montant</th><th></th></tr></thead>
             <tbody>{(s.lines || []).map((l) => (<tr key={l.id} data-testid="bt-ligne"><td className="py-1.5">{canEdit ? <BtChamp value={l.label} onCommit={(v) => majLigne(s, l, { label: String(v).trim() })} onSaved={() => showToast("Enregistré ✓")} data-testid="bt-ligne-label" className="border rounded px-1 py-0.5 text-sm" style={{ ...ecBorder, width: "100%", minWidth: 120 }} /> : l.label}</td><td>{canEdit ? <BtChamp value={l.unit || ""} onCommit={(v) => majLigne(s, l, { unit: String(v).trim() })} onSaved={() => showToast("Enregistré ✓")} className="border rounded px-1 py-0.5 text-xs" style={{ ...ecBorder, width: 70 }} /> : (l.unit || "—")}</td><td className="text-right tabular">{canEdit && sitsDe(s.id).length === 0 ? <BtChamp type="number" min="0" step="0.01" value={l.qty} onCommit={(v) => majLigne(s, l, { qty: btQ(v) })} onSaved={() => showToast("Enregistré ✓")} data-testid="bt-ligne-qte" className="border rounded px-1 py-0.5 text-xs tabular" style={{ ...ecBorder, width: 80 }} /> : l.qty}</td><td className="text-right tabular">{canEdit && sitsDe(s.id).length === 0 ? <BtChamp type="number" min="0" value={l.pu} onCommit={(v) => majLigne(s, l, { pu: btR2(v) })} onSaved={() => showToast("Enregistré ✓")} data-testid="bt-ligne-pu" className="border rounded px-1 py-0.5 text-xs tabular" style={{ ...ecBorder, width: 100 }} /> : fmt(l.pu)}</td><td className="text-right tabular">{fmt(btR2(l.qty * l.pu))}</td><td className="text-right">{canEdit && sitsDe(s.id).length === 0 && <button onClick={() => retirerLigne(s, l)} className="text-xs" style={{ color: "#A6432F" }} data-testid="bt-ligne-retirer">Retirer</button>}</td></tr>))}</tbody>
             {(s.lines || []).length > 0 && <tfoot><tr style={{ fontWeight: 600, borderTop: "2px solid #152238" }}><td colSpan={4}>Total du marché (hors taxe)</td><td className="text-right tabular" data-testid="bt-marche">{fmt(btMarche(s))}</td><td></td></tr></tfoot>}</table></div>
+          {(s.lines || []).length > 0 && (<div className="mb-2"><button onClick={() => btExporterChantier({ site: s, settings, tcaRate, today, client: clients.find((c) => c.id === (s.clientId || (sitsDe(s.id)[0] || {}).clientId)), marche: btMarche(s), facture: factureHt(s.id), encaisse: btR2(sitsDe(s.id).reduce((t, x) => t + btSolde(x).paye, 0)), retenue: retenueDue(s.id), situations: sitsDe(s.id), depenses: deps.filter((d) => d.siteId === s.id && d.status !== "annulé") }).catch((e) => showToast(e.message || "Export Excel impossible."))} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="bt-chantier-excel">Exporter le chantier (Excel)</button> <button onClick={() => btExporterChantierWord({ site: s, settings, tcaRate, today, client: clients.find((c) => c.id === (s.clientId || (sitsDe(s.id)[0] || {}).clientId)), marche: btMarche(s), facture: factureHt(s.id), encaisse: btR2(sitsDe(s.id).reduce((t, x) => t + btSolde(x).paye, 0)), retenue: retenueDue(s.id), situations: sitsDe(s.id), depenses: deps.filter((d) => d.siteId === s.id && d.status !== "annulé") }).catch((e) => showToast(e.message || "Export Word impossible."))} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="bt-chantier-word">Exporter le chantier (Word)</button></div>)}
           {(s.lines || []).length === 0 && <div className="text-sm mb-2" style={{ color: "#8A8370" }}>Aucune ligne : ajoutez les travaux du marché ci-dessous.</div>}
           {canEdit && (<div className="grid md:grid-cols-5 gap-2 mt-2 items-end">
             <div className="md:col-span-2"><label className="text-xs" style={{ color: "#8A8370" }}>Désignation des travaux</label><div className="flex gap-1"><input value={fl.label} onChange={(e) => setFl({ ...fl, label: e.target.value })} data-testid="bt-lg-label" className={ecInput} style={ecBorder} /><BtFleche id="bt-dl-ligne" onPick={(v) => setFl({ ...fl, label: v })} /></div></div>
@@ -1469,7 +1534,7 @@ function BtpModule({ suppliers, btp, setBtp, entries, setEntries, accounts, setA
           <div className="display text-base mb-2" style={{ color: "#152238" }}>Pour démarrer, en 7 étapes</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="bt-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && !(isVendeur && (tb === "chantiers" || tb === "depenses")) && <button className="text-xs underline" data-testid="bt-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
-        {sites.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="bt-vide">Pour commencer : enregistrez vos <b>clients</b>, créez un <b>chantier</b> avec son bordereau de prix, puis suivez les <b>dépenses</b> et émettez les <b>situations de travaux</b>.</div>}
+        {sites.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#152238" }} data-testid="bt-vide">Pour commencer : enregistrez vos <b>clients</b>, créez un <b>chantier</b> avec son bordereau de prix, puis suivez les <b>dépenses</b> et émettez les <b>situations de travaux</b>.</div>}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>

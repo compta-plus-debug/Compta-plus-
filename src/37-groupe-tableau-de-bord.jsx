@@ -5,7 +5,44 @@
 // @exports GroupDashboardModule
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Tableau de bord consolidé du groupe ---
-function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlanStatus, groupTrialEndsAt, companyId, role, showToast, onGroupRenamed, onRequestsChanged, onEnterCurrentCompany, onJumpToModule }) {
+// Apparence de l'espace multi-entreprises (maquette C). CSS intégré au module, limité à .compta-groupe.
+const GROUPE_CSS = String.raw`/* ==========================================================================
+   Compta+ — Refonte visuelle : ESPACE MULTI-ENTREPRISES (maquette C)
+   Ne change que l'apparence. Règles limitées au conteneur .compta-groupe.
+   Retour arrière : supprimer la ligne <link ... refonte-groupe.css>.
+   ========================================================================== */
+@media (min-width: 768px) {
+  main .compta-groupe .grid.sm\:grid-cols-2 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+main .compta-groupe .grid.sm\:grid-cols-2 > div {
+  background: #fff !important;
+  border-radius: 12px !important;
+  padding: 18px !important;
+  box-shadow: 0 1px 3px rgba(21, 34, 56, .07);
+  min-width: 0;
+}
+main .compta-groupe .grid.md\:grid-cols-4 > div {
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(21, 34, 56, .07);
+  min-width: 0;
+}
+main .compta-groupe .grid.md\:grid-cols-4 .tabular { overflow-wrap: anywhere; }
+main .compta-groupe table { width: 100%; border-collapse: collapse; font-size: 13px; }
+main .compta-groupe table thead tr { background: #152238; }
+main .compta-groupe table thead th {
+  background: #152238 !important;
+  color: #EFE9DD !important;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 10px 12px;
+}
+main .compta-groupe table tbody td { padding: 9px 12px; line-height: 1.4; vertical-align: middle; }
+main .compta-groupe table tbody tr:nth-child(even) { background: #FAF8F1; }
+`;
+
+function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlanStatus, groupTrialEndsAt, companyId, role, showToast, onGroupRenamed, onRequestsChanged, onEnterCurrentCompany, onJumpToModule, onBackToPlatform, onSignOut }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [companiesData, setCompaniesData] = useState([]);
@@ -241,17 +278,28 @@ function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlan
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl">
+    <div className="p-4 md:p-8 max-w-6xl compta-groupe">
+      <style>{GROUPE_CSS}</style>
       <div className="rounded-lg p-6 mb-6 flex items-center justify-between flex-wrap gap-3"
         style={{ background: "linear-gradient(135deg, #152238 0%, #1F3358 100%)" }}>
         <div>
           <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#C9A24B" }}>Espace multi-entreprises</div>
           <div className="display text-2xl" style={{ color: "#fff" }}>{groupName}</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs px-3 py-1.5 rounded-full" style={{ background: "rgba(201,162,75,0.18)", color: "#C9A24B" }}>
             {companiesData.length} / {groupMaxCompanies || 5} entreprises
           </span>
+          {onBackToPlatform && (
+            <button onClick={onBackToPlatform} className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.12)", color: "#C9A24B" }}>
+              ← Tableau de bord général
+            </button>
+          )}
+          {onSignOut && (
+            <button onClick={onSignOut} className="hidden md:inline-flex text-xs px-3 py-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.12)", color: "#EFE9DD" }}>
+              Se déconnecter
+            </button>
+          )}
           {role === "Administrateur" && (
             <button onClick={() => { setShowSettings((v) => !v); setEditGroupName(groupName || ""); }}
               className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5" style={{ background: "rgba(255,255,255,0.12)", color: "#EFE9DD" }}>

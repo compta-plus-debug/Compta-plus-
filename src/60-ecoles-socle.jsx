@@ -27,7 +27,7 @@ const EC_CSS = `
 [data-testid="ecoles-module"] input:focus,[data-testid="ecoles-module"] select:focus,[data-testid="ecoles-module"] textarea:focus{outline:2px solid #C9A24B55;border-color:#C9A24B}
 .ec-kpi{background:#fff;border:1px solid #EEE9DA;border-top:3px solid #C9A24B;border-radius:10px;box-shadow:0 1px 3px rgba(21,34,56,.07);padding:12px 14px}
 .ec-card{background:#fff;border:1px solid #E4DFD1;border-radius:12px;box-shadow:0 1px 3px rgba(21,34,56,.06)}
-.ec-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;padding:6px;background:#EFEBDD;border-radius:12px}
+.ec-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;padding:6px;background:#fff;border:1px solid #E4DFD1;border-radius:12px;box-shadow:0 1px 3px rgba(21,34,56,.06)}
 `;
 const ecInput = "w-full border rounded px-2 py-1.5 text-sm mt-1";
 const ecBorder = { borderColor: "#DDD6C4" };

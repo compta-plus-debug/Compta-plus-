@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Immobilier
-// @depends EC_CSS, Plus, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
+// @depends EC_CSS, Plus, StatsBloc, cpLoadChunk, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
 //   ecTelecharger, fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon
 //   useState
 // @exports ImmobilierModule
@@ -52,6 +52,22 @@ function imSolde(r) {
   return { paye, reste: imR2((r.total || 0) - paye) };
 }
 
+const IM_XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const IM_DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+// Export Word ou Excel d'un tableau de l'onglet Rapports (rentabilité par bien ou loyers impayés).
+async function imExporterTableau(kind, d) {
+  const OF = await cpLoadChunk("office");
+  const st = d.settings || {};
+  const periode = d.du || d.au ? ((d.du ? ecDateFr(d.du) : "début") + " au " + (d.au ? ecDateFr(d.au) : "aujourd'hui")) : "Toute la période";
+  const blocs = OF.officeEntreprise(st, d.titre).concat([
+    { k: "p", s: 9, sp: 80, parts: [{ t: "Période : " }, { t: periode, g: true }, { t: " · établi le " + ecDateFr(d.today) }] },
+    { k: "tbl", style: "ligne", cols: d.cols, lignes: d.lignes, pieds: [d.pied] },
+  ]);
+  const doc = { fichier: d.fichier + "_" + (d.du || "debut") + "_" + (d.au || d.today), sections: [{ nom: "Rapport", blocs }] };
+  const logo = await OF.officeLogo(st.companyLogo, 50);
+  if (kind === "xlsx") OF.officeTelecharger(doc.fichier + ".xlsx", OF.officeXlsx(doc.sections, { logo }), IM_XLSX_TYPE);
+  else OF.officeTelecharger(doc.fichier + ".docx", OF.officeDocx(doc.sections, { logo }), IM_DOCX_TYPE);
+}
 function ImmobilierModule({ suppliers, immo, setImmo, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // accueil : locataires, loyers, encaissements, quittances
@@ -614,7 +630,7 @@ function ImmobilierModule({ suppliers, immo, setImmo, entries, setEntries, accou
           <div className="display text-base mb-2" style={{ color: "#152238" }}>Pour démarrer, en 7 étapes</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="im-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && !(isVendeur && (tb === "biens" || tb === "baux")) && <button className="text-xs underline" data-testid="im-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
-        {biens.length + baux.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="im-vide">Pour commencer : ajoutez vos <b>biens</b> et vos <b>locataires</b>, puis créez un <b>bail</b> et émettez le premier <b>loyer</b>.</div>}
+        {biens.length + baux.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#152238" }} data-testid="im-vide">Pour commencer : ajoutez vos <b>biens</b> et vos <b>locataires</b>, puis créez un <b>bail</b> et émettez le premier <b>loyer</b>.</div>}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>
@@ -645,6 +661,15 @@ function ImmobilierModule({ suppliers, immo, setImmo, entries, setEntries, accou
     const parNature = IM_DEPENSES.map(([k, l]) => ({ l, n: depP.filter((x) => x.kind === k).length, m: S(depP.filter((x) => x.kind === k), (x) => x.amount) })).filter((x) => x.n > 0);
     const exporterBien = () => ecTelecharger("rentabilite-biens-" + today + ".csv", [["Bien", "Loyers facturés HT", "Encaissé", "Dépenses", "Résultat"], ...parBien.map((x) => [x.b.name, x.fact, x.enc, x.dep, x.res]), ["Total", S(parBien, (x) => x.fact), S(parBien, (x) => x.enc), S(parBien, (x) => x.dep), S(parBien, (x) => x.res)]]);
     const exporterImp = () => ecTelecharger("loyers-impayes-" + today + ".csv", [["Locataire", "Loyers impayés", "Pas encore échu", "1 à 30 j", "31 à 60 j", "Plus de 60 j", "Reste à payer"], ...impayes.map((x) => [x.c.name, x.n, x.b0, x.b1, x.b2, x.b3, x.reste]), ["Total", S(impayes, (x) => x.n), S(impayes, (x) => x.b0), S(impayes, (x) => x.b1), S(impayes, (x) => x.b2), S(impayes, (x) => x.b3), S(impayes, (x) => x.reste)]]);
+    const exp = (kind, titre, fichier, cols, lignes, pied) => imExporterTableau(kind, { titre, fichier, cols, lignes, pied, du: rd, au: rf, today, settings }).catch((e) => showToast(e.message || "Export impossible."));
+    const expBiens = (kind) => exp(kind, "RENTABILITÉ PAR BIEN", "Rentabilite-biens",
+      [{ h: "Bien", sp: 4, al: "l" }, { h: "Loyers facturés HT", sp: 2, al: "r" }, { h: "Encaissé", sp: 2, al: "r" }, { h: "Dépenses", sp: 2, al: "r" }, { h: "Résultat", sp: 2, al: "r" }],
+      parBien.map((x) => [{ t: x.b.name || "" }, { t: fmt(x.fact), al: "r" }, { t: fmt(x.enc), al: "r" }, { t: fmt(x.dep), al: "r" }, { t: fmt(x.res), al: "r", g: true }]),
+      [{ t: "TOTAL", g: true }, { t: fmt(S(parBien, (x) => x.fact)), al: "r", g: true }, { t: fmt(S(parBien, (x) => x.enc)), al: "r", g: true }, { t: fmt(S(parBien, (x) => x.dep)), al: "r", g: true }, { t: fmt(S(parBien, (x) => x.res)), al: "r", g: true }]);
+    const expImp = (kind) => exp(kind, "LOYERS IMPAYÉS PAR LOCATAIRE", "Loyers-impayes",
+      [{ h: "Locataire", sp: 2, al: "l" }, { h: "Loyers", sp: 1, al: "r" }, { h: "Pas encore échu", sp: 2, al: "r" }, { h: "1 à 30 j", sp: 2, al: "r" }, { h: "31 à 60 j", sp: 2, al: "r" }, { h: "Plus de 60 j", sp: 2, al: "r" }, { h: "Reste à payer", sp: 1, al: "r" }],
+      impayes.map((x) => [{ t: x.c.name || "" }, { t: String(x.n), al: "r" }, { t: fmt(x.b0), al: "r" }, { t: fmt(x.b1), al: "r" }, { t: fmt(x.b2), al: "r" }, { t: fmt(x.b3), al: "r" }, { t: fmt(x.reste), al: "r", g: true }]),
+      [{ t: "TOTAL", g: true }, { t: String(S(impayes, (x) => x.n)), al: "r", g: true }, { t: fmt(S(impayes, (x) => x.b0)), al: "r", g: true }, { t: fmt(S(impayes, (x) => x.b1)), al: "r", g: true }, { t: fmt(S(impayes, (x) => x.b2)), al: "r", g: true }, { t: fmt(S(impayes, (x) => x.b3)), al: "r", g: true }, { t: fmt(S(impayes, (x) => x.reste)), al: "r", g: true }]);
     return (
       <div>
         <div className="flex flex-wrap gap-2 items-end mb-4">
@@ -653,11 +678,11 @@ function ImmobilierModule({ suppliers, immo, setImmo, entries, setEntries, accou
           {(rd || rf) && <button className="text-xs underline" onClick={() => { setRd(""); setRf(""); }}>Tout afficher</button>}
           <div className="text-xs" style={{ color: "#7A7460" }}>Le filtre porte sur la date d'émission des loyers et la date des dépenses.</div>
         </div>
-        <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Rentabilité par bien</div><button onClick={exporterBien} className="text-xs underline" data-testid="im-rapport-export-bien">Exporter</button></div>
+        <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Rentabilité par bien</div><button onClick={exporterBien} className="text-xs underline" data-testid="im-rapport-export-bien">Exporter</button><button onClick={() => expBiens("xlsx")} className="text-xs underline ml-3" data-testid="im-rapport-excel-bien">Excel</button><button onClick={() => expBiens("docx")} className="text-xs underline ml-3" data-testid="im-rapport-word-bien">Word</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Bien</th><th className="text-right">Loyers facturés (hors taxe)</th><th className="text-right">Encaissé</th><th className="text-right">Dépenses</th><th className="text-right">Résultat</th></tr></thead>
           <tbody>{parBien.map((x) => (<tr key={x.b.id} data-testid="im-rapport-bien"><td className="py-1.5">{x.b.name}</td><td className="text-right tabular">{fmt(x.fact)}</td><td className="text-right tabular">{fmt(x.enc)}</td><td className="text-right tabular">{fmt(x.dep)}</td><td className="text-right tabular">{fmt(x.res)}</td></tr>))}</tbody>
           {parBien.length > 0 && <tfoot><tr style={tf} data-testid="im-rapport-bien-total"><td>Total</td><td className="text-right tabular" data-testid="im-rapport-bien-tot-fact">{fmt(S(parBien, (x) => x.fact))}</td><td className="text-right tabular" data-testid="im-rapport-bien-tot-enc">{fmt(S(parBien, (x) => x.enc))}</td><td className="text-right tabular" data-testid="im-rapport-bien-tot-dep">{fmt(S(parBien, (x) => x.dep))}</td><td className="text-right tabular" data-testid="im-rapport-bien-tot-res">{fmt(S(parBien, (x) => x.res))}</td></tr></tfoot>}</table></div>
-        <div className="flex items-center justify-between mb-2 mt-5"><div className="display text-base" style={{ color: "#152238" }}>Loyers impayés par locataire (retard depuis l'échéance)</div><button onClick={exporterImp} className="text-xs underline" data-testid="im-rapport-export-imp">Exporter</button></div>
+        <div className="flex items-center justify-between mb-2 mt-5"><div className="display text-base" style={{ color: "#152238" }}>Loyers impayés par locataire (retard depuis l'échéance)</div><button onClick={exporterImp} className="text-xs underline" data-testid="im-rapport-export-imp">Exporter</button><button onClick={() => expImp("xlsx")} className="text-xs underline ml-3" data-testid="im-rapport-excel-imp">Excel</button><button onClick={() => expImp("docx")} className="text-xs underline ml-3" data-testid="im-rapport-word-imp">Word</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Locataire</th><th className="text-right">Loyers</th><th className="text-right">Pas encore échu</th><th className="text-right">1 à 30 j</th><th className="text-right">31 à 60 j</th><th className="text-right">Plus de 60 j</th><th className="text-right">Reste à payer</th></tr></thead>
           <tbody>{impayes.map((x) => (<tr key={x.c.id} data-testid="im-rapport-imp"><td className="py-1.5">{x.c.name}</td><td className="text-right tabular">{x.n}</td><td className="text-right tabular">{fmt(x.b0)}</td><td className="text-right tabular">{fmt(x.b1)}</td><td className="text-right tabular">{fmt(x.b2)}</td><td className="text-right tabular">{fmt(x.b3)}</td><td className="text-right tabular">{fmt(x.reste)}</td></tr>))}</tbody>
           {impayes.length > 0 && <tfoot><tr style={tf} data-testid="im-rapport-imp-total"><td>Total</td><td className="text-right tabular">{S(impayes, (x) => x.n)}</td><td className="text-right tabular">{fmt(S(impayes, (x) => x.b0))}</td><td className="text-right tabular">{fmt(S(impayes, (x) => x.b1))}</td><td className="text-right tabular">{fmt(S(impayes, (x) => x.b2))}</td><td className="text-right tabular">{fmt(S(impayes, (x) => x.b3))}</td><td className="text-right tabular" data-testid="im-rapport-imp-tot-reste">{fmt(S(impayes, (x) => x.reste))}</td></tr></tfoot>}</table></div>

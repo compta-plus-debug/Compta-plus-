@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Ong
-// @depends CURRENCIES, CURRENT_CURRENCY, EC_CSS, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput
+// @depends CURRENCIES, CURRENT_CURRENCY, EC_CSS, StatsBloc, cpLoadChunk, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput
 //   ecPastille, ecTelecharger, isFutureDate, isLocked, statMois, statSomme, todayStr, uid
 //   useBrouillon, useState
 // @exports OngModule
@@ -128,6 +128,55 @@ function ogPeriodes(m, y, today) {
   return out;
 }
 
+// ── Export Word et Excel d'un fonds affecté (fiche, dons, dépenses, virements) ──
+const OG_XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const OG_DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+function ogDocumentFonds(f, d, settings, OF) {
+  const st = settings || {};
+  const libelle = (liste, k) => (liste.find((x) => x[0] === k) || [])[1] || k || "";
+  const nomContact = (id) => (d.contacts.find((c) => c.id === id) || {}).name || "";
+  const nomMembre = (id) => (d.membres.find((m) => m.id === id) || {}).name || "";
+  const donateur = (x) => (x.donorId ? nomContact(x.donorId) : x.memberId ? nomMembre(x.memberId) : x.donorName || "");
+  const s = d.solde;
+  const sections = [];
+  const bailleur = f.bailleurId ? nomContact(f.bailleurId) : "";
+  const pct = s.budget > 0 ? Math.round(s.dep * 100 / s.budget) : 0;
+  const fiche = OF.officeEntreprise(st, "FICHE DE FONDS AFFECTÉ").concat([
+    { k: "p", s: 9, sp: 80, parts: [{ t: "Fonds : " }, { t: f.name || "", g: true }, { t: " (" + (f.number || "") + ")" }] },
+    { k: "p", s: 9, sp: 160, parts: [{ t: "Bailleur : " }, { t: bailleur || "—", g: true }, { t: " · Période : " + (f.start ? ecDateFr(f.start) : "—") + " au " + (f.end ? ecDateFr(f.end) : "—") + " · Statut : " + (f.status === "clos" ? "clôturé" : "actif") }] },
+    { k: "tbl", style: "grille",
+      cols: [{ h: "Budget", sp: 2, al: "r" }, { h: "Reçu", sp: 2, al: "r" }, { h: "Dépensé", sp: 2, al: "r" }, { h: "Solde", sp: 2, al: "r" }, { h: "Dépensé (%)", sp: 2, al: "r" }, { h: "Virements nets", sp: 2, al: "r" }],
+      lignes: [[{ t: ogM(s.budget), al: "r" }, { t: ogM(s.recu), al: "r" }, { t: ogM(s.dep), al: "r" }, { t: ogM(s.solde), al: "r", g: true }, { t: pct + " %", al: "r" }, { t: ogM(s.vin - s.vout), al: "r" }]],
+      pieds: [] },
+  ]);
+  sections.push({ nom: "Fiche", blocs: fiche });
+  if (d.dons.length) sections.push({ nom: "Dons et subventions", blocs: OF.officeEntreprise(st, null).concat([
+    { k: "p", t: "Dons et subventions affectés — " + (f.name || ""), g: true, s: 13, sp: 120 },
+    { k: "tbl", style: "ligne", cols: [{ h: "Date", sp: 2, al: "l" }, { h: "Nature", sp: 2, al: "l" }, { h: "Donateur", sp: 3, al: "l" }, { h: "Libellé", sp: 3, al: "l" }, { h: "Mode", sp: 1, al: "l" }, { h: "Montant", sp: 2, al: "r" }],
+      lignes: d.dons.map((x) => [ecDateFr(x.date), libelle(OG_RECETTES, x.kind), donateur(x), x.label || "", x.mode === "banque" ? "Banque" : "Caisse", { t: ogM(x.amount), al: "r" }]),
+      pieds: [[{ t: "Total", cs: 5, g: true }, { t: ogM(d.dons.reduce((t, x) => t + (Number(x.amount) || 0), 0)), al: "r", g: true }]] },
+  ]) });
+  if (d.deps.length) sections.push({ nom: "Dépenses", blocs: OF.officeEntreprise(st, null).concat([
+    { k: "p", t: "Dépenses sur le fonds — " + (f.name || ""), g: true, s: 13, sp: 120 },
+    { k: "tbl", style: "ligne", cols: [{ h: "Date", sp: 2, al: "l" }, { h: "Nature", sp: 3, al: "l" }, { h: "Fournisseur", sp: 2, al: "l" }, { h: "Libellé", sp: 3, al: "l" }, { h: "Dépassement", sp: 1, al: "c" }, { h: "Montant", sp: 2, al: "r" }],
+      lignes: d.deps.map((x) => [ecDateFr(x.date), libelle(OG_DEPENSES, x.kind), x.supplier || "", x.label || "", { t: x.depassement ? "Oui" : "Non", al: "c" }, { t: ogM(x.amount), al: "r" }]),
+      pieds: [[{ t: "Total", cs: 5, g: true }, { t: ogM(d.deps.reduce((t, x) => t + (Number(x.amount) || 0), 0)), al: "r", g: true }]] },
+  ]) });
+  if (d.vires.length) sections.push({ nom: "Virements", blocs: OF.officeEntreprise(st, null).concat([
+    { k: "p", t: "Virements entre fonds — " + (f.name || ""), g: true, s: 13, sp: 120 },
+    { k: "tbl", style: "ligne", cols: [{ h: "Date", sp: 2, al: "l" }, { h: "Sens", sp: 2, al: "l" }, { h: "Motif", sp: 5, al: "l" }, { h: "Montant", sp: 2, al: "r" }],
+      lignes: d.vires.map((v) => [ecDateFr(v.date), v.to === f.id ? "Entrant" : "Sortant", v.motif || "", { t: ogM(v.amount), al: "r" }]),
+      pieds: [] },
+  ]) });
+  return { fichier: "Fonds-" + String(f.number || f.name || f.id || "fonds").replace(/[^\w-]+/g, "_"), sections };
+}
+async function ogExporterFonds(kind, f, d, settings) {
+  const OF = await cpLoadChunk("office");
+  const doc = ogDocumentFonds(f, d, settings, OF);
+  const logo = await OF.officeLogo(settings && settings.companyLogo, 50);
+  if (kind === "xlsx") OF.officeTelecharger(doc.fichier + ".xlsx", OF.officeXlsx(doc.sections, { logo }), OG_XLSX_TYPE);
+  else OF.officeTelecharger(doc.fichier + ".docx", OF.officeDocx(doc.sections, { logo }), OG_DOCX_TYPE);
+}
 function OngModule({ suppliers, ong, setOng, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // réception : donateurs, dons, reçus, membres et cotisations
@@ -412,7 +461,7 @@ function OngModule({ suppliers, ong, setOng, entries, setEntries, accounts, setA
         <div className="text-xs mb-2" style={{ color: "#8A8370" }}>{f ? [f.number, bailleur && V.bailleur + " : " + bailleur, f.start && "du " + ecDateFr(f.start), f.end && "au " + ecDateFr(f.end)].filter(Boolean).join(" · ") : "Argent sans destination précise : fonctionnement général de l'organisation"}</div>
         <div className="grid grid-cols-3 gap-2 text-sm"><div><div className="text-xs" style={{ color: "#8A8370" }}>Reçu</div><div className="tabular" data-testid="og-fonds-recu">{ogM(s.recu + s.vin)}</div></div><div><div className="text-xs" style={{ color: "#8A8370" }}>Dépensé</div><div className="tabular" data-testid="og-fonds-dep">{ogM(s.dep + s.vout)}</div></div><div><div className="text-xs" style={{ color: "#8A8370" }}>Solde</div><div className="tabular" data-testid="og-fonds-solde" style={{ fontWeight: 700, color: s.solde < -0.004 ? "#A6432F" : "#152238" }}>{ogM(s.solde)}</div></div></div>
         {bud > 0 && (<div className="mt-2"><div className="text-xs" style={{ color: "#8A8370" }}>Budget {ogM(bud)} · dépensé {pct} %{s.dep > bud + 0.004 ? " — budget dépassé" : ""}</div><div style={{ background: "#EEE9DA", borderRadius: 4, height: 6 }}><div style={{ width: pct + "%", background: s.dep > bud + 0.004 ? "#A6432F" : "#0F6B5C", height: 6, borderRadius: 4 }} /></div></div>)}
-        <div className="mt-2 flex flex-wrap gap-3 text-xs"><button className="underline" onClick={() => setSelFonds(selFonds === id && id ? "" : id || "__general")} data-testid="og-fonds-ouvrir">{selFonds === (id || "__general") ? "Fermer" : "Détail"}</button></div>
+        <div className="mt-2 flex flex-wrap gap-3 text-xs"><button className="underline" onClick={() => setSelFonds(selFonds === id && id ? "" : id || "__general")} data-testid="og-fonds-ouvrir">{selFonds === (id || "__general") ? "Fermer" : "Détail"}</button>{f && <button className="underline" data-testid="og-fonds-excel" onClick={() => ogExporterFonds("xlsx", f, { contacts, membres, dons: donsOk.filter((x) => (x.fondId || "") === id), deps: depsOk.filter((x) => (x.fondId || "") === id), vires: viresOk.filter((v) => v.from === id || v.to === id), solde: { budget: Number(f.budget) || 0, recu: s.recu, dep: s.dep, vin: s.vin, vout: s.vout, solde: s.solde } }, settings).catch((e) => showToast(e.message || "Export Excel impossible."))}>Excel</button>}{f && <button className="underline" data-testid="og-fonds-word" onClick={() => ogExporterFonds("docx", f, { contacts, membres, dons: donsOk.filter((x) => (x.fondId || "") === id), deps: depsOk.filter((x) => (x.fondId || "") === id), vires: viresOk.filter((v) => v.from === id || v.to === id), solde: { budget: Number(f.budget) || 0, recu: s.recu, dep: s.dep, vin: s.vin, vout: s.vout, solde: s.solde } }, settings).catch((e) => showToast(e.message || "Export Word impossible."))}>Word</button>}</div>
       </div>);
     };
     const idSel = selFonds === "__general" ? "" : selFonds;
@@ -679,7 +728,7 @@ function OngModule({ suppliers, ong, setOng, entries, setEntries, accounts, setA
           <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{toutFait ? " — toutes faites ✓" : ""}</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="og-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && tb !== "apercu" && accesTab(tb) && <button className="text-xs underline" data-testid="og-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
-        {dons.length + deps.length + fonds.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="og-vide">Pour commencer : choisissez votre <b>type d'organisation</b>, créez vos <b>fonds</b> (projets), enregistrez votre premier <b>don</b> avec son reçu, puis vos <b>dépenses</b> imputées à un fonds.</div>}
+        {dons.length + deps.length + fonds.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#152238" }} data-testid="og-vide">Pour commencer : choisissez votre <b>type d'organisation</b>, créez vos <b>fonds</b> (projets), enregistrez votre premier <b>don</b> avec son reçu, puis vos <b>dépenses</b> imputées à un fonds.</div>}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>

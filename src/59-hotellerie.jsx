@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Hotellerie
-// @depends EC_CSS, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille, ecTelecharger
+// @depends EC_CSS, StatsBloc, cpLoadChunk, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille, ecTelecharger
 //   isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useState
 // @exports HotelModule
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -62,6 +62,29 @@ function hoRedimensionner(file, max) {
   });
 }
 
+const HO_XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const HO_DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+// Export Word ou Excel du journal des séjours facturés (période de l'onglet Rapports).
+async function hoExporterJournal(kind, d) {
+  const OF = await cpLoadChunk("office");
+  const st = d.settings || {};
+  const somme = (f) => hoR2(d.jours.reduce((s, j) => s + f(d.parJour[j]), 0));
+  const lignes = d.jours.map((j) => { const x = d.parJour[j]; return [
+    ecDateFr(j), { t: String(x.nb), al: "r" }, { t: String(x.nuits), al: "r" }, { t: hoM(x.heberg), al: "r" }, { t: hoM(x.services), al: "r" },
+    { t: hoM(x.sejour), al: "r" }, { t: hoM(x.tca), al: "r" }, { t: hoM(x.total), al: "r", g: true }, { t: hoM(x.esp), al: "r" }, { t: hoM(x.ban), al: "r" }]; });
+  const pied = [{ t: "TOTAL", g: true }, { t: String(somme((x) => x.nb)), al: "r", g: true }, { t: String(somme((x) => x.nuits)), al: "r", g: true },
+    { t: hoM(somme((x) => x.heberg)), al: "r", g: true }, { t: hoM(somme((x) => x.services)), al: "r", g: true }, { t: hoM(somme((x) => x.sejour)), al: "r", g: true },
+    { t: hoM(somme((x) => x.tca)), al: "r", g: true }, { t: hoM(somme((x) => x.total)), al: "r", g: true }, { t: hoM(somme((x) => x.esp)), al: "r", g: true }, { t: hoM(somme((x) => x.ban)), al: "r", g: true }];
+  const blocs = OF.officeEntreprise(st, "JOURNAL DES SÉJOURS — HÔTELLERIE").concat([
+    { k: "p", s: 9, sp: 80, parts: [{ t: "Période : " }, { t: ecDateFr(d.du) + " au " + ecDateFr(d.au), g: true }, { t: " · établi le " + ecDateFr(d.today) }] },
+    { k: "tbl", style: "ligne", cols: [{ h: "Date", sp: 3, al: "l" }, { h: "Séjours", sp: 1, al: "r" }, { h: "Nuitées", sp: 1, al: "r" }, { h: "Hébergement", sp: 1, al: "r" }, { h: "Services", sp: 1, al: "r" }, { h: "Taxe séjour", sp: 1, al: "r" }, { h: "TCA", sp: 1, al: "r" }, { h: "Total", sp: 1, al: "r" }, { h: "Espèces", sp: 1, al: "r" }, { h: "Banque", sp: 1, al: "r" }],
+      lignes, pieds: [pied] },
+  ]);
+  const doc = { fichier: "Journal-hotellerie-" + d.du + "_" + d.au, sections: [{ nom: "Journal", blocs }] };
+  const logo = await OF.officeLogo(st.companyLogo, 50);
+  if (kind === "xlsx") OF.officeTelecharger(doc.fichier + ".xlsx", OF.officeXlsx(doc.sections, { logo }), HO_XLSX_TYPE);
+  else OF.officeTelecharger(doc.fichier + ".docx", OF.officeDocx(doc.sections, { logo }), HO_DOCX_TYPE);
+}
 function HotelModule({ hotel, setHotel, entries, setEntries, accounts, setAccounts, settings, role, showToast, logAudit, currentUserEmail }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // réception : réservations, arrivées, départs, encaissements
@@ -366,7 +389,7 @@ function HotelModule({ hotel, setHotel, entries, setEntries, accounts, setAccoun
           <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{guideFait ? " — toutes faites ✓" : ""}</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{guide.map(([t, d, tb, fait], i) => (<li key={i} data-testid="hotel-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && !(isVendeur && !["resa", "clients", "factures", "planning"].includes(tb)) && <button className="text-xs underline" data-testid="hotel-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
-        {types.length + rooms.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="hotel-vide">Pour commencer, dans cet ordre : <b>1.</b> onglet <b>Chambres et tarifs</b> : créez vos types de chambres (nom, personnes, tarif par nuit) · <b>2.</b> ajoutez vos chambres (numéro et type) · <b>3.</b> facultatif : vos services (petit-déjeuner, blanchisserie…), la taxe de séjour et la TCA · <b>4.</b> onglet <b>Clients</b> : enregistrez un client · <b>5.</b> onglet <b>Réservations</b> : créez une réservation.</div>}
+        {types.length + rooms.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#152238" }} data-testid="hotel-vide">Pour commencer, dans cet ordre : <b>1.</b> onglet <b>Chambres et tarifs</b> : créez vos types de chambres (nom, personnes, tarif par nuit) · <b>2.</b> ajoutez vos chambres (numéro et type) · <b>3.</b> facultatif : vos services (petit-déjeuner, blanchisserie…), la taxe de séjour et la TCA · <b>4.</b> onglet <b>Clients</b> : enregistrez un client · <b>5.</b> onglet <b>Réservations</b> : créez une réservation.</div>}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>
@@ -420,7 +443,7 @@ function HotelModule({ hotel, setHotel, entries, setEntries, accounts, setAccoun
           {guests.length === 0 && <div className="text-xs mt-2" style={{ color: "#A6432F" }}>Aucun client enregistré : créez d'abord sa fiche dans l'onglet « Clients ».</div>}
         </div>)}
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">N°</th><th>Client</th><th>Chambre</th><th>Arrivée</th><th>Départ</th><th className="text-right">Nuits</th><th className="text-right">Acompte</th><th>État</th><th></th></tr></thead>
-          <tbody>{tri.map((x) => (<tr key={x.id} data-testid="hotel-resa-ligne"><td className="py-1.5 tabular text-xs">{x.number}</td><td>{guestDe(x.guestId).name || "—"}</td><td>{nomChambre(x.roomId)}</td><td>{ecDateFr(x.from)}</td><td>{ecDateFr(x.to)}</td><td className="text-right tabular">{hoJours(x.from, x.to)}</td><td className="text-right tabular">{hoM(acomptesDe(x))}</td><td>{pastilleEtat(x)}</td><td className="text-right"><button onClick={() => setSel(sel === x.id ? "" : x.id)} className="text-xs underline" data-testid="hotel-resa-ouvrir">Ouvrir</button></td></tr>))}</tbody></table></div>
+          <tbody>{tri.map((x) => (<tr key={x.id} data-testid="hotel-resa-ligne"><td className="py-1.5 tabular text-xs">{x.number}</td><td>{guestDe(x.guestId).name || "—"}</td><td>{nomChambre(x.roomId)}</td><td>{ecDateFr(x.from)}</td><td>{ecDateFr(x.to)}</td><td className="text-right tabular">{hoJours(x.from, x.to)}</td><td className="text-right tabular">{hoM(acomptesDe(x))}</td><td>{pastilleEtat(x)}</td><td className="text-right whitespace-nowrap"><button onClick={() => setSel(sel === x.id ? "" : x.id)} className="text-xs underline mr-2" data-testid="hotel-resa-ouvrir">Ouvrir</button>{x.status === "arrivee" && canFront && <button onClick={() => { setSel(x.id); setTimeout(() => document.querySelector('[data-testid="hotel-depart"]')?.scrollIntoView({ behavior: "smooth", block: "center" }), 60); }} className="px-2 py-1 rounded text-xs" style={ecBtnGold} data-testid="hotel-resa-facturer">Facturer le départ</button>}</td></tr>))}</tbody></table></div>
         {bookings.length === 0 && <div className="text-sm mt-2" style={{ color: "#8A8370" }}>Aucune réservation pour le moment.</div>}
         {b && Detail(b)}
       </div>
@@ -613,7 +636,7 @@ function HotelModule({ hotel, setHotel, entries, setEntries, accounts, setAccoun
         <div className="ec-card p-4 mb-4"><div className="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
           <div>{lab("Du")}<input type="date" value={rp.from} onChange={(e) => setRp({ ...rp, from: e.target.value })} data-testid="hotel-rp-du" className={ecInput} style={ecBorder} /></div>
           <div>{lab("Au")}<input type="date" value={rp.to} onChange={(e) => setRp({ ...rp, to: e.target.value })} data-testid="hotel-rp-au" className={ecInput} style={ecBorder} /></div>
-          <div><button onClick={exporter} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="hotel-rapport-export">Exporter le journal (CSV)</button></div>
+          <div className="flex flex-wrap gap-2 col-span-2 md:col-span-2 items-end"><button onClick={exporter} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="hotel-rapport-export">Exporter le journal (CSV)</button><button onClick={() => hoExporterJournal("xlsx", { jours, parJour, du: rp.from, au: rp.to, today, settings }).catch((e) => showToast(e.message || "Export Excel impossible."))} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="hotel-journal-excel">Excel</button><button onClick={() => hoExporterJournal("docx", { jours, parJour, du: rp.from, au: rp.to, today, settings }).catch((e) => showToast(e.message || "Export Word impossible."))} className="px-3 py-2 rounded text-sm" style={ecBtn} data-testid="hotel-journal-word">Word</button></div>
         </div></div>
         <div className="display text-base" style={{ color: "#152238" }}>Journal des ventes par jour (séjours facturés)</div>
         <div className="ec-wrap mb-5"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Date</th><th className="text-right">Séjours</th><th className="text-right">Nuitées</th><th className="text-right">Hébergement</th><th className="text-right">Services</th><th className="text-right">Taxe séjour</th><th className="text-right">TCA</th><th className="text-right">Total</th><th className="text-right">Espèces</th><th className="text-right">Banque</th></tr></thead>

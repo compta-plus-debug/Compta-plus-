@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Sante
-// @depends EC_CSS, Plus, StatsBloc, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
+// @depends EC_CSS, Plus, StatsBloc, cpLoadChunk, ecBorder, ecBtn, ecBtnGold, ecDateFr, ecInput, ecPastille
 //   ecTelecharger, fmt, isFutureDate, isLocked, statMois, statSomme, todayStr, uid, useBrouillon
 //   useState
 // @exports SanteModule
@@ -65,6 +65,22 @@ function saSoldes(inv) {
   };
 }
 
+const SA_XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const SA_DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+// Export Word ou Excel d'un tableau de l'onglet Rapports (journal des encaissements ou liste des factures).
+async function saExporterTableau(kind, d) {
+  const OF = await cpLoadChunk("office");
+  const st = d.settings || {};
+  const periode = (d.du ? ecDateFr(d.du) : "début") + " au " + (d.au ? ecDateFr(d.au) : "aujourd'hui");
+  const blocs = OF.officeEntreprise(st, d.titre).concat([
+    { k: "p", s: 9, sp: 80, parts: [{ t: "Période : " }, { t: periode, g: true }, { t: " · établi le " + ecDateFr(d.today) }] },
+    { k: "tbl", style: "ligne", cols: d.cols, lignes: d.lignes, pieds: d.pieds },
+  ]);
+  const doc = { fichier: d.fichier + "_" + (d.du || "debut") + "_" + (d.au || d.today), sections: [{ nom: "Rapport", blocs }] };
+  const logo = await OF.officeLogo(st.companyLogo, 50);
+  if (kind === "xlsx") OF.officeTelecharger(doc.fichier + ".xlsx", OF.officeXlsx(doc.sections, { logo }), SA_XLSX_TYPE);
+  else OF.officeTelecharger(doc.fichier + ".docx", OF.officeDocx(doc.sections, { logo }), SA_DOCX_TYPE);
+}
 function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEntries, accounts, setAccounts, products, setProducts, movements, setMovements, settings, role, showToast, logAudit, currentUserEmail }) {
   const canEdit = role === "Administrateur" || role === "Éditeur";
   const isVendeur = role === "Vendeur"; // accueil (ou comptoir en pharmacie) : fiches patients, factures, encaissements, séjours
@@ -708,7 +724,7 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
           <div className="display text-base mb-2" style={{ color: "#152238" }}>Marche à suivre, en 7 étapes{toutFait ? " — toutes faites ✓" : ""}</div>
           <ol className="text-sm" style={{ color: "#152238", listStyle: "none", paddingLeft: 0 }}>{etapes.map(([t, d, tb, fait], i) => (<li key={i} data-testid="sante-etape" className="mb-1.5 flex flex-wrap gap-2 items-baseline"><span style={{ color: fait ? "#0F6B5C" : "#8A8370", fontWeight: 700 }}>{fait ? "✓" : (i + 1) + "."}</span><span><b>{t}</b> — <span style={{ color: "#5B563F" }}>{d}</span></span>{!fait && tb !== "etab" && <button className="text-xs underline" data-testid="sante-etape-ouvrir" onClick={() => setTab(tb)}>Ouvrir</button>}</li>))}</ol>
         </div>)}
-        {patients.length + invoices.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#FFF6E0", color: "#152238" }} data-testid="sante-vide">Pour commencer : ajoutez vos <b>assureurs</b> et vos <b>{V.Praticiens.toLowerCase()}</b>, remplissez le <b>catalogue</b> (tarifs), puis créez vos <b>{V.Patients.toLowerCase()}</b> et votre première facture.</div>}
+        {patients.length + invoices.length === 0 && <div className="p-4 rounded text-sm mb-4" style={{ background: "#fff", border: "1px solid #E4DFD1", color: "#152238" }} data-testid="sante-vide">Pour commencer : ajoutez vos <b>assureurs</b> et vos <b>{V.Praticiens.toLowerCase()}</b>, remplissez le <b>catalogue</b> (tarifs), puis créez vos <b>{V.Patients.toLowerCase()}</b> et votre première facture.</div>}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {kpis.map(([l, v, t]) => (<div key={t} className="ec-kpi"><div className="text-xs" style={{ color: "#8A8370" }}>{l}</div><div className="display text-lg tabular" data-testid={t} style={{ color: "#152238" }}>{v}</div></div>))}
         </div>
@@ -740,6 +756,14 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
     const tf = { fontWeight: 600, borderTop: "2px solid #152238" };
     const exporterFact = () => ecTelecharger("factures-" + V.slug + "-" + today + ".csv", [["N°", "Date", V.Patient, "Total", "Part assureur", "Part " + V.patient, "Reste " + V.patient, "Reste assureur", "État"], ...invoices.filter((i) => dansP(i.date)).map((i) => { const s0 = saSoldes(i); return [i.number, ecDateFr(i.date), nomPatient(i.patientId), i.total, i.insurerAmount, i.patientAmount, i.status === "annulee" ? "" : s0.restePatient, i.status === "annulee" ? "" : s0.resteAssureur, i.status === "annulee" ? "Annulée" : "Émise"]; }), ["Total", "", "", S(actives, (i) => i.total), S(actives, (i) => i.insurerAmount), S(actives, (i) => i.patientAmount), S(actives, (i) => saSoldes(i).restePatient), S(actives, (i) => saSoldes(i).resteAssureur), ""]]);
     const exporterEnc = () => ecTelecharger("encaissements-" + V.slug + "-" + today + ".csv", [["Date", "Facture", V.Patient, "Mode", "Montant"], ...encaiss.map((p) => [ecDateFr(p.date), p.number, p.patient, p.mode === "banque" ? "Banque" : "Espèces", p.amount]), ["Total", "", "", "", S(encaiss, (p) => p.amount)]]);
+    const expFact = (kind) => saExporterTableau(kind, { titre: "LISTE DES FACTURES", fichier: "Factures-" + V.slug, du: rd, au: rf, today, settings,
+      cols: [{ h: "N°", sp: 2, al: "l" }, { h: "Date", sp: 1, al: "l" }, { h: V.Patient, sp: 2, al: "l" }, { h: "Total", sp: 1, al: "r" }, { h: "Part assureur", sp: 1, al: "r" }, { h: "Part " + V.patient, sp: 1, al: "r" }, { h: "Reste " + V.patient, sp: 1, al: "r" }, { h: "Reste assureur", sp: 1, al: "r" }, { h: "État", sp: 2, al: "l" }],
+      lignes: invoices.filter((i) => dansP(i.date)).map((i) => { const s0 = saSoldes(i); const an = i.status === "annulee"; return [{ t: String(i.number || "") }, { t: ecDateFr(i.date) }, { t: nomPatient(i.patientId) || "" }, { t: fmt(i.total), al: "r" }, { t: fmt(i.insurerAmount), al: "r" }, { t: fmt(i.patientAmount), al: "r" }, { t: an ? "" : fmt(s0.restePatient), al: "r" }, { t: an ? "" : fmt(s0.resteAssureur), al: "r" }, { t: an ? "Annulée" : "Émise" }]; }),
+      pieds: [[{ t: "TOTAL", g: true }, { t: "", g: true }, { t: "", g: true }, { t: fmt(S(actives, (i) => i.total)), al: "r", g: true }, { t: fmt(S(actives, (i) => i.insurerAmount)), al: "r", g: true }, { t: fmt(S(actives, (i) => i.patientAmount)), al: "r", g: true }, { t: fmt(S(actives, (i) => saSoldes(i).restePatient)), al: "r", g: true }, { t: fmt(S(actives, (i) => saSoldes(i).resteAssureur)), al: "r", g: true }, { t: "", g: true }]] });
+    const expEnc = (kind) => saExporterTableau(kind, { titre: "JOURNAL DES ENCAISSEMENTS", fichier: "Encaissements-" + V.slug, du: rd, au: rf, today, settings,
+      cols: [{ h: "Date", sp: 2, al: "l" }, { h: "Facture", sp: 2, al: "l" }, { h: V.Patient, sp: 4, al: "l" }, { h: "Mode", sp: 2, al: "l" }, { h: "Montant", sp: 2, al: "r" }],
+      lignes: encaiss.map((p) => [{ t: ecDateFr(p.date) }, { t: String(p.number || "") }, { t: p.patient || "" }, { t: p.mode === "banque" ? "Banque" : "Espèces" }, { t: fmt(p.amount), al: "r" }]),
+      pieds: [[{ t: "Total (" + encaiss.length + ")", g: true, cs: 4 }, { t: fmt(S(encaiss, (p) => p.amount)), al: "r", g: true }]] });
     return (
       <div>
         <div className="flex flex-wrap gap-2 items-end mb-4">
@@ -748,7 +772,7 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
           {(rd || rf) && <button className="text-xs underline" onClick={() => { setRd(""); setRf(""); }}>Tout afficher</button>}
           <div className="text-xs" style={{ color: "#7A7460" }}>Le filtre porte sur la date des factures et des encaissements.</div>
         </div>
-        <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Chiffre d'affaires par catégorie</div><button onClick={exporterFact} className="text-xs underline" data-testid="sante-rapport-export-factures">Exporter les factures</button></div>
+        <div className="flex items-center justify-between mb-2"><div className="display text-base" style={{ color: "#152238" }}>Chiffre d'affaires par catégorie</div><button onClick={exporterFact} className="text-xs underline" data-testid="sante-rapport-export-factures">Exporter les factures</button><button onClick={() => expFact("xlsx").catch((e) => showToast(e.message || "Export Excel impossible."))} className="text-xs underline ml-3" data-testid="sante-fact-excel">Excel</button><button onClick={() => expFact("docx").catch((e) => showToast(e.message || "Export Word impossible."))} className="text-xs underline ml-3" data-testid="sante-fact-word">Word</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Catégorie</th><th className="text-right">Facturé</th></tr></thead>
           <tbody>{Object.keys(parCat).map((k) => (<tr key={k} data-testid="sante-rapport-cat"><td className="py-1.5">{k}</td><td className="text-right tabular">{fmt(parCat[k])}</td></tr>))}</tbody>
           {Object.keys(parCat).length > 0 && <tfoot><tr style={tf} data-testid="sante-rapport-cat-total"><td>Total</td><td className="text-right tabular" data-testid="sante-rapport-cat-tot">{fmt(totCat)}</td></tr></tfoot>}</table></div>
@@ -760,7 +784,7 @@ function SanteModule({ sante: santeTout, setSante: setSanteBrut, entries, setEnt
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Assureur</th><th className="text-right">0 à 30 jours</th><th className="text-right">31 à 60 jours</th><th className="text-right">Plus de 60 jours</th><th className="text-right">Total</th></tr></thead>
           <tbody>{Object.keys(parAss).map((k) => (<tr key={k} data-testid="sante-rapport-ass"><td className="py-1.5">{k}</td><td className="text-right tabular">{fmt(parAss[k].b0)}</td><td className="text-right tabular">{fmt(parAss[k].b1)}</td><td className="text-right tabular">{fmt(parAss[k].b2)}</td><td className="text-right tabular">{fmt(saR2(parAss[k].b0 + parAss[k].b1 + parAss[k].b2))}</td></tr>))}</tbody>
           {Object.keys(parAss).length > 0 && <tfoot><tr style={tf} data-testid="sante-rapport-ass-total"><td>Total</td><td className="text-right tabular">{fmt(S(Object.values(parAss), (o) => o.b0))}</td><td className="text-right tabular">{fmt(S(Object.values(parAss), (o) => o.b1))}</td><td className="text-right tabular">{fmt(S(Object.values(parAss), (o) => o.b2))}</td><td className="text-right tabular" data-testid="sante-rapport-ass-tot">{fmt(S(Object.values(parAss), (o) => o.b0 + o.b1 + o.b2))}</td></tr></tfoot>}</table></div>
-        <div className="flex items-center justify-between mb-2 mt-5"><div className="display text-base" style={{ color: "#152238" }}>Journal des encaissements</div><button onClick={exporterEnc} className="text-xs underline" data-testid="sante-rapport-export-enc">Exporter</button></div>
+        <div className="flex items-center justify-between mb-2 mt-5"><div className="display text-base" style={{ color: "#152238" }}>Journal des encaissements</div><button onClick={exporterEnc} className="text-xs underline" data-testid="sante-rapport-export-enc">Exporter</button><button onClick={() => expEnc("xlsx").catch((e) => showToast(e.message || "Export Excel impossible."))} className="text-xs underline ml-3" data-testid="sante-enc-excel">Excel</button><button onClick={() => expEnc("docx").catch((e) => showToast(e.message || "Export Word impossible."))} className="text-xs underline ml-3" data-testid="sante-enc-word">Word</button></div>
         <div className="ec-wrap"><table className="ec-table"><thead><tr className="text-left text-xs" style={{ color: "#8A8370" }}><th className="py-1">Date</th><th>Facture</th><th>{V.Patient}</th><th>Mode</th><th className="text-right">Montant</th></tr></thead>
           <tbody>{encaiss.map((p) => (<tr key={p.id} data-testid="sante-rapport-enc"><td className="py-1.5">{ecDateFr(p.date)}</td><td className="tabular text-xs">{p.number}</td><td>{p.patient}</td><td>{p.mode === "banque" ? "Banque" : "Espèces"}</td><td className="text-right tabular">{fmt(p.amount)}</td></tr>))}</tbody>
           {encaiss.length > 0 && <tfoot><tr style={tf} data-testid="sante-rapport-enc-total"><td colSpan={4}>Total ({encaiss.length})</td><td className="text-right tabular" data-testid="sante-rapport-enc-tot">{fmt(S(encaiss, (p) => p.amount))}</td></tr></tfoot>}</table></div>
