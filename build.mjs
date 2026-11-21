@@ -244,6 +244,10 @@ for (const [id, code] of Object.entries(chunkFiles)) {
   fs.writeFileSync(path.join(sortie, "chunks", id + ".js"), code);
 }
 fs.writeFileSync(path.join(sortie, "index.html"), indexFinal);
+// Feuille de styles du lot 1 du visuel : copiée à côté de index.html (sinon la page la demande et ne la trouve pas).
+const lot1 = [path.join(racine, "src", "refonte-lot1.css"), path.join(racine, "docs", "refonte-lot1.css")].find((f) => fs.existsSync(f));
+if (lot1) { if (path.resolve(lot1) !== path.join(sortie, "refonte-lot1.css")) fs.copyFileSync(lot1, path.join(sortie, "refonte-lot1.css")); console.log("Feuille lot 1 : refonte-lot1.css copiée dans " + path.relative(racine, sortie) + "/"); }
+else if (indexFinal.includes("refonte-lot1.css")) { console.error("BLOQUÉ — la page demande refonte-lot1.css mais le fichier est introuvable (src/ ou docs/)."); process.exit(1); }
 for (const [rel, buf] of vendorOut) {
   const dest = path.join(sortie, rel);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
