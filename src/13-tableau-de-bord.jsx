@@ -92,23 +92,55 @@ function LowStockAlertCard({ setActive, products, planTier }) {
   const lowStockProducts = (products || []).filter((p) => p.type === "marchandise" && Number(p.seuil) > 0 && Number(p.stock || 0) <= Number(p.seuil));
   if (lowStockProducts.length === 0) return null;
 
-  const preview = lowStockProducts.slice(0, 3);
+  // Les produits les plus en manque d'abord ; cinq lignes au plus, le reste par le lien « Voir le stock ».
+  const manque = (p) => Number(p.seuil) - Number(p.stock || 0);
+  const lignes = [...lowStockProducts].sort((a, b) => manque(b) - manque(a)).slice(0, 5);
+  const reste = lowStockProducts.length - lignes.length;
+  const nombre = (v) => Number(v || 0).toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+  const aller = () => setActive?.("stock");
+
+  const entete = { padding: "8px 10px", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "#FFFFFF", background: "#152238", textAlign: "left", whiteSpace: "nowrap" };
+  const cellule = { padding: "9px 10px", fontSize: 13, color: "#152238", borderTop: "1px solid #E8E4DC", whiteSpace: "nowrap" };
+  const droite = { textAlign: "right", fontFamily: "ui-monospace, monospace" };
 
   return (
-    <div className="rounded-lg p-4 mb-6 cursor-pointer" style={{ background: "#F7E9E3", border: "1px solid #A6432F22" }}
-      onClick={() => setActive?.("stock")}>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+    <div className="rounded-lg mb-6 overflow-hidden" style={{ background: "#FFFFFF", border: "1px solid #E8E4DC", borderTop: "4px solid #A6432F", boxShadow: "0 1px 3px rgba(21,34,56,0.06)" }}>
+      <div className="flex items-center justify-between gap-3 flex-wrap px-4 pt-4 pb-3">
         <div>
           <div className="text-xs font-medium uppercase tracking-wide" style={{ color: "#A6432F" }}>Alerte de stock bas</div>
           <div className="text-sm mt-0.5" style={{ color: "#152238" }}>
             {lowStockProducts.length} produit{lowStockProducts.length > 1 ? "s" : ""} sous le seuil de réapprovisionnement
           </div>
         </div>
-        <div className="text-lg font-semibold shrink-0" style={{ color: "#A6432F" }}>{lowStockProducts.length}</div>
+        <button type="button" onClick={aller} className="text-sm px-3 py-1.5 rounded" style={{ background: "#152238", color: "#FFFFFF" }}>Voir le stock</button>
       </div>
-      <div className="text-xs mt-2" style={{ color: "#8A6A5F" }}>
-        {preview.map((p) => p.name).join(", ")}{lowStockProducts.length > preview.length ? "…" : ""}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={entete}>Produit</th>
+              <th style={{ ...entete, textAlign: "right" }}>Stock</th>
+              <th style={{ ...entete, textAlign: "right" }}>Seuil</th>
+              <th style={{ ...entete, textAlign: "right" }}>Manque</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lignes.map((p, i) => (
+              <tr key={p.id || i} onClick={aller} style={{ cursor: "pointer", background: i % 2 ? "#FBF8F3" : "#FFFFFF" }}>
+                <td style={cellule}>{p.name}</td>
+                <td style={{ ...cellule, ...droite }}>{nombre(p.stock)}</td>
+                <td style={{ ...cellule, ...droite }}>{nombre(p.seuil)}</td>
+                <td style={{ ...cellule, ...droite, color: "#A6432F", fontWeight: 600 }}>{nombre(manque(p))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+      {reste > 0 && (
+        <div className="text-xs px-4 py-2" style={{ color: "#8A6A5F", borderTop: "1px solid #E8E4DC" }}>
+          + {reste} autre{reste > 1 ? "s" : ""} produit{reste > 1 ? "s" : ""} — voir le stock
+        </div>
+      )}
     </div>
   );
 }
