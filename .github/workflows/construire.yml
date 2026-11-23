@@ -49,6 +49,8 @@ jobs:
           fi
 
       - name: Construire le site dans docs/
+        env:
+          TAILWIND_BIN: ${{ github.workspace }}/node_modules/.bin/tailwindcss
         run: node build/build.mjs "${{ steps.cible.outputs.cible }}"
 
       - name: Installer le navigateur de test
