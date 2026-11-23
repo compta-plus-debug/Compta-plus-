@@ -1,8 +1,8 @@
 # Construction et publication automatiques du site (Compta+).
 # À chaque modification de src/, build/ ou tests/ sur main :
-#   1. le site est compilé dans docs/ (cible déduite du nom du dépôt : « --test » = test, sinon production) ;
-#   2. les tests automatiques sont lancés ;
-#   3. si tout est vert, docs/ est publié dans le dépôt, et GitHub Pages le met en ligne.
+#   1. les tests automatiques sont découpés en 4 lots lancés en parallèle (chaque lot construit le site puis teste sa part) ;
+#   2. si les 4 lots sont verts, le site est construit une dernière fois dans docs/ et publié dans le dépôt ;
+#   3. GitHub Pages met docs/ en ligne.
 # Aucun fichier compilé à déposer à la main.
 name: Construire le site
 
@@ -25,8 +25,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  construire:
+  tests:
+    name: Tests (lot ${{ matrix.lot }}/4)
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        lot: [1, 2, 3, 4]
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v4
@@ -56,13 +61,40 @@ jobs:
       - name: Installer le navigateur de test
         run: npx playwright install --with-deps chromium
 
-      - name: Tests automatiques
+      - name: Tests automatiques (lot ${{ matrix.lot }}/4)
+        env:
+          SHARD: "${{ matrix.lot }}/4"
+        run: node tests/tst-lancer.mjs
+
+  publier:
+    name: Publier le site
+    needs: tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer les dépendances
+        run: npm install --no-audit --no-fund --no-package-lock
+
+      - name: Choisir la cible (test ou production)
+        id: cible
         run: |
-          if [ -f tests/tst-lancer.mjs ]; then
-            node tests/tst-lancer.mjs
+          if [[ "${GITHUB_REPOSITORY}" == *"--test" ]]; then
+            echo "cible=test" >> "$GITHUB_OUTPUT"
           else
-            echo "tests/tst-lancer.mjs absent : tests ignorés"
+            echo "cible=prod" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Construire le site dans docs/
+        env:
+          TAILWIND_BIN: ${{ github.workspace }}/node_modules/.bin/tailwindcss
+        run: node build/build.mjs "${{ steps.cible.outputs.cible }}"
 
       - name: Garder une copie téléchargeable (secours)
         uses: actions/upload-artifact@v4
