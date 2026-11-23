@@ -5,8 +5,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 const ici = path.dirname(fileURLToPath(import.meta.url));
 const tests = ["h1", "k1", "g2", "p1", "p2", "p3", "p5", "p6", "r1", "c2", "c1", "d2", "d3", "d4", "e1", "i3", "i4", "i5", "j1", "l1", "l2", "l3", "c6", "m1", "m2", "n2", "n1", "n3", "s1", "s2", "t1", "t2", "u1", "u2", "u3", "u4", "u5", "u6", "u7", "u8", "u9", "u10", "u11", "u12", "u13", "u14", "u15", "u16", "u17", "u18", "u19", "u20", "u21", "u22", "u23","u24","u25","u26","u27","u28","u29","u30","u31","u32","u33","u34","u35","u36","u37","u38","u39","u40","u41","u42", "u43", "u44", "u45","u46","u47","u48","u49","u50","u51","u52","u53","u54","u55","u56","u57","u58", "u59"];
+// Découpage en lots (SHARD="1/4" = premier quart des tests). Sans SHARD, tous les tests sont lancés.
+const [numeroLot, nbLots] = (process.env.SHARD || "1/1").split("/").map(Number);
+const lot = tests.filter((_, i) => i % nbLots === numeroLot - 1);
+console.log("Lot " + numeroLot + "/" + nbLots + " : " + lot.length + " tests");
 let echecs = 0;
-for (const t of tests) {
+for (const t of lot) {
   let sortie = "", ok = false;
   for (let essai = 1; essai <= 2 && !ok; essai++) {           // un 2e essai si le navigateur a eu un raté ponctuel
     const r = spawnSync("node", [path.join(ici, "tst-" + t + ".cjs")], { cwd: ici, encoding: "utf8", timeout: 300000, env: process.env });
