@@ -249,6 +249,15 @@ fs.writeFileSync(path.join(sortie, "index.html"), indexFinal);
 const feuillesRefonte = fs.readdirSync(path.join(racine, "src")).filter((f) => /^refonte-.*\.css$/.test(f));
 for (const nom of feuillesRefonte) fs.copyFileSync(path.join(racine, "src", nom), path.join(sortie, nom));
 if (feuillesRefonte.length) console.log("Feuilles de refonte copiées : " + feuillesRefonte.join(", "));
+// Cache du navigateur : le nom du cache suit la version de l'application (plus de retouche à la main de sw.js).
+const swFichier = path.join(sortie, "sw.js");
+if (fs.existsSync(swFichier)) {
+  const sw = fs.readFileSync(swFichier, "utf8");
+  const sw2 = sw.replace(/const CACHE_NAME = "[^"]*";/, 'const CACHE_NAME = "compta-plus-cache-' + m[1] + '";');
+  if (sw2 === sw && !sw.includes('"compta-plus-cache-' + m[1] + '"')) { console.error("BLOQUÉ — ligne CACHE_NAME introuvable dans sw.js."); process.exit(1); }
+  fs.writeFileSync(swFichier, sw2);
+  console.log("Cache du navigateur : compta-plus-cache-" + m[1]);
+}
 for (const m of indexFinal.matchAll(/href="(refonte-[^"?]+\.css)/g)) {
   if (!fs.existsSync(path.join(sortie, m[1]))) { console.error("BLOQUÉ — la page demande " + m[1] + " mais le fichier est introuvable."); process.exit(1); }
 }

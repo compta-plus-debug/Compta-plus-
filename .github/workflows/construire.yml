@@ -1,95 +1,91 @@
-# Compile automatiquement le site à chaque modification de src/ : aucun fichier compilé à déposer à la main.
-# La cible (test ou production) est déduite du NOM du dépôt : « compta-plus--test » = test, sinon production.
+# Construction et publication automatiques du site (Compta+).
+# À chaque modification de src/, build/ ou tests/ sur main :
+#   1. le site est compilé dans docs/ (cible déduite du nom du dépôt : « --test » = test, sinon production) ;
+#   2. les tests automatiques sont lancés ;
+#   3. si tout est vert, docs/ est publié dans le dépôt, et GitHub Pages le met en ligne.
+# Aucun fichier compilé à déposer à la main.
 name: Construire le site
 
 on:
   push:
+    branches: [main]
     paths:
       - "src/**"
       - "build/**"
-      - "*.jsx"
-      - "package.json"
-      - "build.mjs"
-      - "controle.mjs"
-      - "dependances.mjs"
-      - "entetes.mjs"
-      - "tst-*"
       - "tests/**"
+      - "package.json"
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# Si plusieurs dépôts de fichiers se suivent, seule la dernière construction va au bout.
+# Une seule construction à la fois. On ne l'interrompt pas en cours de route, pour éviter une publication incomplète.
 concurrency:
   group: construire-le-site
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   construire:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Installer le compilateur
+      - name: Installer les dépendances
         run: npm install --no-audit --no-fund --no-package-lock
 
-      # Générateur de styles Tailwind (exécutable officiel, version fixée) : il produit docs/tailwind.css,
-      # qui remplace le script externe cdn.tailwindcss.com. L'empreinte est vérifiée avant toute utilisation.
-      - name: Installer le générateur de styles (Tailwind 3.4.17)
+      - name: Choisir la cible (test ou production)
+        id: cible
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/tailwindcss" "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64"
-          echo "7d24f7fa191d2193b78cd5f5a42a6093e14409521908529f42d80b11fde1f1d4 $RUNNER_TEMP/tailwindcss" | sha256sum -c -
-          chmod +x "$RUNNER_TEMP/tailwindcss"
-          echo "TAILWIND_BIN=$RUNNER_TEMP/tailwindcss" >> "$GITHUB_ENV"
+          if [[ "${GITHUB_REPOSITORY}" == *"--test" ]]; then
+            echo "cible=test" >> "$GITHUB_OUTPUT"
+          else
+            echo "cible=prod" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Compiler
-        run: |
-          if [[ "${GITHUB_REPOSITORY}" == *"--test" ]]; then CIBLE=test; else CIBLE=prod; fi
-          echo "Cible : $CIBLE"
-          if [ -f build/build.mjs ]; then S=build/build.mjs; else S=build.mjs; fi
-          echo "Script : $S"
-          node "$S" "$CIBLE"
+      - name: Construire le site dans docs/
+        run: node build/build.mjs "${{ steps.cible.outputs.cible }}"
 
       - name: Installer le navigateur de test
-        run: |
-          if [ -f tests/tst-lancer.mjs ] || [ -f tst-lancer.mjs ]; then npx playwright install --with-deps chromium; else echo "Tests non installés : étape ignorée."; fi
+        run: npx playwright install --with-deps chromium
 
       - name: Tests automatiques
         run: |
-          if [ -f tests/tst-lancer.mjs ]; then node tests/tst-lancer.mjs
-          elif [ -f tst-lancer.mjs ]; then node tst-lancer.mjs
-          else echo "Tests non installés : étape ignorée."; fi
+          if [ -f tests/tst-lancer.mjs ]; then
+            node tests/tst-lancer.mjs
+          else
+            echo "tests/tst-lancer.mjs absent : tests ignorés"
+          fi
 
       - name: Garder une copie téléchargeable (secours)
         uses: actions/upload-artifact@v4
         with:
           name: site-compile
-          path: |
-            docs/app.min.js
-            docs/index.html
-            docs/tailwind.css
-            docs/vendor
-            docs/fonts
-            docs/chunks
+          path: docs/
 
-      - name: Publier les fichiers compilés dans docs/
+      - name: Publier docs/ dans le dépôt
         run: |
           git config user.name "construction-automatique"
           git config user.email "actions@users.noreply.github.com"
-          git add -A docs/app.min.js docs/index.html docs/tailwind.css docs/vendor docs/fonts docs/chunks
+          git add docs/
           if git diff --cached --quiet; then
             echo "Aucun changement à publier."
-          else
-            git commit -m "Construction automatique du site"
-            for essai in 1 2 3 4; do
-              git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" || true
-              if git push; then echo "Publié."; exit 0; fi
-              echo "Envoi refusé (essai $essai), nouvelle tentative…"; sleep 5
-            done
-            echo "Impossible de publier après 4 essais."; exit 1
+            exit 0
           fi
+          git commit -m "Construction automatique du site (${GITHUB_SHA:0:7})"
+          for essai in 1 2 3 4; do
+            if git push origin HEAD:"${GITHUB_REF_NAME}"; then
+              echo "Publié."
+              exit 0
+            fi
+            echo "Envoi refusé (essai $essai), nouvelle tentative…"
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" || true
+            sleep 5
+          done
+          echo "Impossible de publier après 4 essais."
+          exit 1

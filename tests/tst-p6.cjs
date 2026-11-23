@@ -3,7 +3,7 @@ let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.
 const txt=p=>p.evaluate(()=>document.body.innerText);
 const noMember=(extra)=>new Function("(function(){if(!crypto.randomUUID)crypto.randomUUID=function(){return 'g'+Math.random().toString(36).slice(2)};var S=window.__srv;S.tables.company_members=[];S.tables.companies=[];"+(extra||"")+"})();");
 const blockedFn="S.fnH={'create-company':async function(o){return {data:null,error:{message:'x',context:{json:async function(){return {error:'Cette adresse email a déjà bénéficié de 2 essais gratuits. Pour continuer, choisissez un forfait ou écrivez-nous à support@comptaplus.app : nous vous aiderons.',code:'trial_limit'}}}}}}};";
-const allowFn="S.fnH={'create-company':async function(o){S.lastCheck=o.body;return {data:{success:true,allowed:true},error:null}},'create-group':async function(o){S.tables.company_groups.push({id:'g1',name:o.body.name,owner_user_id:'u1'});return {data:{groupId:'g1'},error:null}}};";
+const allowFn="S.fnH={'create-company':async function(o){S.lastCheck=o.body;return {data:{success:true,allowed:true},error:null}}};";
 (async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
 // A) Groupe : refus serveur -> bannière, aucun groupe créé
 {const {p,errs}=await boot(b,{skipSeed:true,pageInit:noMember(blockedFn+"S.tables.company_groups=[];")});
@@ -15,7 +15,9 @@ const allowFn="S.fnH={'create-company':async function(o){S.lastCheck=o.body;retu
  ok('A : aucun groupe créé',await p.evaluate(()=>window.__srv.tables.company_groups.length)===0);
  ok('A : aucune erreur JS',errs.length===0,errs.slice(0,3));await p.close();}
 // B) Groupe : autorisé -> vérification envoyée avec checkOnly puis groupe créé
-{const {p,errs}=await boot(b,{skipSeed:true,pageInit:noMember(allowFn+"S.tables.company_groups=[];")});
+// v339 : la création de groupe passe par la fonction serveur create-group (simulée ici comme le serveur la ferait)
+const groupFn="S.fnH['create-group']=async function(o){var id='g'+Math.random().toString(36).slice(2);S.tables.company_groups.push({id:id,owner_user_id:'u1',name:o.body.name,plan_status:'trial'});return {data:{success:true,groupId:id,groupName:o.body.name,groupMaxCompanies:5},error:null}};";
+{const {p,errs}=await boot(b,{skipSeed:true,pageInit:noMember(allowFn+groupFn+"S.tables.company_groups=[];")});
  await p.locator('input[placeholder*="Nom de l\'entreprise"]').fill('Mon Groupe');
  await p.locator('[data-testid="welcome-phone"]').fill('509 3712 3456');
  await p.getByText('Extension',{exact:false}).first().click();

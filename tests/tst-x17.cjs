@@ -1,0 +1,25 @@
+// v360+ — alerte de stock bas : tableau (Produit / Stock / Seuil / Manque), 5 lignes au plus, lien « Voir le stock ».
+const {chromium}=require('playwright');const {boot}=require('./tst-harness.cjs');const fs=require('fs');const path=require('path');
+let fails=0;const ok=(n,c,i)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' '+JSON.stringify(i)));if(!c)fails++};
+const init=new Function("(function(){try{localStorage.clear()}catch(e){}var c=window.__srv.tables.companies[0];c.plan_tier='assisted';})();");
+const low=[['Pied Poule',24.6,30],['Poisson Mackerel',33,40],['Ti Bout Maypark',22,25],['Riz',2,10],['Huile',1,8],['Sel',0,5],['Sucre',4,6]].map((x,i)=>({id:100+i,code:'P'+i,name:x[0],type:'marchandise',price:10,account:'707',stock:x[1],seuil:x[2]}));
+const ok1={id:200,code:'OK',name:'Farine',type:'marchandise',price:10,account:'707',stock:50,seuil:5};
+(async()=>{const b=await chromium.launch(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{});
+const {p,errs}=await boot(b,{settings:{companyName:'Test Stock',currency:'HTG'},primary:true,cats:{products:[...low,ok1]},pageInit:init});
+const css=['refonte-lot1.css','refonte-lot2.css','refonte-lot2b.css'].map(f=>fs.readFileSync(path.join(__dirname,'docs',f),'utf8')).join('\n');
+await p.locator('button',{hasText:'Tableau de bord'}).first().click();await p.waitForTimeout(600);
+await p.addStyleTag({content:css});await p.setViewportSize({width:390,height:844});await p.waitForTimeout(400);
+const carte=p.locator('.compta-accueil table').first();
+ok('tableau d\'alerte présent',(await carte.count())===1);
+const heads=await p.locator('.compta-accueil table thead th').allInnerTexts();
+ok('en-têtes Produit / Stock / Seuil / Manque',JSON.stringify(heads.map(h=>h.toLowerCase()))===JSON.stringify(['produit','stock','seuil','manque']),heads);
+ok('5 lignes au plus',(await p.locator('.compta-accueil table tbody tr').count())===5);
+const premiere=await p.locator('.compta-accueil table tbody tr').first().innerText();
+ok('le produit le plus en manque est en tête (Riz : manque 8)',premiere.includes('Riz')&&premiere.includes('8'),premiere);
+const bas=await p.getByText('autres produits').count()+await p.getByText('autre produit').count();
+ok('mention des produits restants',bas===1);
+ok('bouton Voir le stock',(await p.getByRole('button',{name:'Voir le stock'}).count())===1);
+const sw=await p.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
+ok('aucun débordement horizontal à 390 px',sw<=1,{sw});
+ok('aucune erreur JS',errs.length===0,errs);
+await b.close();console.log('fails='+fails);process.exit(fails?1:0)})();
