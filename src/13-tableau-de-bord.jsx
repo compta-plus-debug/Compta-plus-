@@ -53,7 +53,7 @@ function FiscalDeadlinesCard({ setActive, taxSystem, planTier }) {
   return (
     <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: showIR ? "repeat(auto-fit, minmax(260px, 1fr))" : "1fr" }}>
       <div className="rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap cursor-pointer"
-        style={{ background: urgencyBg(tcaDaysLeft), border: `1px solid ${urgencyColor(tcaDaysLeft)}22` }}
+        style={{ background: "#fff", border: "1px solid #E4DFD1", borderTop: `4px solid ${urgencyColor(tcaDaysLeft)}` }}
         onClick={() => setActive?.("rapports")}>
         <div>
           <div className="text-xs font-medium uppercase tracking-wide" style={{ color: urgencyColor(tcaDaysLeft) }}>Déclaration TCA</div>
@@ -65,7 +65,7 @@ function FiscalDeadlinesCard({ setActive, taxSystem, planTier }) {
       </div>
       {showIR && (
         <div className="rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap cursor-pointer"
-          style={{ background: urgencyBg(irDaysLeft), border: `1px solid ${urgencyColor(irDaysLeft)}22` }}
+          style={{ background: "#fff", border: "1px solid #E4DFD1", borderTop: `4px solid ${urgencyColor(irDaysLeft)}` }}
           onClick={() => setActive?.("rapports")}>
           <div>
             <div className="text-xs font-medium uppercase tracking-wide" style={{ color: urgencyColor(irDaysLeft) }}>Impôt sur le Revenu</div>
@@ -176,7 +176,7 @@ function AgingReceivablesCard({ setActive, invoices, planTier }) {
   const totalDue = clientList.reduce((s, c) => s + c.total, 0);
 
   return (
-    <div className="rounded-lg p-4 mb-6 cursor-pointer" style={{ background: "#FBF1DC", border: "1px solid #9A7B1E22" }}
+    <div className="rounded-lg p-4 mb-6 cursor-pointer" style={{ background: "#fff", border: "1px solid #E4DFD1", borderTop: "4px solid #9A7B1E" }}
       onClick={() => setActive?.("crm")}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
