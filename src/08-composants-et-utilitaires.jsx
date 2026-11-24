@@ -281,6 +281,6 @@ const FALLBACK_HTG_PER_USD = 130.53; // taux de référence BRH du 07/08/2026, e
 const PLAN_TIER_INFO = {
   standard: { label: "Standard", priceUSD: 20, next: "assisted", prev: null },
   assisted: { label: "Assisté", priceUSD: 80, next: "group", prev: "standard" },
-  group: { label: "Extension (jusqu'à 5 entreprises)", priceUSD: 350, next: null, prev: "assisted" },
+  group: { label: "Extension (jusqu'à 5 entreprises)", priceUSD: 230, next: null, prev: "assisted" },
 };
 

@@ -12,7 +12,7 @@
 //  • prix en dollars, facture établie en gourdes au taux affiché ; TCA en option (taux modifiable).
 // Une facture n'est jamais effacée : elle s'annule avec un motif.
 
-const FB_PRIX_DEFAUT = { standard: 20, assisted: 80, group: 350, pack: 12, A: 8, B: 5, C: 3 };
+const FB_PRIX_DEFAUT = { standard: 20, assisted: 80, group: 230, pack: 12, A: 8, B: 5, C: 3 };
 const FB_GRILLE_DEFAUT = { ecoles: "A", import_export: "A", industrie: "A", sante: "B", ong: "B", services: "C", btp: "C", immobilier: "C", restauration: "C", transport: "C", agriculture: "C" };
 const FB_DELAI_JOURS = 15; // une facture non payée après 15 jours est « en retard » (rappel)
 const fbR2 = (n) => Math.round((Number(n) || 0) * 100) / 100;

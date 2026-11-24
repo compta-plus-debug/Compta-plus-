@@ -179,7 +179,7 @@ function SuperAdminModule({ showToast }) {
     // (80 $ Assisté / 20 $ Standard), converti en gourdes au taux de référence —
     // même mécanisme que le paiement MonCash du forfait Standard côté client.
     // Reste librement modifiable si le montant réellement reçu diffère.
-    const priceUSD = co.group_id ? 350 : co.plan_tier === "assisted" ? 80 : 20;
+    const priceUSD = co.group_id ? 230 : co.plan_tier === "assisted" ? 80 : 20;
     setForm({ method: "moncash", amount: String(usdToHtg(priceUSD)), currency: "HTG", date: todayStr(), reference: "", note: "", durationDays: 30 });
     if (!payments[co.id]) loadPayments(co.id);
   };
@@ -213,7 +213,7 @@ function SuperAdminModule({ showToast }) {
     // Si le panneau de paiement de cette entreprise est déjà ouvert, on rafraîchit
     // aussi le montant pré-rempli pour refléter le nouveau forfait immédiatement.
     if (openId === co.id) {
-      setForm((f) => ({ ...f, amount: String(usdToHtg(co.group_id ? 350 : tier === "assisted" ? 80 : 20)), currency: "HTG" }));
+      setForm((f) => ({ ...f, amount: String(usdToHtg(co.group_id ? 230 : tier === "assisted" ? 80 : 20)), currency: "HTG" }));
     }
     logSA("forfait_modifie", co, `${co.plan_tier || "standard"} → ${tier}`);
     showToast(tier === "assisted" ? `${co.name} passe au forfait Assisté (80 $/mois).` : `${co.name} repasse au forfait Standard.`);
@@ -603,7 +603,7 @@ function SuperAdminModule({ showToast }) {
                           const siblings = companies.filter((c) => c.group_id === co.group_id && c.id !== co.id);
                           return (
                             <div className="text-xs mb-3 px-2 py-2 rounded" style={{ background: "#E6F1EE", color: "#0F6B5C" }}>
-                              <div>Fait partie d'un groupe multi-entreprises (forfait Extension, 350 $/mois pour l'ensemble) — {siblings.length + 1} entreprise{siblings.length + 1 > 1 ? "s" : ""}</div>
+                              <div>Fait partie d'un groupe multi-entreprises (forfait Extension, 230 $/mois pour l'ensemble) — {siblings.length + 1} entreprise{siblings.length + 1 > 1 ? "s" : ""}</div>
                               {siblings.length > 0 && (
                                 <ul className="mt-1 ml-3" style={{ listStyle: "disc" }}>
                                   {siblings.map((s) => <li key={s.id}>{s.name || "(sans nom)"}</li>)}

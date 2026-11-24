@@ -2113,7 +2113,7 @@ function App() {
             <button onClick={() => setWelcomeTier("group")}
               className="text-left p-3 rounded border-2"
               style={{ borderColor: welcomeTier === "group" ? "#0F6B5C" : "#DDD6C4", background: welcomeTier === "group" ? "#E6F1EE" : "#fff" }}>
-              <div className="text-sm font-medium" style={{ color: "#0F6B5C" }}>Extension — 350 $/mois</div>
+              <div className="text-sm font-medium" style={{ color: "#0F6B5C" }}>Extension — 230 $/mois</div>
               <div className="text-xs" style={{ color: "#8A8370" }}>Pour gérer jusqu'à 5 entreprises (succursales ou commerces distincts) dans un même espace, avec tableau de bord consolidé — inclut toutes les fonctionnalités Assisté</div>
             </button>
           </div>

@@ -17,7 +17,7 @@ function LandingPage({ onStart }) {
   }, []);
   const htgPrice = htgRate ? Math.round((20 * htgRate) / 10) * 10 : Math.round((20 * FALLBACK_HTG_PER_USD) / 10) * 10;
   const htgPriceAssisted = htgRate ? Math.round((80 * htgRate) / 10) * 10 : Math.round((80 * FALLBACK_HTG_PER_USD) / 10) * 10;
-  const htgPriceGroup = htgRate ? Math.round((350 * htgRate) / 10) * 10 : Math.round((350 * FALLBACK_HTG_PER_USD) / 10) * 10;
+  const htgPriceGroup = htgRate ? Math.round((230 * htgRate) / 10) * 10 : Math.round((230 * FALLBACK_HTG_PER_USD) / 10) * 10;
   const features = [
     { icon: BookOpen, title: "Comptabilité en partie double", desc: "Journal, plan de comptes, bilan et compte de résultat générés automatiquement, avec journal scellé par chaînage cryptographique." },
     { icon: ShoppingCart, title: "Point de vente & facturation", desc: "Encaissez en boutique, générez des factures professionnelles imprimables ou en PDF, gérez remises et paiements partiels." },
@@ -119,7 +119,7 @@ function LandingPage({ onStart }) {
               <div className="text-center pb-4" style={{ borderBottom: "1px solid #E3F2EC" }}>
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#4FAE93" }}>Haïti</div>
                 <div className="lp-display text-2xl mb-1">{htgPriceGroup.toLocaleString("fr-FR")} HTG<span className="text-sm font-normal" style={{ color: "#A39C87" }}> / mois</span></div>
-                <p className="text-xs" style={{ color: "#A39C87" }}>≈ 350 USD ({(htgRate || FALLBACK_HTG_PER_USD).toFixed(2)} HTG/USD) — MonCash, NatCash ou virement</p>
+                <p className="text-xs" style={{ color: "#A39C87" }}>≈ 230 USD ({(htgRate || FALLBACK_HTG_PER_USD).toFixed(2)} HTG/USD) — MonCash, NatCash ou virement</p>
               </div>
               <div className="text-center">
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#4FAE93" }}>Mexique</div>
