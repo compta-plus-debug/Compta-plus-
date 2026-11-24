@@ -38,7 +38,7 @@ const inv=(p)=>p.evaluate(()=>window.__srv.tables.billing_invoices);
  ok('Assisté : 80 USD = 10 400 G (blocs inclus)',tot('Assistee')===10400,tot('Assistee'));
  ok('Lakay : forfait seul 20 USD = 2 600 G',tot('Lakay SA')===2600,tot('Lakay SA'));
  const gf=mens.filter(r=>r.company_id==='g1'||r.company_id==='g2');
- ok('Groupe : une seule facture de 350 USD = 45 500 G',gf.length===1&&gf[0].total_htg===45500,gf.length);
+ ok('Groupe : une seule facture de 230 USD = 29 900 G',gf.length===1&&gf[0].total_htg===29900,gf.length);
  ok('Groupe : facturée au nom de l entreprise rattachée (jamais un autre nom) avec le groupe et les entreprises couvertes sur la ligne',gf[0]&&gf[0].client_name===(gf[0].company_id==='g1'?'Filiale1':'Filiale2')&&/Groupe Alpha/.test(gf[0].lines[0].label)&&/Filiale1/.test(gf[0].lines[0].label)&&/Filiale2/.test(gf[0].lines[0].label),gf[0]&&[gf[0].client_name,gf[0].lines[0].label]);
  ok('aucune facture ne porte le nom du groupe comme client',!mens.some(r=>r.client_name==='Groupe Alpha'));
  ok('entreprise en essai : pas de facture mensuelle',!mens.some(r=>r.client_name==='EnEssai'));

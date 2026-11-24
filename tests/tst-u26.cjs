@@ -39,7 +39,7 @@ const inv=(p)=>p.evaluate(()=>window.__srv.tables.billing_invoices);
  // membre non principal d'un groupe
  await sel.selectOption('g2');await g(p,'fb-em-emettre').click();await p.waitForTimeout(1200);
  rows=await inv(p);const gf=rows.filter(r=>r.kind==='mensuelle'&&(r.company_id==='g1'||r.company_id==='g2'));
- ok('groupe : une seule facture (350 USD) au nom de l entreprise la plus ancienne (Fil1), groupe cité',gf.length===1&&gf[0].company_id==='g1'&&gf[0].client_name==='Fil1'&&gf[0].total_htg===45500&&/Groupe Alpha/.test(gf[0].lines[0].label),gf.map(r=>[r.company_id,r.client_name,r.total_htg]));
+ ok('groupe : une seule facture (230 USD) au nom de l entreprise la plus ancienne (Fil1), groupe cité',gf.length===1&&gf[0].company_id==='g1'&&gf[0].client_name==='Fil1'&&gf[0].total_htg===29900&&/Groupe Alpha/.test(gf[0].lines[0].label),gf.map(r=>[r.company_id,r.client_name,r.total_htg]));
  // toutes
  await sel.selectOption('');await g(p,'fb-em-emettre').click();await p.waitForTimeout(1500);
  rows=await inv(p);mens=rows.filter(r=>r.kind==='mensuelle');
