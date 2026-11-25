@@ -1,10 +1,10 @@
 // ═══ MODULE ═══
 // @module Assistance et anomalies
-// @depends PLAN_TIER_INFO, fmt, supabase, useEffect, useState
+// @depends PLAN_TIER_INFO, fmt, supabase, todayStr, useEffect, useState
 // @exports AssistedPrincipleReminder, PendingRecommendationsBanner, _backNavStack
 //   buildReversedCorrectedLines, buildReversedCorrection, cleanSuggestionLabel
 //   detectAmountAnomaly, detectDuplicateAnomaly, detectRareAccountAnomaly, detectReversedAnomaly
-//   detectTaxAnomaly, fetchBillingTarif, fetchHtgPerUsd, suggestAccountFromHistory
+//   detectTaxAnomaly, fetchBillingTarif, fetchHtgPerUsd, promoActive, suggestAccountFromHistory
 //   suggestSimilarTiers, tarifPrixUsd, useAssistedAnomalyGate, useBackNav
 // ═══ FIN DE L'EN-TÊTE ═══
 // --- Rappel du principe comptable (forfait Assisté uniquement) ---
@@ -300,15 +300,34 @@ function detectDuplicateAnomaly(newItem, recentItems) {
 // Tarif des abonnements fixé dans Super Admin > Facturation > Réglages de facturation :
 // prix en dollars par forfait et taux « gourdes pour 1 USD ». C'est la référence commune de l'application
 // et de la fonction serveur moncash. rate = null si le taux n'est pas renseigné (repli : taux du marché).
+// Lecture d'abord par la vue publique « prix_forfaits_publics » (prix et taux seulement, lisible
+// par les visiteurs non connectés), puis par la table elle-même.
 async function fetchBillingTarif() {
+  try {
+    const { data, error } = await supabase.from("prix_forfaits_publics").select("prices, rate_htg_per_usd").eq("id", 1).maybeSingle();
+    if (!error && data) { const r = Number(data.rate_htg_per_usd); return { rate: r > 0 ? r : null, prices: data.prices || {} }; }
+  } catch (e) { /* vue absente : essai ci-dessous */ }
   try {
     const { data } = await supabase.from("billing_settings").select("prices, rate_htg_per_usd").eq("id", 1).maybeSingle();
     if (data) { const r = Number(data.rate_htg_per_usd); return { rate: r > 0 ? r : null, prices: data.prices || {} }; }
   } catch (e) { /* hors ligne ou lecture impossible : repli */ }
   return { rate: null, prices: {} };
 }
-// Prix en dollars d'un forfait : réglages de facturation d'abord, valeur intégrée sinon.
-function tarifPrixUsd(tarif, tier) {
+// Promotion datée (Super admin > Réglages de facturation) : prices.promo = { tier, usd, debut, fin, libelle }.
+// Elle vaut pour les factures émises pendant la période (date d'émission) et pour les prix affichés ce jour-là.
+function promoActive(tarif, tier, dateIso) {
+  const p = tarif && tarif.prices && tarif.prices.promo;
+  if (!p || p.tier !== tier) return null;
+  const usd = Number(p.usd);
+  if (!(usd > 0) || !p.debut || !p.fin) return null;
+  const d = String(dateIso || todayStr()).slice(0, 10);
+  if (d < String(p.debut).slice(0, 10) || d > String(p.fin).slice(0, 10)) return null;
+  return { usd, libelle: p.libelle || "promotion", debut: String(p.debut).slice(0, 10), fin: String(p.fin).slice(0, 10) };
+}
+// Prix en dollars d'un forfait à une date : promotion active d'abord, puis réglages, valeur intégrée en dernier recours.
+function tarifPrixUsd(tarif, tier, dateIso) {
+  const promo = promoActive(tarif, tier, dateIso);
+  if (promo) return promo.usd;
   const p = Number(tarif && tarif.prices && tarif.prices[tier]);
   if (p > 0) return p;
   return (PLAN_TIER_INFO[tier] || PLAN_TIER_INFO.standard).priceUSD;

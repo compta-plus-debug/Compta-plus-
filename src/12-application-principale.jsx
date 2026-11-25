@@ -2101,19 +2101,19 @@ function App() {
             <button onClick={() => setWelcomeTier("standard")}
               className="text-left p-3 rounded border-2"
               style={{ borderColor: welcomeTier === "standard" ? "#152238" : "#DDD6C4", background: welcomeTier === "standard" ? "#F4F2EC" : "#fff" }}>
-              <div className="text-sm font-medium" style={{ color: "#152238" }}>Standard — 20 $/mois</div>
+              <div className="text-sm font-medium" style={{ color: "#152238" }}>Standard — {tarifPrixUsd(billTarif, "standard")} $/mois</div>
               <div className="text-xs" style={{ color: "#8A8370" }}>Toutes les fonctionnalités de base</div>
             </button>
             <button onClick={() => setWelcomeTier("assisted")}
               className="text-left p-3 rounded border-2"
               style={{ borderColor: welcomeTier === "assisted" ? "#5B3FA0" : "#DDD6C4", background: welcomeTier === "assisted" ? "#F3EEFB" : "#fff" }}>
-              <div className="text-sm font-medium" style={{ color: "#5B3FA0" }}>Assisté — 80 $/mois</div>
+              <div className="text-sm font-medium" style={{ color: "#5B3FA0" }}>Assisté — {tarifPrixUsd(billTarif, "assisted")} $/mois</div>
               <div className="text-xs" style={{ color: "#8A8370" }}>+ alertes, recommandations et corrections automatiques pour éviter les erreurs de saisie</div>
             </button>
             <button onClick={() => setWelcomeTier("group")}
               className="text-left p-3 rounded border-2"
               style={{ borderColor: welcomeTier === "group" ? "#0F6B5C" : "#DDD6C4", background: welcomeTier === "group" ? "#E6F1EE" : "#fff" }}>
-              <div className="text-sm font-medium" style={{ color: "#0F6B5C" }}>Extension — 230 $/mois</div>
+              <div className="text-sm font-medium" style={{ color: "#0F6B5C" }}>Extension — {tarifPrixUsd(billTarif, "group")} $/mois</div>
               <div className="text-xs" style={{ color: "#8A8370" }}>Pour gérer jusqu'à 5 entreprises (succursales ou commerces distincts) dans un même espace, avec tableau de bord consolidé — inclut toutes les fonctionnalités Assisté</div>
             </button>
           </div>

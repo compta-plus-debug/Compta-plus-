@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Page accueil
-// @depends BarChart3, BookOpen, Boxes, FALLBACK_HTG_PER_USD, ShoppingCart, Truck, Users, fetchHtgPerUsd
+// @depends BarChart3, BookOpen, Boxes, FALLBACK_HTG_PER_USD, ShoppingCart, Truck, Users, fetchBillingTarif, fetchHtgPerUsd, promoActive, tarifPrixUsd
 //   useEffect, useState
 // @exports LandingPage
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -9,15 +9,23 @@
 function LandingPage({ onStart }) {
   const [htgRate, setHtgRate] = useState(null);
   const [rateIsLive, setRateIsLive] = useState(false);
+  // Prix et promotion : ceux des Réglages de facturation (Super admin), comme dans l'application.
+  const [tarif, setTarif] = useState({ rate: null, prices: {} });
   useEffect(() => {
+    fetchBillingTarif().then((t) => setTarif(t));
     fetchHtgPerUsd().then((rate) => {
       if (rate) { setHtgRate(rate); setRateIsLive(true); }
       else { setHtgRate(FALLBACK_HTG_PER_USD); setRateIsLive(false); }
     });
   }, []);
-  const htgPrice = htgRate ? Math.round((20 * htgRate) / 10) * 10 : Math.round((20 * FALLBACK_HTG_PER_USD) / 10) * 10;
-  const htgPriceAssisted = htgRate ? Math.round((80 * htgRate) / 10) * 10 : Math.round((80 * FALLBACK_HTG_PER_USD) / 10) * 10;
-  const htgPriceGroup = htgRate ? Math.round((230 * htgRate) / 10) * 10 : Math.round((230 * FALLBACK_HTG_PER_USD) / 10) * 10;
+  // Taux : celui des réglages (même référence que le paiement), sinon le taux du marché, sinon le taux de repli.
+  const tauxAffiche = tarif.rate || htgRate || FALLBACK_HTG_PER_USD;
+  const usdStandard = tarifPrixUsd(tarif, "standard"), usdAssisted = tarifPrixUsd(tarif, "assisted"), usdGroup = tarifPrixUsd(tarif, "group");
+  // Mention de promotion datée sous le prix d'un forfait, si une promotion est en cours.
+  const noteProm = (tier) => { const pr = promoActive(tarif, tier); return pr ? " — promotion « " + pr.libelle + " » jusqu'au " + pr.fin : ""; };
+  const htgPrice = Math.round((usdStandard * tauxAffiche) / 10) * 10;
+  const htgPriceAssisted = Math.round((usdAssisted * tauxAffiche) / 10) * 10;
+  const htgPriceGroup = Math.round((usdGroup * tauxAffiche) / 10) * 10;
   const features = [
     { icon: BookOpen, title: "Comptabilité en partie double", desc: "Journal, plan de comptes, bilan et compte de résultat générés automatiquement, avec journal scellé par chaînage cryptographique." },
     { icon: ShoppingCart, title: "Point de vente & facturation", desc: "Encaissez en boutique, générez des factures professionnelles imprimables ou en PDF, gérez remises et paiements partiels." },
@@ -81,7 +89,7 @@ function LandingPage({ onStart }) {
               <div className="text-center pb-4" style={{ borderBottom: "1px solid #F0EBDD" }}>
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#C9A24B" }}>Haïti</div>
                 <div className="lp-display text-2xl mb-1">{htgPrice.toLocaleString("fr-FR")} HTG<span className="text-sm font-normal" style={{ color: "#A39C87" }}> / mois</span></div>
-                <p className="text-xs" style={{ color: "#A39C87" }}>≈ 20 USD ({(htgRate || FALLBACK_HTG_PER_USD).toFixed(2)} HTG/USD) — MonCash, NatCash ou virement</p>
+                <p className="text-xs" style={{ color: "#A39C87" }}>≈ {usdStandard} USD ({tauxAffiche.toFixed(2)} HTG/USD) — MonCash, NatCash ou virement{noteProm("standard")}</p>
               </div>
               <div className="text-center">
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#C9A24B" }}>Mexique</div>
@@ -100,7 +108,7 @@ function LandingPage({ onStart }) {
               <div className="text-center pb-4" style={{ borderBottom: "1px solid #EEE6FA" }}>
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#8B6FD9" }}>Haïti</div>
                 <div className="lp-display text-2xl mb-1">{htgPriceAssisted.toLocaleString("fr-FR")} HTG<span className="text-sm font-normal" style={{ color: "#A39C87" }}> / mois</span></div>
-                <p className="text-xs" style={{ color: "#A39C87" }}>≈ 80 USD ({(htgRate || FALLBACK_HTG_PER_USD).toFixed(2)} HTG/USD) — MonCash, NatCash ou virement</p>
+                <p className="text-xs" style={{ color: "#A39C87" }}>≈ {usdAssisted} USD ({tauxAffiche.toFixed(2)} HTG/USD) — MonCash, NatCash ou virement{noteProm("assisted")}</p>
               </div>
               <div className="text-center">
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#8B6FD9" }}>Mexique</div>
@@ -119,7 +127,7 @@ function LandingPage({ onStart }) {
               <div className="text-center pb-4" style={{ borderBottom: "1px solid #E3F2EC" }}>
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#4FAE93" }}>Haïti</div>
                 <div className="lp-display text-2xl mb-1">{htgPriceGroup.toLocaleString("fr-FR")} HTG<span className="text-sm font-normal" style={{ color: "#A39C87" }}> / mois</span></div>
-                <p className="text-xs" style={{ color: "#A39C87" }}>≈ 230 USD ({(htgRate || FALLBACK_HTG_PER_USD).toFixed(2)} HTG/USD) — MonCash, NatCash ou virement</p>
+                <p className="text-xs" style={{ color: "#A39C87" }}>≈ {usdGroup} USD ({tauxAffiche.toFixed(2)} HTG/USD) — MonCash, NatCash ou virement{noteProm("group")}</p>
               </div>
               <div className="text-center">
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: "#4FAE93" }}>Mexique</div>

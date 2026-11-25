@@ -1,6 +1,6 @@
 // ═══ MODULE ═══
 // @module Facturation abonnements
-// @depends FALLBACK_HTG_PER_USD, SECTEURS_CATALOGUE, fetchHtgPerUsd, friendlyError, supabase, todayStr
+// @depends FALLBACK_HTG_PER_USD, SECTEURS_CATALOGUE, fetchHtgPerUsd, friendlyError, promoActive, supabase, tarifPrixUsd, todayStr
 //   useEffect, useState
 // @exports BillingAdminPanel, FB_WA_MODELES, fbEnregistrerContact, fbTelValide, fbWaLien, fbWaTexte
 // ═══ FIN DE L'EN-TÊTE ═══
@@ -72,9 +72,14 @@ function fbPeriode(dateIso) {
   return { start: y + "-" + fbPad(m) + "-01", end: y + "-" + fbPad(m) + "-" + fbPad(jours), jours };
 }
 // Lignes d'un mois complet pour une entreprise (ou un groupe) : forfait + suppléments de blocs
-function fbLignes(entity, cfg) {
+// Le prix du forfait est celui des réglages à la date d'émission (promotion datée comprise) : un changement de prix
+// ne touche que les factures émises après lui. Une promotion active est mentionnée sur la ligne.
+function fbLignes(entity, cfg, dateIso) {
   const P = cfg.prices, tier = fbTier(entity.plan_tier);
-  const base = { standard: ["Forfait Standard — abonnement mensuel", P.standard], assisted: ["Forfait Assisté — abonnement mensuel", P.assisted], group: ["Forfait Extension (jusqu'à 5 entreprises) — abonnement mensuel", P.group] }[tier];
+  const promo = promoActive({ prices: P }, tier, dateIso);
+  const prixForfait = tarifPrixUsd({ prices: P }, tier, dateIso);
+  const suffixe = promo ? " — promotion « " + promo.libelle + " »" : "";
+  const base = { standard: ["Forfait Standard — abonnement mensuel" + suffixe, prixForfait], assisted: ["Forfait Assisté — abonnement mensuel" + suffixe, prixForfait], group: ["Forfait Extension (jusqu'à 5 entreprises) — abonnement mensuel" + suffixe, prixForfait] }[tier];
   const lines = [{ label: base[0], qty: 1, unit_usd: fbR2(base[1]), total_usd: fbR2(base[1]) }];
   if (tier === "standard") {
     if (entity.sector_pack) lines.push({ label: "Pack 3 secteurs d'activité", qty: 1, unit_usd: fbR2(P.pack), total_usd: fbR2(P.pack) });
@@ -108,7 +113,7 @@ function fbEmission({ companies, groups, invoices, cfg, date, rate, vatEnabled, 
   const drafts = [];
   const mensuelle = (co, entity, nom, note) => {
     if (dejaMensuelle(co.id)) return;
-    const { lines, full } = fbLignes(entity, cfg);
+    const { lines, full } = fbLignes(entity, cfg, date);
     let ls = lines, from = per.start;
     if (note) ls = lines.map((l, i) => (i === 0 ? { ...l, label: l.label + note } : l));
     // première facture payante : prorata à partir de la fin de l'essai quand elle tombe dans le mois
@@ -145,7 +150,7 @@ function fbComplement({ company, group, invoices, cfg, date, rate, vatEnabled, v
     .sort((a, b) => String(a.number).localeCompare(String(b.number)));
   if (!liste.length) return { error: "Aucune facture mensuelle pour ce mois : utilisez d'abord « Émettre les factures du mois »." };
   const dernier = liste[liste.length - 1];
-  const { full } = fbLignes(entity, cfg);
+  const { full } = fbLignes(entity, cfg, date);
   const ecart = fbR2(full - (Number(dernier.monthly_full_usd) || 0));
   if (ecart <= 0) return { error: "Aucune hausse à facturer : une baisse s'applique au mois suivant (pas d'avoir)." };
   const restant = fbEntreJours(date, per.end) + 1;
@@ -390,6 +395,16 @@ function BillingAdminPanel({ view, showToast, currentUserEmail }) {
   const actualiserTaux = async () => { const r = await fetchHtgPerUsd(); if (r) { setEdit((e) => ({ ...e, rate_htg_per_usd: String(Math.round(r * 100) / 100) })); showToast("Taux du jour : 1 USD = " + (Math.round(r * 100) / 100) + " G."); } else { setEdit((e) => ({ ...e, rate_htg_per_usd: e.rate_htg_per_usd || String(FALLBACK_HTG_PER_USD) })); showToast("Service de taux indisponible : saisissez le taux manuellement."); } };
   const enregistrerReglages = async () => {
     const prices = {}; Object.keys(FB_PRIX_DEFAUT).forEach((k) => { prices[k] = Math.max(0, Number(edit.prices[k]) || 0); });
+    // Promotion datée : enregistrée avec les prix, ou retirée si le bloc est vide.
+    const pr = edit.prices.promo;
+    const promoSaisie = !!pr && (String(pr.usd == null ? "" : pr.usd).trim() !== "" || !!pr.debut || !!pr.fin);
+    if (promoSaisie) {
+      const usdPromo = Number(pr.usd);
+      if (!(usdPromo > 0) || !pr.debut || !pr.fin || String(pr.debut) > String(pr.fin) || !["standard", "assisted", "group"].includes(pr.tier)) {
+        showToast("Promotion incomplète : forfait, montant en dollars, date de début et date de fin (début avant fin) sont obligatoires."); return;
+      }
+      prices.promo = { tier: pr.tier, usd: usdPromo, debut: String(pr.debut).slice(0, 10), fin: String(pr.fin).slice(0, 10), libelle: String(pr.libelle || "promotion").trim() || "promotion" };
+    }
     const vr = Number(edit.vat_rate);
     if (!(vr >= 0 && vr <= 100)) { showToast("Le taux de TCA doit être entre 0 et 100 %."); return; }
     const row = { id: 1, issuer_name: String(edit.issuer_name || "Compta+").trim(), issuer_address: edit.issuer_address || "", issuer_phone: edit.issuer_phone || "", issuer_email: edit.issuer_email || "", issuer_nif: edit.issuer_nif || "", logo: edit.logo || "", thanks: edit.thanks || "Merci de votre confiance !", payment_info: edit.payment_info || "",
@@ -425,6 +440,19 @@ function BillingAdminPanel({ view, showToast, currentUserEmail }) {
         <div style={fbCarte}>
           <FbTitre couleur="#C9A24B" titre="Prix mensuels et taux de change" sous="Prix en dollars ; la facture est établie en gourdes au taux affiché. TCA en option." />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">{prixChamp("standard", "Forfait Standard")}{prixChamp("assisted", "Forfait Assisté")}{prixChamp("group", "Forfait Extension")}{prixChamp("pack", "Pack 3 secteurs")}{prixChamp("A", "Bloc grille A")}{prixChamp("B", "Bloc grille B")}{prixChamp("C", "Bloc grille C")}</div>
+          <div className="mt-3 p-3 rounded" style={{ border: "1px dashed #C9A24B" }} data-testid="fb-promo-bloc">
+            <div className="text-sm font-medium mb-1" style={{ color: "#152238" }}>Promotion datée (facultative)</div>
+            <p className="text-xs mb-2" style={{ color: "#8A8370" }}>Elle s'applique aux factures émises entre les deux dates, et aux prix affichés ces jours-là. Les factures déjà émises ne changent pas. Laissez vide s'il n'y a pas de promotion.</p>
+            {(() => { const pr = edit.prices.promo || { tier: "group", usd: "", debut: "", fin: "", libelle: "" }; const setPr = (k, v) => setEdit({ ...edit, prices: { ...edit.prices, promo: { ...pr, [k]: v } } }); return (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div><label className="text-xs" style={{ color: "#8A8370" }}>Forfait concerné</label><select value={pr.tier} onChange={(e) => setPr("tier", e.target.value)} data-testid="fb-promo-tier" style={fbCell}><option value="standard">Standard</option><option value="assisted">Assisté</option><option value="group">Extension</option></select></div>
+                <div><label className="text-xs" style={{ color: "#8A8370" }}>Prix promo ($/mois)</label><input type="number" min="0" value={pr.usd == null ? "" : pr.usd} onChange={(e) => setPr("usd", e.target.value)} data-testid="fb-promo-usd" style={fbCell} /></div>
+                <div><label className="text-xs" style={{ color: "#8A8370" }}>Du</label><input type="date" value={pr.debut || ""} onChange={(e) => setPr("debut", e.target.value)} data-testid="fb-promo-debut" style={fbCell} /></div>
+                <div><label className="text-xs" style={{ color: "#8A8370" }}>Au</label><input type="date" value={pr.fin || ""} onChange={(e) => setPr("fin", e.target.value)} data-testid="fb-promo-fin" style={fbCell} /></div>
+                <div><label className="text-xs" style={{ color: "#8A8370" }}>Libellé (sur la facture)</label><input value={pr.libelle || ""} onChange={(e) => setPr("libelle", e.target.value)} data-testid="fb-promo-libelle" style={fbCell} /></div>
+              </div>); })()}
+            <button onClick={() => setEdit({ ...edit, prices: { ...edit.prices, promo: null } })} className="text-xs underline mt-2" data-testid="fb-promo-retirer">Retirer la promotion</button>
+          </div>
           <div className="grid md:grid-cols-3 gap-3 mt-3 items-end">{champ("rate_htg_per_usd", "Taux affiché : gourdes pour 1 USD", "number")}<button onClick={actualiserTaux} style={fbBtn} data-testid="fb-reg-taux-auto">Taux du marché du jour</button></div>
           <FbTauxCompare applique={Number(edit.rate_htg_per_usd) || 0} marche={marche} brh={Number(edit.brh_rate) || 0} brhDate={edit.brh_rate_date} />
           <div className="grid md:grid-cols-3 gap-3 mt-3 items-end">
