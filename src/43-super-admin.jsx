@@ -257,6 +257,27 @@ function SuperAdminModule({ showToast }) {
     showToast(`Entreprise "${co.name}" supprimée définitivement.`);
   };
 
+  // Suppression d'un groupe multi-entreprises par l'administrateur de la plateforme.
+  // Choix retenu : les entreprises sont DÉTACHÉES (elles gardent leurs données, repassent
+  // en Standard, et leur fin de période suit celle du groupe). La logique est côté base
+  // de données (fonction delete_group_detach, réservée à l'administrateur de la plateforme).
+  const deleteGroupForCompany = async (co) => {
+    const gid = co.group_id;
+    if (!gid) return;
+    const { data: grp } = await supabase.from("company_groups").select("name").eq("id", gid).maybeSingle();
+    const gname = grp?.name;
+    if (!gname) { showToast("Impossible de lire le nom du groupe : suppression annulée."); return; }
+    const typed = window.prompt(
+      `Cette action supprime DÉFINITIVEMENT le groupe "${gname}".\n\nSes entreprises ne sont PAS supprimées : elles sont détachées du groupe, gardent toutes leurs données et repassent au forfait Standard.\n\nPour confirmer, tapez exactement le nom du groupe : ${gname}`
+    );
+    if (typed !== gname) { showToast("Suppression annulée — le nom saisi ne correspond pas."); return; }
+    const { error } = await supabase.rpc("delete_group_detach", { target_group_id: gid });
+    if (error) { showToast(friendlyError(error)); return; }
+    await loadCompanies();
+    logSA("groupe_supprime", co, `Groupe « ${gname} » supprimé — entreprises détachées`);
+    showToast(`Groupe « ${gname} » supprimé. Ses entreprises ont été détachées.`);
+  };
+
   const recordPayment = async (co) => {
     if (!form.amount || Number(form.amount) <= 0) {
       showToast("Montant invalide.");
@@ -613,6 +634,9 @@ function SuperAdminModule({ showToast }) {
                                   {siblings.map((s) => <li key={s.id}>{s.name || "(sans nom)"}</li>)}
                                 </ul>
                               )}
+                              <button onClick={() => deleteGroupForCompany(co)} className="text-xs px-2 py-1.5 mt-2 rounded" style={{ border: "1px solid #A6432F", color: "#A6432F" }} data-testid="sa-group-delete">
+                                Supprimer le groupe (les entreprises sont détachées)
+                              </button>
                             </div>
                           );
                         })()}
@@ -1028,7 +1052,7 @@ function SuperAdminModule({ showToast }) {
         {tab === "fact_relances" && <BillingAdminPanel view="relances" showToast={showToast} currentUserEmail={(typeof _membership !== "undefined" && _membership && _membership.email) || ""} />}
         {tab === "fact_reglages" && <BillingAdminPanel view="reglages" showToast={showToast} currentUserEmail={(typeof _membership !== "undefined" && _membership && _membership.email) || ""} />}
         {tab === "journal" && (() => {
-          const LAB = { statut_modifie: "Statut modifié", forfait_modifie: "Forfait modifié", paiement_enregistre: "Paiement enregistré", groupe_cree: "Groupe créé", entreprise_supprimee: "Entreprise supprimée", essai_prolonge: "Essai prolongé", essai_oublie: "Essai oublié", relance: "Relance préparée" };
+          const LAB = { statut_modifie: "Statut modifié", forfait_modifie: "Forfait modifié", paiement_enregistre: "Paiement enregistré", groupe_cree: "Groupe créé", groupe_supprime: "Groupe supprimé", entreprise_supprimee: "Entreprise supprimée", essai_prolonge: "Essai prolongé", essai_oublie: "Essai oublié", relance: "Relance préparée" };
           const rows = (superLog || []).filter((l) => (!logFilter || l.action_type === logFilter) && (!logSearch.trim() || `${l.target_description || ""} ${l.details || ""} ${l.actor_email || ""}`.toLowerCase().includes(logSearch.trim().toLowerCase())));
           return (
             <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E4DFD1", minWidth: 0, overflowWrap: "anywhere" }} data-testid="journal-panel">

@@ -2,10 +2,73 @@
 // @module Centre de gestion
 // @depends AnnouncementsAdminPanel, BadgeDollar, CabinetBillingPanel, CabinetRequestsPanel, GroupedTabNav
 //   ProceduresPanel, SecteursGestionPanel, SimpleGroupedBarChart, SupervisionPanel, SupportInbox
-//   TeamMessagingPanel, X, friendlyError, invokeEdgeFunction, logClientError, roleLabel, supabase
+//   TeamMessagingPanel, X, fetchBillingTarif, friendlyError, invokeEdgeFunction, logClientError, roleLabel, supabase, tarifPrixUsd
 //   useEffect, useState, useTeamUnread
 // @exports CentreDeGestionModule
 // ═══ FIN DE L'EN-TÊTE ═══
+// Liste de tous les groupes multi-entreprises : nom, nombre d'entreprises, comptes
+// rattachés et détails du forfait Extension. Lecture seule ; la suppression d'un groupe
+// se fait dans le Super admin (fiche de l'entreprise).
+function GroupesPanel({ companies, members }) {
+  const [groups, setGroups] = useState(null);
+  const [tarif, setTarif] = useState({ rate: null, prices: {} });
+  const [erreur, setErreur] = useState(null);
+  useEffect(() => {
+    let vivant = true;
+    fetchBillingTarif().then((t) => { if (vivant) setTarif(t); });
+    supabase.from("company_groups").select("*").then(({ data, error }) => {
+      if (!vivant) return;
+      if (error) setErreur("Impossible de lire la table des groupes : seuls les groupes visibles à partir des entreprises sont affichés.");
+      setGroups(data || []);
+    });
+    return () => { vivant = false; };
+  }, []);
+
+  if (groups === null) return <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }}>Chargement…</div>;
+
+  // Groupes connus, plus les groupes référencés par une entreprise mais non lisibles ici.
+  const connus = new Set(groups.map((g) => g.id));
+  const inconnus = [...new Set(companies.filter((c) => c.group_id && !connus.has(c.group_id)).map((c) => c.group_id))];
+  const lignes = [
+    ...groups.map((g) => ({ id: g.id, nom: g.name || "(sans nom)", g })),
+    ...inconnus.map((id) => ({ id, nom: "(groupe non lisible)", g: null })),
+  ];
+
+  const STATUT = { trial: "Essai", active: "Actif", suspended: "Suspendu" };
+  const dateFr = (iso) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { dateStyle: "long" }) : "—");
+
+  return (
+    <div data-testid="groupes-panel">
+      {erreur && <div className="text-xs mb-3 px-3 py-2 rounded" style={{ background: "#F7E9E3", color: "#A6432F" }}>{erreur}</div>}
+      {lignes.length === 0 ? (
+        <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }}>Aucun groupe multi-entreprises pour le moment.</div>
+      ) : (
+        <div className="grid gap-3">
+          {lignes.map((l) => {
+            const ents = companies.filter((c) => c.group_id === l.id);
+            const emails = [...new Set(members.filter((m) => ents.some((c) => c.id === m.company_id) && m.email).map((m) => m.email))];
+            const g = l.g;
+            return (
+              <div key={l.id} className="rounded-xl border p-4" style={{ borderColor: "#DDD6C4", background: "#fff" }} data-testid="groupe-ligne">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <div className="font-medium" style={{ color: "#152238" }}>{l.nom}</div>
+                  <div className="text-xs" style={{ color: "#8A8370" }}>{ents.length} entreprise{ents.length > 1 ? "s" : ""}{g && g.max_companies ? ` (max ${g.max_companies})` : ""}</div>
+                </div>
+                <div className="text-xs mt-2" style={{ color: "#5C6B8C" }}>
+                  <div>Forfait : Extension — {tarifPrixUsd(tarif, "group")} $/mois pour l'ensemble</div>
+                  <div>Statut : {g ? (STATUT[g.plan_status] || g.plan_status || "—") : "—"}{g && g.trial_ends_at ? ` · fin de période : ${dateFr(g.trial_ends_at)}` : ""}</div>
+                  <div>Entreprises : {ents.length ? ents.map((c) => c.name || "(sans nom)").join(", ") : "aucune"}</div>
+                  <div>Comptes rattachés ({emails.length}) : {emails.length ? emails.join(", ") : "aucun"}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin }) {
   const [tab, setTab] = useState("entreprises");
   const [companies, setCompanies] = useState([]);
@@ -471,7 +534,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
         tab={tab}
         setTab={setTab}
         groups={[
-          ...(perms.entreprises ? [{ label: "Entreprises", color: { bg: "#5B3FA0", text: "#fff", light: "#EDEAF7", lightText: "#5B3FA0" }, tabs: [["entreprises", "Entreprises"], ["secteurs", "Secteurs et blocs"]] }] : []),
+          ...(perms.entreprises ? [{ label: "Entreprises", color: { bg: "#5B3FA0", text: "#fff", light: "#EDEAF7", lightText: "#5B3FA0" }, tabs: [["entreprises", "Entreprises"], ["groupes", "Groupes"], ["secteurs", "Secteurs et blocs"]] }] : []),
           ...(perms.offres ? [{ label: "Campagnes", color: { bg: "#9A7B1E", text: "#fff", light: "#FBF1DC", lightText: "#9A7B1E" }, tabs: [["offres", "Offres spéciales"], ["annonces", "Annonces"], ["cabinets", "Cabinets"]] }] : []),
           ...(perms.statistiques ? [{ label: "Statistiques", color: { bg: "#0F6B5C", text: "#fff", light: "#E6F1EE", lightText: "#0F6B5C" }, tabs: [["statistiques", "Statistiques"]] }] : []),
           ...(perms.supervision ? [{ label: "Supervision", color: { bg: "#3B5C1F", text: "#fff", light: "#EEF4E2", lightText: "#3B5C1F" }, tabs: [["supervision", "Supervision"]] }] : []),
@@ -480,7 +543,7 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
         ]}
       />
 
-      {!perms[tab] && tab !== "entreprises" && !(tab === "secteurs" && perms.entreprises) && (() => { setTab("entreprises"); return null; })()}
+      {!perms[tab] && tab !== "entreprises" && !((tab === "secteurs" || tab === "groupes") && perms.entreprises) && (() => { setTab("entreprises"); return null; })()}
 
       {loading ? (
         <div className="text-sm py-8 text-center" style={{ color: "#A39C87" }}>Chargement…</div>
@@ -644,6 +707,8 @@ function CentreDeGestionModule({ showToast, currentUserEmail, isPlatformAdmin })
           </div>
           )}
         </div>
+      ) : tab === "groupes" ? (
+        <GroupesPanel companies={companies} members={members} />
       ) : tab === "secteurs" ? (
         <SecteursGestionPanel showToast={showToast} currentUserEmail={currentUserEmail} logActivity={logActivity} />
       ) : tab === "annonces" ? (
