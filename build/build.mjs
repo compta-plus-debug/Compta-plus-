@@ -35,6 +35,19 @@ console.log("Frontières entre modules vérifiées (" + lues.filter((x) => x.tex
 if (dep.problemes.length) { console.error("BLOQUÉ — frontières entre modules :"); dep.problemes.forEach((x) => console.error("  ✗ " + x)); process.exit(1); }
 let source = noms.map((n) => fs.readFileSync(path.join(dossierParties, n), "utf8")).join("");
 
+// Numéro de version automatique : date du jour (fuseau du Mexique) + compteur du paquet (build/paquet.txt).
+// Dans src/00-config.jsx la ligne reste « __AUTO__ » : elle n'est jamais retouchée à la main.
+{
+  const fichierCompteur = [path.join(dossierScript, "paquet.txt"), path.join(racine, "build", "paquet.txt"), path.join(racine, "paquet.txt")].find((f) => fs.existsSync(f));
+  const compteur = fichierCompteur ? fs.readFileSync(fichierCompteur, "utf8").trim() : "";
+  if (!/^\d{1,3}$/.test(compteur)) { console.error("BLOQUÉ — compteur du paquet introuvable ou invalide (build/paquet.txt)."); process.exit(1); }
+  const jour = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Mexico_City" }).replace(/-/g, "");
+  const remplacer = (t) => t.replace('const APP_VERSION = "__AUTO__";', 'const APP_VERSION = "' + jour + "-" + compteur.padStart(3, "0") + '";');
+  source = remplacer(source);
+  // Les morceaux (lues) servent à assembler le cœur de l'application : la même substitution doit y figurer.
+  for (const x of lues) x.texte = remplacer(x.texte);
+}
+
 // 2) Cible TEST : même substitution que l'ancienne publication (première occurrence par ligne)
 const appliquerCible = (texte) => {
   if (cible !== "test") return texte;
