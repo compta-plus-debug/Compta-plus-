@@ -15,6 +15,19 @@ for(const w of [1280,390]){
  await bouton.waitFor({timeout:8000}).catch(()=>{});const visible=await bouton.isVisible().catch(()=>false);
  ok('bouton « Tableau de bord du groupe » visible ('+w+'px)',visible);
  if(visible){await bouton.click();await p.waitForTimeout(1800);}
+ // Hybride v365 — onglets : Finances affiche le tableau comparatif ; Paramètres porte le choix de fond.
+ const onglets=await p.locator('.gr-tab').allInnerTexts();
+ ok('onglets présents ('+w+'px)',onglets.length>=4&&onglets.some(x=>/Finances/.test(x))&&onglets.some(x=>/Paramètres/.test(x)),onglets);
+ await p.locator('.gr-tab',{hasText:'Finances'}).click();await p.waitForTimeout(400);
+ ok('tableau comparatif dans Finances ('+w+'px)',await p.locator('.compta-groupe table').count()>0);
+ if(w===1280){
+   await p.locator('.gr-tab',{hasText:'Paramètres'}).click();await p.waitForTimeout(300);
+   const avant=await p.evaluate(()=>document.querySelector('.compta-groupe').className);
+   await p.locator('button:has-text("Passer en fond bleu")').click();await p.waitForTimeout(300);
+   const apres=await p.evaluate(()=>[document.querySelector('.compta-groupe').className,localStorage.getItem('compta_groupe_fond')]);
+   ok('fond bleu activé et mémorisé',apres[0].includes('fond-bleu')&&apres[1]==='bleu',{avant,apres});
+   await p.locator('.gr-tab',{hasText:'Finances'}).click();await p.waitForTimeout(200);
+ }
  // Le bac à sable n'a pas la feuille Tailwind : on ajoute seulement la règle « overflow-x-auto » qu'elle fournit.
  await p.addStyleTag({content:'.overflow-x-auto{overflow-x:auto}.w-full{width:100%}'});await p.waitForTimeout(300);
  const m=await p.evaluate(()=>{const z=document.querySelector('.compta-groupe');
