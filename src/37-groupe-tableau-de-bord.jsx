@@ -44,6 +44,15 @@ main .compta-groupe table tbody tr { border-bottom: 1px solid #EEF1F5; }
 main .compta-groupe .overflow-x-auto { border: 1px solid rgba(31, 169, 122, .45); border-radius: 12px; background: #fff; padding: 4px 12px; }
 /* Hybride (maquette retenue) — fond gris clair, onglets en pastilles, cartes à bordure fine */
 main .compta-groupe { background: #F3F5F8; min-height: 100vh; }
+/* Pleine largeur : l'espace groupe occupe tout l'écran, sans le fond vert de l'application */
+body:has(.compta-groupe), main:has(.compta-groupe) { background: #F3F5F8 !important; }
+main:has(.compta-groupe) { max-width: none !important; padding: 0 !important; }
+main .compta-groupe, main .compta-groupe.max-w-6xl { max-width: none !important; width: 100%; }
+/* Grand écran : textes et chiffres agrandis */
+@media (min-width: 1280px) { main .compta-groupe { zoom: 1.15; } }
+/* Chiffres des tableaux et des cartes en gras */
+main .compta-groupe table td { font-weight: 600; }
+main .compta-groupe [style*="ui-monospace"] { font-weight: 700; }
 main .compta-groupe .grid.sm\:grid-cols-2 > div { border: 1px solid #E4E9F1; box-shadow: none; }
 main .compta-groupe .gr-tabs { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 18px; padding: 2px 0 6px; scrollbar-width: none; }
 main .compta-groupe .gr-tabs::-webkit-scrollbar { display: none; }
@@ -525,9 +534,9 @@ function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlan
                 ["Résultat", fmt(totals.resultat), totals.resultat >= 0 ? "#1E7A5C" : "#A6432F"],
                 ["Trésorerie", fmt(totals.tresorerie), "#14213A"],
               ].map(([libelle, valeur, couleur]) => (
-                <div key={libelle} className="gr-carte" style={{ padding: 10 }}>
+                <div key={libelle} className="gr-carte" style={{ padding: 10, minWidth: 0 }}>
                   <div style={{ fontSize: 11, color: "#6B7A90" }}>{libelle}</div>
-                  <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 600, color: couleur, marginTop: 3 }}>{valeur}</div>
+                  <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, fontWeight: 600, color: couleur, marginTop: 3, overflowWrap: "anywhere" }}>{valeur}</div>
                 </div>
               ))}
             </div>
@@ -551,9 +560,9 @@ function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlan
                     <span style={{ fontSize: 11, background: statut.fond, color: statut.texte, borderRadius: 999, padding: "3px 8px", whiteSpace: "nowrap" }}>{statut.libelle}</span>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, fontSize: 12 }}>
-                    <div className="gr-sous" style={{ borderRadius: 8, padding: 8 }}><div style={{ color: "#6B7A90" }}>CA</div><div style={{ fontFamily: "ui-monospace, monospace" }}>{fmt(c.kpis.produits)}</div></div>
-                    <div className="gr-sous" style={{ borderRadius: 8, padding: 8 }}><div style={{ color: "#6B7A90" }}>Résultat</div><div style={{ fontFamily: "ui-monospace, monospace", color: c.kpis.resultat >= 0 ? "#1E7A5C" : "#A6432F" }}>{fmt(c.kpis.resultat)}</div></div>
-                    <div className="gr-sous" style={{ borderRadius: 8, padding: 8 }}><div style={{ color: "#6B7A90" }}>Salariés</div><div style={{ fontFamily: "ui-monospace, monospace" }}>{c.activeEmployeeCount || 0}</div></div>
+                    <div className="gr-sous" style={{ borderRadius: 8, padding: 8, minWidth: 0 }}><div style={{ color: "#6B7A90" }}>CA</div><div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, overflowWrap: "anywhere" }}>{fmt(c.kpis.produits)}</div></div>
+                    <div className="gr-sous" style={{ borderRadius: 8, padding: 8, minWidth: 0 }}><div style={{ color: "#6B7A90" }}>Résultat</div><div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, overflowWrap: "anywhere", color: c.kpis.resultat >= 0 ? "#1E7A5C" : "#A6432F" }}>{fmt(c.kpis.resultat)}</div></div>
+                    <div className="gr-sous" style={{ borderRadius: 8, padding: 8, minWidth: 0 }}><div style={{ color: "#6B7A90" }}>Salariés</div><div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, overflowWrap: "anywhere" }}>{c.activeEmployeeCount || 0}</div></div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={(e) => { e.stopPropagation(); ouvrirEntreprise(c); }}
@@ -577,9 +586,9 @@ function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlan
                 ["Résultat", totals.resultat, totals.resultat >= 0 ? "#1E7A5C" : "#A6432F"],
                 ["Trésorerie", totals.tresorerie, "#14213A"],
               ].map(([libelle, valeur, couleur]) => (
-                <div key={libelle} className="gr-carte" style={{ padding: 12 }}>
+                <div key={libelle} className="gr-carte" style={{ padding: 12, minWidth: 0 }}>
                   <div style={{ fontSize: 11, color: "#6B7A90" }}>{libelle}</div>
-                  <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 15, fontWeight: 600, color: couleur, marginTop: 4 }}>{fmt(valeur)}</div>
+                  <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 14, fontWeight: 600, color: couleur, marginTop: 4, overflowWrap: "anywhere" }}>{fmt(valeur)}</div>
                 </div>
               ))}
             </div>
