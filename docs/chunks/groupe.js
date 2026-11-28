@@ -1,4 +1,4 @@
-(window.__cpc=window.__cpc||{}).groupe={v:"20261127-375",f:function(ie){const{chooseCompany:ne,computeBalances:at,computeKpis:ot,fmt:f,friendlyError:x,genInviteToken:se,invokeEdgeFunction:E,roleLabel:le,supabase:p,unwrapVersioned:rt,useEffect:it,useState:r}=ie,Pt=ie.__live,nt=String.raw`/* ==========================================================================
+(window.__cpc=window.__cpc||{}).groupe={v:"20261127-376",f:function(ie){const{chooseCompany:ne,computeBalances:at,computeKpis:ot,fmt:f,friendlyError:x,genInviteToken:se,invokeEdgeFunction:E,roleLabel:le,supabase:p,unwrapVersioned:rt,useEffect:it,useState:r}=ie,Pt=ie.__live,nt=String.raw`/* ==========================================================================
    Compta+ — Refonte visuelle : ESPACE MULTI-ENTREPRISES (maquette C)
    Ne change que l'apparence. Règles limitées au conteneur .compta-groupe.
    Retour arrière : supprimer la ligne <link ... refonte-groupe.css>.
