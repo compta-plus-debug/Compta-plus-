@@ -227,6 +227,15 @@ const fbBtnOr = { background: "#C9A24B", color: "#152238", borderRadius: 6, padd
 async function fbChargerConfig() {
   try { const { data } = await supabase.from("billing_settings").select("*").eq("id", 1).maybeSingle(); return fbConfig(data); } catch (e) { return fbConfig(null); }
 }
+// Espace entreprise : lecture limitée à l'émetteur, aux informations de paiement et aux tarifs
+// (vue billing_issuer_public, sans les modèles de relance réservés au Super Admin).
+async function fbChargerConfigEntreprise() {
+  try {
+    const { data } = await supabase.from("billing_issuer_public").select("*").eq("id", 1).maybeSingle();
+    if (data) return fbConfig(data);
+  } catch (e) { /* vue absente : repli ci-dessous */ }
+  return fbChargerConfig();
+}
 
 // ───────── Cartes graphiques (même présentation que le reste de l'application) ─────────
 // v334 — espace de comparaison : taux appliqué, taux du marché du jour, taux de référence BRH.
@@ -283,7 +292,7 @@ function BillingClientPanel({ companyId, showToast }) {
   useEffect(() => {
     let vivant = true;
     (async () => {
-      const c = await fbChargerConfig();
+      const c = await fbChargerConfigEntreprise();
       const { data, error } = await supabase.from("billing_invoices").select("*").eq("company_id", companyId).order("issue_date", { ascending: false });
       let ct = null;
       try { const r = await supabase.from("companies").select("phone, whatsapp_optin").eq("id", companyId).maybeSingle(); ct = r && r.data ? r.data : null; } catch (e) { ct = null; }

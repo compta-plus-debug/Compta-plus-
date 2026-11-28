@@ -460,6 +460,29 @@ function GroupDashboardModule({ groupId, groupName, groupMaxCompanies, groupPlan
                 <span style={{ color: "#14213A" }}>{new Date(groupTrialEndsAt).toLocaleDateString("fr-FR")}</span>
               </div>
             )}
+            {(() => {
+              const today = new Date().toISOString().slice(0, 10);
+              const dues = groupInvoices.filter((f) => f.status === "emise");
+              const prochaine = dues.slice().sort((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")))[0];
+              const enRetard = dues.filter((f) => f.due_date && f.due_date < today).length;
+              const dates = groupInvoices.map((f) => f.last_reminder_at).filter(Boolean).sort();
+              const derniere = dates[dates.length - 1];
+              const ligne = (label, value) => (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ color: "#6B7A90" }}>{label}</span>
+                  <span style={{ color: "#14213A", textAlign: "right" }}>{value}</span>
+                </div>
+              );
+              return (
+                <>
+                  {ligne("Prochaine facture à régler", prochaine
+                    ? `${Number(prochaine.total_htg || 0).toLocaleString("fr-FR")} HTG, échéance ${prochaine.due_date ? new Date(prochaine.due_date).toLocaleDateString("fr-FR") : "non définie"}`
+                    : "Aucune")}
+                  {ligne("Factures en retard", enRetard)}
+                  {ligne("Dernière relance", derniere ? new Date(derniere).toLocaleDateString("fr-FR") : "Aucune")}
+                </>
+              );
+            })()}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "#6B7A90" }}>Entreprises</span><span style={{ color: "#14213A" }}>{companiesData.length} / {groupMaxCompanies || 5}</span>
